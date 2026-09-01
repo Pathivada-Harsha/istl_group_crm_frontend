@@ -3,59 +3,125 @@
 // The borrower record. Reached by clicking a row in the registry, and landed on
 // directly after an import completes — that is the moment the derived panel
 // earns its place, since the user sees nine values appear that they never typed.
+//
+// Organized into tabs (Overview / Sanction Letters / Repayment Schedule)
+// rather than one long scroll — every card and action below is the same one
+// that existed before the tabs, just grouped so only one section's worth is
+// on screen at a time. There is no separate Documents tab and no separate
+// Sanction Detail page: a sanction's document actions (View/Download/
+// Replace/Attach) live on its row in Sanction Letters, and clicking a row
+// simply selects that sanction as the page's shared context — Overview and
+// Repayment Schedule both read from it — rather than navigating anywhere.
+// Sanction Details / Derived Values / the schedule itself live in
+// SanctionOverviewPanel.js, reused here card by card. Both the active tab
+// (?tab=) and the selected sanction (?sanctionId=) live in the URL, so
+// either survives a refresh, a direct link, or browser back/forward.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, {
+  useCallback, useEffect, useRef, useState,
+} from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, FileText, Pencil, Plus, Download, MapPin, Mail, Phone,
-  Building2, Users, Link2, Eye, Paperclip, RefreshCw, Upload, Trash2, AlertTriangle,
+  ArrowLeft, FileText, Pencil, Plus, MapPin, Mail, Phone,
+  Building2, Users, Link2, Paperclip, Upload, Trash2, AlertTriangle, CalendarClock,
+  Eye, Download, RefreshCw, Check,
 } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
+import CrmPreloader from '../preLoader';
 import BorrowerFormModal from './BorrowerFormModal';
 import SanctionFormModal from './SanctionFormModal';
+import HierarchyPicker, { EMPTY_HIERARCHY, hierarchyFromBorrower, resolveHierarchyGroupId } from './HierarchyPicker';
 import DocumentViewerModal from './DocumentViewerModal';
 import SanctionCompareModal from './SanctionCompareModal';
-import { SANCTION_FIELDS } from './sanctionFields';
+import {
+  SanctionDetailsCard, DerivedValuesCard, RepaymentScheduleSection, Row, statusLabel,
+} from './SanctionOverviewPanel';
+import { deriveRepaymentSchedule } from './sanctionDerive';
 import '../../pages-css/BorrowerRegistry.css';
 import '../../pages-css/BorrowerRegistryPremium.css';
 
-// Free-text covenant fields read as sentences, not numbers — left-aligning
-// just these keeps every other field's right-aligned number/date look intact.
-const LEFT_ALIGN_KEYS = new Set(['cashSweep', 'dsra', 'isra']);
-
-// ROI (detailHidden) is left out of this card — Rate of interest already
-// states it in full, and the bare percentage is only worth a place of its
-// own in the registry table's Key columns view.
-const DETAIL_FIELDS = SANCTION_FIELDS.filter((f) => !f.detailHidden);
-
 const isBlank = (v) => v === null || v === undefined || String(v).trim() === '';
 
-/** The derived panel, as data — so it can be filtered like the card beside it. */
-const DERIVED_ROWS = [
-  { key: 'derivedEquityContribution', label: 'Equity contribution' },
-  { key: 'derivedRatioCheck', label: 'Ratio check', tone: (v) => (v === 'Reconciles' ? 'ok' : 'warn') },
-  { key: 'derivedRoiCheck', label: 'ROI check', tone: (v) => (v === 'Reconciles' ? 'ok' : 'warn') },
-  { key: 'derivedMoratoriumEnd', label: 'Moratorium ends' },
-  // Modelled from tenor and moratorium, deliberately distinct from the
-  // contractual dates in the card alongside. Where the two disagree, that gap
-  // is worth seeing rather than reconciling away.
-  { key: 'derivedRepaymentStart', label: 'Repayment starts (modelled)' },
-  { key: 'derivedRepaymentEnd', label: 'Repayment ends (modelled)' },
-  { key: 'derivedTotalTenorMonths', label: 'Total tenor' },
-  { key: 'derivedFirstYearInterest', label: 'First-year interest' },
-  { key: 'derivedSanctionValidTill', label: 'Sanction valid till' },
-  { key: 'derivedCodStatus', label: 'COD status', tone: (v) => (/Overdue/i.test(v || '') ? 'warn' : '') },
+// Documents live inside the Sanction Letters tab now (each row carries its own
+// View/Download/Replace/Attach actions) rather than as a tab of their own —
+// a sanction letter's row is "the" place to manage that sanction and its file.
+const TABS = [
+  { key: 'overview', label: 'Overview', icon: Building2 },
+  { key: 'letters', label: 'Sanction Letters', icon: FileText },
+  { key: 'schedule', label: 'Repayment Schedule', icon: CalendarClock },
 ];
+const TAB_KEYS = new Set(TABS.map((t) => t.key));
+
+// Ref no. | date | amount — same order for every sanction dropdown option on
+// this page, Overview and Repayment Schedule alike, so the two never read as
+// two different pickers for the same thing.
+const sanctionOptionLabel = (s) => [s.refNo, s.sanctionDate, s.sanctionedAmount].filter(Boolean).join(' | ');
+
+/**
+ * The "which sanction am I looking at" picker — shared by Overview and
+ * Repayment Schedule so both stay on the exact same selected-sanction state
+ * (selectSanction/?sanctionId=, see below) rather than each keeping its own.
+ * Only ever rendered when there's a real choice to make (sanctions.length > 1
+ * — see the two call sites).
+ */
+const SanctionSwitcher = ({ label, sanctions, active, onSelect }) => (
+  <div className="brx-sanction-switch">
+    <span className="brx-sanction-switch-label">{label}</span>
+    <select
+      className="brx-sanction-switch-select"
+      value={active?.id ?? ''}
+      onChange={(e) => {
+        const s = sanctions.find((x) => String(x.id) === e.target.value);
+        if (s) onSelect(s);
+      }}
+    >
+      {sanctions.map((s) => (
+        <option key={s.id} value={s.id}>{sanctionOptionLabel(s)}</option>
+      ))}
+    </select>
+  </div>
+);
 
 const BorrowerDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [borrower, setBorrower] = useState(null);
-  const [activeId, setActiveId] = useState(null);
+  // Both the active tab and the selected sanction live in the URL rather than
+  // plain component state, so either survives a refresh, a direct link, and
+  // browser back/forward — and so a sanction picked in Sanction Letters stays
+  // picked when the user switches to Repayment Schedule or Overview, without
+  // opening any other page.
+  const tabParam = searchParams.get('tab');
+  const activeTab = TAB_KEYS.has(tabParam) ? tabParam : 'overview';
+  const sanctionIdParam = searchParams.get('sanctionId');
+  const setActiveTab = useCallback((key) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', key);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+  const selectSanction = useCallback((s) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('sanctionId', String(s.id));
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+  const sanctions = borrower?.sanctions || [];
+  // Gates the sanction-picker dropdown on Overview and Repayment Schedule —
+  // both tabs themselves stay visible regardless of sanction count, but a
+  // dropdown with only one (or zero) options is nothing but clutter.
+  const hasMultipleSanctions = sanctions.length > 1;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editIdentity, setEditIdentity] = useState(false);
+  const [changeOrg, setChangeOrg] = useState(false);
+  const [orgHierarchy, setOrgHierarchy] = useState(EMPTY_HIERARCHY);
+  const [savingOrg, setSavingOrg] = useState(false);
+  const [orgError, setOrgError] = useState('');
   const [sanctionModal, setSanctionModal] = useState(null); // { mode, initial }
   const [viewerFor, setViewerFor] = useState(null);         // sanction being read
   const [attaching, setAttaching] = useState(false);        // parse in flight
@@ -66,12 +132,29 @@ const BorrowerDetail = () => {
   const [importing, setImporting] = useState(false);
   const [deleteSanction, setDeleteSanction] = useState(null); // row awaiting confirmation
   const [deleting, setDeleting] = useState(false);
-  // A letter states maybe a dozen of the thirty-odd registry columns. Showing
-  // the rest as dashes turned a short page into three screens of nothing, so
-  // they are left out until asked for.
-  const [showAll, setShowAll] = useState(false);
+  // Identity is the one card still shown whole rather than through
+  // SanctionOverviewPanel (it isn't sanction-specific), so it keeps its own
+  // "show all" state here.
+  const [identityExpanded, setIdentityExpanded] = useState(false);
 
   const backToRegistry = useCallback(() => navigate('/lender/borrowers'), [navigate]);
+
+  // The primary "Back" affordance is context-aware: a company that sits
+  // inside a group returns to that group's page (with its Sub Group, if any,
+  // expanded) rather than jumping all the way back to the flat Level-1
+  // registry — regardless of how the user actually arrived here (drill-down
+  // or a search result), since the target is computed from the borrower's
+  // own parentGroupId/subGroupId, not from how navigation got here. Only a
+  // genuinely standalone company (no group at all) still goes to the
+  // registry. The explicit "Lender · Borrower Registry" breadcrumb link
+  // always goes to the registry regardless — that's the deliberate escape
+  // hatch back to Level 1.
+  const backLabel = borrower?.parentGroupId ? `Back to ${borrower.parentGroupName}` : 'Back to Registry';
+  const goBack = useCallback(() => {
+    if (!borrower?.parentGroupId) { navigate('/lender/borrowers'); return; }
+    const base = `/lender/borrowers/group/${borrower.parentGroupId}`;
+    navigate(borrower.subGroupId ? `${base}?openSubGroup=${borrower.subGroupId}` : base);
+  }, [navigate, borrower]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,9 +162,15 @@ const BorrowerDetail = () => {
     try {
       const data = await borrowerApi.getById(id);
       setBorrower(data);
-      setActiveId((prev) => prev || data?.sanctions?.[0]?.id || null);
     } catch (e) {
+      // Clears any previously-loaded borrower too, not just on the very
+      // first load — otherwise a refetch that fails after an action that
+      // already succeeded (e.g. deleting the one sanction that was the
+      // only reason this borrower was visible at all) leaves the stale
+      // pre-action data on screen under the error banner, which reads as
+      // "the action failed" when it actually didn't.
       setError(e.message || 'Could not load this borrower');
+      setBorrower(null);
     } finally {
       setLoading(false);
     }
@@ -89,18 +178,42 @@ const BorrowerDetail = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  // Escape returns to the registry — the same gesture that closes the modals,
-  // so it stays consistent across the module.
+  const openChangeOrg = () => {
+    setOrgHierarchy(hierarchyFromBorrower(borrower));
+    setOrgError('');
+    setChangeOrg(true);
+  };
+
+  const handleSaveOrg = async () => {
+    setOrgError('');
+    setSavingOrg(true);
+    try {
+      const groupId = await resolveHierarchyGroupId(orgHierarchy);
+      await borrowerApi.updateHierarchy(borrower.id, {
+        groupId, isSubsidiary: orgHierarchy.isSubsidiary, isSpv: orgHierarchy.isSpv,
+      });
+      setChangeOrg(false);
+      await load();
+    } catch (e) {
+      setOrgError(e.message || 'Could not update the organization');
+    } finally {
+      setSavingOrg(false);
+    }
+  };
+
+  // Escape leaves the page the same way the Back button does — same
+  // context-aware target — the same gesture that closes the modals, so it
+  // stays consistent across the module.
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape' && !editIdentity && !sanctionModal && !viewerFor
-          && !compare && !deleteSanction) {
-        backToRegistry();
+          && !compare && !deleteSanction && !changeOrg) {
+        goBack();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [backToRegistry, editIdentity, sanctionModal, viewerFor, compare, deleteSanction]);
+  }, [goBack, editIdentity, sanctionModal, viewerFor, compare, deleteSanction, changeOrg]);
 
   const openDocument = (sanction) => setViewerFor(sanction);
 
@@ -136,9 +249,16 @@ const BorrowerDetail = () => {
     setError('');
     try {
       await borrowerApi.removeSanction(deleteSanction.id);
-      // If the deleted row was the one on display, fall back to whatever
-      // remains rather than leaving the cards showing a removed record.
-      if (activeId === deleteSanction.id) setActiveId(null);
+      // If the deleted row was the one selected, drop it from the URL so the
+      // page falls back to the latest remaining sanction rather than showing
+      // cards for a record that's gone.
+      if (String(sanctionIdParam) === String(deleteSanction.id)) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('sanctionId');
+          return next;
+        }, { replace: true });
+      }
       setDeleteSanction(null);
       await load();
     } catch (err) {
@@ -223,11 +343,16 @@ const BorrowerDetail = () => {
     );
   }
 
-  const sanctions = borrower.sanctions || [];
-  const active = sanctions.find((s) => s.id === activeId) || sanctions[0] || null;
-  const hiddenCount = active
-    ? DETAIL_FIELDS.filter((f) => isBlank(active[f.key])).length
-    : 0;
+  const explicitSanction = sanctionIdParam
+    ? sanctions.find((s) => String(s.id) === String(sanctionIdParam))
+    : null;
+  const active = explicitSanction || sanctions[0] || null;
+  // The full per-period repayment schedule isn't part of what the backend
+  // returns for a sanction — it's computed client-side from the saved
+  // record the exact same way SanctionFormModal computes it live from the
+  // in-progress form, since a saved sanction already carries the identical
+  // field names (sanctionFields.js's key IS the DTO property).
+  const pageScheduleView = active ? deriveRepaymentSchedule(active) : null;
 
   // Same rule as the sanction cards — an unfilled identity field is left out
   // rather than repeated as "Not entered" fifteen times. The pending chip and
@@ -237,7 +362,7 @@ const BorrowerDetail = () => {
   // that doesn't show the borrower's name reads as broken — the more so once
   // the blank rows around it are hidden and the card falls back to an empty
   // state while the name sits in the title right above it.
-  const identityKyc = [
+  const identityKycAll = [
     { label: 'CIN', value: borrower.cin, mono: true },
     { label: 'PAN', value: borrower.pan, mono: true },
     { label: 'Promoter', value: borrower.promoterName, icon: <Building2 size={14} aria-hidden="true" /> },
@@ -257,7 +382,10 @@ const BorrowerDetail = () => {
       empty: 'Not linked',
       icon: <Link2 size={14} aria-hidden="true" />,
     },
-  ].filter((r) => showAll || !isBlank(r.value));
+  ];
+  const identityKycFilled = identityKycAll.filter((r) => !isBlank(r.value));
+  const identityKyc = identityExpanded ? identityKycAll : identityKycFilled;
+  const identityCanToggle = identityKycFilled.length < identityKycAll.length;
 
   const identityRows = [
     { label: 'Borrower name', value: borrower.borrowerName, strong: true },
@@ -269,11 +397,12 @@ const BorrowerDetail = () => {
 
   return (
     <div className="br-page">
+      {(importing || attaching) && <CrmPreloader text="Reading sanction letter…" />}
       {/* Back sits above the title on its own line, so it reads as leaving the
           page rather than as an action on the record. */}
-      <button type="button" className="br-back" onClick={backToRegistry}>
+      <button type="button" className="br-back" onClick={goBack}>
         <ArrowLeft size={16} aria-hidden="true" />
-        Back to Registry
+        {backLabel}
       </button>
 
       <div className="br-head">
@@ -281,7 +410,49 @@ const BorrowerDetail = () => {
           <button type="button" className="br-crumb" onClick={backToRegistry}>
             Lender · Borrower Registry
           </button>
-          <h1 className="br-title">{borrower.borrowerName}</h1>
+          {(borrower.parentGroupName || borrower.subGroupName) && (
+            <div className="brx-crumb-path">
+              {borrower.parentGroupName && (
+                borrower.parentGroupId ? (
+                  <button
+                    type="button" className="brx-crumb-link"
+                    onClick={() => navigate(`/lender/borrowers/group/${borrower.parentGroupId}`)}
+                  >
+                    {borrower.parentGroupName}
+                  </button>
+                ) : <span>{borrower.parentGroupName}</span>
+              )}
+              {borrower.subGroupName && (
+                <>
+                  <span className="brx-crumb-sep">›</span>
+                  {/* A Sub Group has no page of its own — it's an expandable
+                      section on its Parent Group's page (GroupDetail.js) —
+                      so this always routes to the Parent Group with that
+                      section opened, never to the Sub Group's own id. */}
+                  {(borrower.subGroupId && borrower.parentGroupId) ? (
+                    <button
+                      type="button" className="brx-crumb-link"
+                      onClick={() => navigate(
+                        `/lender/borrowers/group/${borrower.parentGroupId}?openSubGroup=${borrower.subGroupId}`,
+                      )}
+                    >
+                      {borrower.subGroupName}
+                    </button>
+                  ) : <span>{borrower.subGroupName}</span>}
+                </>
+              )}
+              <span className="brx-crumb-sep">›</span>
+              <span className="brx-crumb-current">{borrower.borrowerName}</span>
+            </div>
+          )}
+          <h1 className="br-title">
+            {borrower.borrowerName}
+            {borrower.companyType && borrower.companyType !== 'Standalone' && (
+              <span className="br-badge" style={{ marginLeft: 10, verticalAlign: 'middle' }}>
+                {borrower.companyType}
+              </span>
+            )}
+          </h1>
           <p className="br-sub">
             {active
               ? `${active.refNo}${active.sanctionDate ? ` · ${active.sanctionDate}` : ''}`
@@ -290,321 +461,266 @@ const BorrowerDetail = () => {
         </div>
       </div>
 
-      {/* Provenance legend. Each entry names the card it keys to, so the dot
-          on a card header is unambiguous — labelling these by source alone
-          ("Read from the letter") left the reader to guess which card was
-          which. */}
-      <div className="br-legend">
-        <span className="br-legend-item">
-          <span className="br-dot br-dot-read" aria-hidden="true" />
-          <strong className="br-legend-name">Sanction details</strong>
-          <span className="br-legend-src">read from the letter</span>
-        </span>
-        <span className="br-legend-item">
-          <span className="br-dot br-dot-calc" aria-hidden="true" />
-          <strong className="br-legend-name">Derived values</strong>
-          <span className="br-legend-src">calculated automatically</span>
-        </span>
-        <span className="br-legend-item">
-          <span className="br-dot br-dot-user" aria-hidden="true" />
-          <strong className="br-legend-name">Borrower identity</strong>
-          <span className="br-legend-src">entered by the user</span>
-        </span>
-      </div>
-
       {error && <div className="br-banner br-banner-danger">{error}</div>}
 
-      {/* One section, not two: the stored letter and the list of sanctions
-          describe the same thing, so the document sits at the top of this
-          card rather than floating above it as a card of its own. */}
-      <section className="br-card">
-        <header className="br-card-head">
-          <h2 className="br-card-title">Sanctions</h2>
-          <div className="br-docstrip-actions">
-            <button
-              type="button"
-              className="br-btn br-btn-sm"
-              onClick={() => setSanctionModal({ mode: 'create', initial: null })}
-            >
-              <Plus size={14} aria-hidden="true" />
-              Add manually
-            </button>
-            <button
-              type="button"
-              className="br-btn br-btn-sm br-btn-primary"
-              onClick={() => importRef.current?.click()}
-              disabled={importing}
-            >
-              <Upload size={14} aria-hidden="true" />
-              {importing ? 'Reading…' : 'Import sanction letter'}
-            </button>
-          </div>
-        </header>
-
-        <input
-          ref={importRef}
-          type="file"
-          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          onChange={handleImportFile}
-          hidden
-        />
-
-        {/* The document belongs to whichever sanction is selected above. */}
-        {active && (
-          <div className="br-docstrip br-docstrip-inset">
-            <FileText size={20} className="br-docstrip-icon" aria-hidden="true" />
-            <div className="br-docstrip-text">
-              <strong>
-                {active.hasDocument ? 'Sanction letter' : 'No letter attached'}
-              </strong>
-              <span>
-                {active.hasDocument ? (
-                  <>
-                    {active.sanctionDocName}
-                    {active.sanctionDocSize
-                      ? ` · ${Math.round(active.sanctionDocSize / 1024)} KB`
-                      : ''}
-                  </>
-                ) : (
-                  'Attach the letter and its values will be checked against this record.'
-                )}
-              </span>
-            </div>
-            <div className="br-docstrip-actions">
-              {active.hasDocument ? (
-                <>
-                  <button
-                    type="button"
-                    className="br-btn br-btn-sm"
-                    onClick={() => openDocument(active)}
-                  >
-                    <Eye size={14} aria-hidden="true" />
-                    View
-                  </button>
-                  <a className="br-btn br-btn-sm" href={borrowerApi.docDownloadUrl(active.id)}>
-                    <Download size={14} aria-hidden="true" />
-                    Download
-                  </a>
-                  <button
-                    type="button"
-                    className="br-btn br-btn-sm"
-                    onClick={() => startAttach(active)}
-                    disabled={attaching}
-                  >
-                    <RefreshCw size={14} aria-hidden="true" />
-                    Replace
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="br-btn br-btn-sm br-btn-primary"
-                  onClick={() => startAttach(active)}
-                  disabled={attaching}
-                >
-                  <Paperclip size={14} aria-hidden="true" />
-                  {attaching ? 'Reading…' : 'Attach letter'}
-                </button>
-              )}
-            </div>
+      <div className="br-tabstrip">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`br-tab ${activeTab === t.key ? 'br-tab-on' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            <t.icon size={15} aria-hidden="true" />
+            {t.label}
+          </button>
+        ))}
+        {/* Same picker, same selection, shown once inline with the tabs
+            rather than repeated inside both Overview and Repayment
+            Schedule's own content — a single sanction (or none) needs no
+            picker at all, and it never shows on Sanction Letters, which is
+            itself the place to pick a row. */}
+        {hasMultipleSanctions && (activeTab === 'overview' || activeTab === 'schedule') && (
+          <div className="br-tabstrip-switch">
+            <SanctionSwitcher
+              label="Viewing sanction:"
+              sanctions={sanctions}
+              active={active}
+              onSelect={selectSanction}
+            />
           </div>
         )}
+      </div>
 
-        <input
-          ref={attachRef}
-          type="file"
-          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          onChange={handleAttachFile}
-          hidden
-        />
+      {activeTab === 'overview' && (
+          <div className="br-grid-3">
+          <section className="br-card">
+            <header className="br-card-head">
+              <span className="br-dot br-dot-user" aria-hidden="true" />
+              <h2 className="br-card-title">Borrower identity</h2>
+              <span className={`br-chip ${pending ? 'br-chip-warn' : 'br-chip-ok'}`}>
+                {pending ? `${pending} of ${total} pending` : 'Complete'}
+              </span>
+            </header>
+            <dl className="br-dl br-scroll-body">
+              {identityRows.map((r) => (
+                <Row key={r.label} label={r.label} value={r.value} empty={r.empty || 'Not entered'}
+                     mono={r.mono} icon={r.icon} strong={r.strong} />
+              ))}
+            </dl>
+            {identityKyc.length === 0 && (
+              <p className="br-muted br-dl-note">
+                The rest comes from the KYC pack — a sanction letter doesn't carry it.
+              </p>
+            )}
+            {identityCanToggle && (
+              <button type="button" className="br-link br-link-block" onClick={() => setIdentityExpanded((v) => !v)}>
+                {identityExpanded ? 'Hide empty fields' : `${identityKycFilled.length} of ${identityKycAll.length} fields available — show all`}
+              </button>
+            )}
+            <div className="br-card-foot">
+              <button
+                type="button"
+                className="br-btn br-btn-sm"
+                onClick={() => setEditIdentity(true)}
+                disabled={borrower.canEditBorrower === false}
+                title={borrower.canEditBorrower === false
+                  ? "You can view this company because you're on a sanction under it, but only its creator or team can edit its details."
+                  : undefined}
+              >
+                <Plus size={14} aria-hidden="true" />
+                {pending ? 'Complete identity details' : 'Edit identity details'}
+              </button>
+            </div>
+          </section>
 
-        {sanctions.length === 0 ? (
-          <div className="br-empty">
-            <p>No sanction letter yet.</p>
+          <SanctionDetailsCard borrower={borrower} sanction={active} />
+          <DerivedValuesCard sanction={active} />
+          </div>
+      )}
+
+      {activeTab === 'letters' && (
+        <section className="br-card">
+          <header className="br-card-head">
+            <h2 className="br-card-title">Sanctions</h2>
             <div className="br-docstrip-actions">
               <button
                 type="button"
-                className="br-btn"
-                onClick={() => setSanctionModal({ mode: 'create', initial: null })}
+                className="br-btn br-btn-sm"
+                onClick={openChangeOrg}
+                disabled={borrower.canEditBorrower === false}
+                title={borrower.canEditBorrower === false
+                  ? "You can view this company because you're on a sanction under it, but only its creator or team can change its organization."
+                  : undefined}
               >
-                <Plus size={15} aria-hidden="true" />
-                Add manually
+                <Users size={14} aria-hidden="true" />
+                Change organization
               </button>
               <button
                 type="button"
-                className="br-btn br-btn-primary"
+                className="br-btn br-btn-sm"
+                onClick={() => setSanctionModal({ mode: 'create', initial: null })}
+              >
+                <Plus size={14} aria-hidden="true" />
+                Add new manually
+              </button>
+              <button
+                type="button"
+                className="br-btn br-btn-sm br-btn-primary"
                 onClick={() => importRef.current?.click()}
                 disabled={importing}
               >
-                <Upload size={15} aria-hidden="true" />
-                {importing ? 'Reading…' : 'Import sanction letter'}
+                <Upload size={14} aria-hidden="true" />
+                {importing ? 'Reading…' : 'Import new sanction letter'}
               </button>
             </div>
-          </div>
-        ) : (
-          <table className="br-table">
-            <tbody>
-              {sanctions.map((s) => (
-                <tr
-                  key={s.id}
-                  className={s.id === active?.id ? 'br-row-active' : ''}
-                  onClick={() => setActiveId(s.id)}
+          </header>
+
+          <input
+            ref={importRef}
+            type="file"
+            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={handleImportFile}
+            hidden
+          />
+
+          {sanctions.length === 0 ? (
+            <div className="br-empty">
+              <p>No sanction letter yet.</p>
+              <div className="br-docstrip-actions">
+                <button
+                  type="button"
+                  className="br-btn"
+                  onClick={() => setSanctionModal({ mode: 'create', initial: null })}
                 >
-                  <td className="br-mono">{s.refNo}</td>
-                  <td className="br-muted">{s.sanctionDate || '—'}</td>
-                  <td>{s.sanctionedAmount || '—'}</td>
-                  <td><span className="br-chip">{statusLabel(s.status)}</span></td>
-                  <td
-                    className="br-right"
-                    onClick={(e) => e.stopPropagation()}
+                  <Plus size={15} aria-hidden="true" />
+                  Add new manually
+                </button>
+                <button
+                  type="button"
+                  className="br-btn br-btn-primary"
+                  onClick={() => importRef.current?.click()}
+                  disabled={importing}
+                >
+                  <Upload size={15} aria-hidden="true" />
+                  {importing ? 'Reading…' : 'Import new sanction letter'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <table className="br-table">
+              <tbody>
+                {sanctions.map((s) => {
+                  const isSelected = s.id === active?.id;
+                  return (
+                  <tr
+                    key={s.id}
+                    className={s.id === active?.id ? 'br-row-active' : ''}
+                    onClick={() => selectSanction(s)}
                   >
-                    <div className="br-row-actions">
-                      <button
-                        type="button"
-                        className="br-icon-btn"
-                        title={`Edit ${s.refNo}`}
-                        aria-label={`Edit ${s.refNo}`}
-                        onClick={() => setSanctionModal({ mode: 'edit', initial: s })}
-                      >
-                        <Pencil size={15} aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className="br-icon-btn br-icon-danger"
-                        title={`Delete ${s.refNo}`}
-                        aria-label={`Delete ${s.refNo}`}
-                        onClick={() => setDeleteSanction(s)}
-                      >
-                        <Trash2 size={15} aria-hidden="true" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      <div className="br-grid-2">
-        <section className="br-card">
-          <header className="br-card-head">
-            <span className="br-dot br-dot-read" aria-hidden="true" />
-            <h2 className="br-card-title">Sanction details</h2>
-            {active?.source && <span className="br-chip">{sourceLabel(active.source)}</span>}
-            {active && hiddenCount > 0 && (
-              <button
-                type="button"
-                className="br-link"
-                onClick={() => setShowAll((v) => !v)}
-              >
-                {showAll ? 'Hide empty fields' : `Show all ${DETAIL_FIELDS.length} fields`}
-              </button>
-            )}
-          </header>
-          {active ? (
-            // One flat list, in the order the registry sheet prints the fields.
-            // A letter states maybe a dozen of the thirty-odd columns, so the
-            // rest are left out rather than shown as a wall of dashes — the
-            // link in the header brings them back when you want to see what a
-            // record is missing.
-            //
-            // `borrowerName` here is the letter's own field, separate from
-            // the borrower record's name below — but a letter that didn't
-            // capture one shouldn't just look blank when the record's name is
-            // right there, so it falls back to that.
-            <dl className="br-dl br-scroll-body">
-              {DETAIL_FIELDS
-                .map((f) => ({
-                  ...f,
-                  value: f.key === 'borrowerName'
-                    ? (active[f.key] || borrower.borrowerName)
-                    : active[f.key],
-                }))
-                .filter((f) => showAll || !isBlank(f.value))
-                .map((f) => (
-                  <Row
-                    key={f.key}
-                    label={f.label}
-                    value={f.value}
-                    strong={f.key === 'sanctionedAmount'}
-                    mono={f.mono}
-                    align={LEFT_ALIGN_KEYS.has(f.key) ? 'left' : ''}
-                  />
-                ))}
-            </dl>
-          ) : (
-            <p className="br-muted">These fill in once a sanction is recorded.</p>
+                    <td className="br-mono">
+                      {isSelected && (
+                        <Check size={14} className="brx-selected-check" aria-hidden="true" />
+                      )}
+                      {s.refNo}
+                    </td>
+                    <td className="br-muted">{s.sanctionDate || '—'}</td>
+                    <td>{s.sanctionedAmount || '—'}</td>
+                    <td>
+                      <span className="br-chip">{statusLabel(s.status)}</span>
+                      {isSelected && <span className="brx-selected-chip">Selected</span>}
+                    </td>
+                    <td
+                      className="br-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="br-row-actions">
+                        {s.hasDocument ? (
+                          <>
+                            <button
+                              type="button"
+                              className="br-icon-btn"
+                              title={`View ${s.refNo}`}
+                              aria-label={`View ${s.refNo}`}
+                              onClick={() => openDocument(s)}
+                            >
+                              <Eye size={15} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              className="br-icon-btn"
+                              title={`Download ${s.refNo}`}
+                              aria-label={`Download ${s.refNo}`}
+                              onClick={() => borrowerApi.downloadDocFile(s.id, s.sanctionDocName)}
+                            >
+                              <Download size={15} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              className="br-icon-btn"
+                              title={`Replace document for ${s.refNo}`}
+                              aria-label={`Replace document for ${s.refNo}`}
+                              onClick={() => startAttach(s)}
+                              disabled={attaching}
+                            >
+                              <RefreshCw size={15} aria-hidden="true" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="br-icon-btn"
+                            title={`Attach letter to ${s.refNo}`}
+                            aria-label={`Attach letter to ${s.refNo}`}
+                            onClick={() => startAttach(s)}
+                            disabled={attaching}
+                          >
+                            <Paperclip size={15} aria-hidden="true" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="br-icon-btn"
+                          title={`Edit ${s.refNo}`}
+                          aria-label={`Edit ${s.refNo}`}
+                          onClick={() => setSanctionModal({ mode: 'edit', initial: s })}
+                        >
+                          <Pencil size={15} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          className="br-icon-btn br-icon-danger"
+                          title={`Delete ${s.refNo}`}
+                          aria-label={`Delete ${s.refNo}`}
+                          onClick={() => setDeleteSanction(s)}
+                        >
+                          <Trash2 size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </section>
+      )}
 
-        <section className="br-card">
-          <header className="br-card-head">
-            <span className="br-dot br-dot-calc" aria-hidden="true" />
-            <h2 className="br-card-title">Derived values</h2>
-          </header>
-          {active ? (
-            // Same rule as the card alongside: a derived value with nothing to
-            // work from is left out rather than printed as a dash.
-            <dl className="br-dl br-scroll-body">
-              {DERIVED_ROWS
-                .filter((d) => showAll || !isBlank(active[d.key]))
-                .map((d) => (
-                  <Row
-                    key={d.key}
-                    label={d.label}
-                    value={active[d.key]}
-                    tone={d.tone ? d.tone(active[d.key]) : ''}
-                  />
-                ))}
-              {!showAll && DERIVED_ROWS.every((d) => isBlank(active[d.key])) && (
-                <p className="br-muted br-dl-note">
-                  Nothing to work these out from yet. They fill in as the
-                  amounts, rate and dates are recorded.
-                </p>
-              )}
-            </dl>
-          ) : (
-            <p className="br-muted">These fill in once a sanction is recorded.</p>
-          )}
-        </section>
-      </div>
+      {activeTab === 'schedule' && (
+        <RepaymentScheduleSection borrower={borrower} sanction={active} scheduleView={pageScheduleView} />
+      )}
 
-      <section className="br-card">
-        <header className="br-card-head">
-          <span className="br-dot br-dot-user" aria-hidden="true" />
-          <h2 className="br-card-title">Borrower identity</h2>
-          <span className={`br-chip ${pending ? 'br-chip-warn' : 'br-chip-ok'}`}>
-            {pending ? `${pending} of ${total} pending` : 'Complete'}
-          </span>
-        </header>
-        {/* Split down the middle so the two columns stay even as fields fill in. */}
-        <div className="br-grid-2 br-grid-tight">
-          <dl className="br-dl">
-            {identityRows.slice(0, Math.ceil(identityRows.length / 2)).map((r) => (
-              <Row key={r.label} label={r.label} value={r.value} empty={r.empty || 'Not entered'}
-                   mono={r.mono} icon={r.icon} strong={r.strong} />
-            ))}
-          </dl>
-          <dl className="br-dl">
-            {identityRows.slice(Math.ceil(identityRows.length / 2)).map((r) => (
-              <Row key={r.label} label={r.label} value={r.value} empty={r.empty || 'Not entered'}
-                   mono={r.mono} icon={r.icon} strong={r.strong} />
-            ))}
-          </dl>
-        </div>
-        {identityKyc.length === 0 && (
-          <p className="br-muted br-dl-note">
-            The rest comes from the KYC pack — a sanction letter doesn't carry it.
-          </p>
-        )}
-        <div className="br-card-foot">
-          <button type="button" className="br-btn br-btn-sm" onClick={() => setEditIdentity(true)}>
-            <Plus size={14} aria-hidden="true" />
-            {pending ? 'Complete identity details' : 'Edit identity details'}
-          </button>
-        </div>
-      </section>
+      {/* Not tied to any one tab — each Sanction Letters row's View/Download/
+          Replace/Attach action can trigger this regardless of which tab is
+          on screen. */}
+      <input
+        ref={attachRef}
+        type="file"
+        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        onChange={handleAttachFile}
+        hidden
+      />
 
       {deleteSanction && (
         <div className="br-modal-backdrop" onMouseDown={() => setDeleteSanction(null)}>
@@ -685,6 +801,40 @@ const BorrowerDetail = () => {
         />
       )}
 
+      {changeOrg && (
+        <div className="br-modal-backdrop" onMouseDown={() => setChangeOrg(false)}>
+          <div className="br-modal" onMouseDown={(e) => e.stopPropagation()}
+            role="dialog" aria-modal="true" aria-label="Change organization">
+            <div className="br-modal-head">
+              <div>
+                <h3 className="br-modal-title">Change organization</h3>
+                <p className="br-modal-sub">
+                  Moving {borrower.borrowerName}
+                  {active && <> (<span className="brx-ref-highlight">{active.refNo}</span>)</>}
+                  {' '}between groups never touches its sanctions,
+                  documents or repayment schedules.
+                </p>
+              </div>
+              <button type="button" className="br-icon-btn" onClick={() => setChangeOrg(false)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className="br-modal-body br-modal-body-single">
+              <HierarchyPicker value={orgHierarchy} onChange={setOrgHierarchy} />
+            </div>
+            {orgError && <div className="br-banner br-banner-danger">{orgError}</div>}
+            <div className="br-modal-foot">
+              <button type="button" className="br-btn" onClick={() => setChangeOrg(false)} disabled={savingOrg}>
+                Cancel
+              </button>
+              <button type="button" className="br-btn br-btn-primary" onClick={handleSaveOrg} disabled={savingOrg}>
+                {savingOrg ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sanctionModal && (
         <SanctionFormModal
           mode={sanctionModal.mode}
@@ -694,45 +844,16 @@ const BorrowerDetail = () => {
           borrowerName={borrower.borrowerName}
           allowAttach={sanctionModal.mode === 'create'}
           onClose={() => setSanctionModal(null)}
-          onSaved={() => { setSanctionModal(null); load(); }}
+          // Create/import stay open after Save to show the Repayment
+          // Schedule tab it just computed; edit closes itself (see
+          // SanctionFormModal's own save handler). Either way onSaved
+          // fires so this page's own data (the sanctions list, the derived
+          // panel) refreshes in the background.
+          onSaved={() => { load(); }}
         />
       )}
     </div>
   );
 };
-
-const Row = ({
-  label, value, strong = false, tone = '', empty = '—',
-  mono = false, icon = null, align = '',
-}) => (
-  <div className="br-dl-row">
-    <dt className="br-dl-label">
-      {icon && <span className="br-dl-icon">{icon}</span>}
-      {label}
-    </dt>
-    <dd className={[
-      'br-dl-value',
-      strong ? 'br-strong' : '',
-      mono && value ? 'br-mono' : '',
-      value ? (tone ? `br-tone-${tone}` : '') : 'br-muted',
-      align === 'left' ? 'brx-dl-value-left' : '',
-    ].filter(Boolean).join(' ')}>
-      {value || empty}
-    </dd>
-  </div>
-);
-
-const statusLabel = (s) => ({
-  DRAFT: 'Draft',
-  IMPORTED: 'Imported',
-  REVIEW: 'Review',
-  ONBOARDED: 'Onboarded',
-}[s] || s || '—');
-
-const sourceLabel = (s) => ({
-  MANUAL: 'Entered manually',
-  IMPORTED: 'Imported',
-  IMPORTED_EDITED: 'Imported, edited',
-}[s] || s);
 
 export default BorrowerDetail;

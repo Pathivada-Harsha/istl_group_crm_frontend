@@ -13,7 +13,7 @@ function ThemeToggle() {
       className={`theme-toggle-btn${isDark ? ' theme-toggle-btn--dark' : ''}`}
       onClick={toggleTheme}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      data-tooltip={isDark ? 'Light mode' : 'Dark mode'}
     >
       {isDark
         ? <Sun className="theme-toggle-icon" size={17} />

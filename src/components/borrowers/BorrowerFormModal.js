@@ -8,6 +8,7 @@ import { X, Check } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
 import { BORROWER_FIELDS as FIELDS, borrowerFieldGroups } from './borrowerFields';
 import { loadGoogleMaps } from '../../utils/googleMaps';
+import HierarchyPicker, { EMPTY_HIERARCHY, hierarchyFromBorrower, resolveHierarchyGroupId } from './HierarchyPicker';
 import '../../pages-css/BorrowerRegistry.css';
 
 const EMPTY = FIELDS.reduce((a, f) => ({ ...a, [f.key]: '' }), {});
@@ -15,6 +16,7 @@ const GROUPS = borrowerFieldGroups();
 
 const BorrowerFormModal = ({ borrower = null, onClose, onSaved }) => {
   const [form, setForm] = useState({ ...EMPTY });
+  const [hierarchy, setHierarchy] = useState({ ...EMPTY_HIERARCHY });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   // idle | loading | done | error — feedback next to the Pincode field only.
@@ -27,6 +29,7 @@ const BorrowerFormModal = ({ borrower = null, onClose, onSaved }) => {
       if (borrower[key]) next[key] = String(borrower[key]);
     });
     setForm(next);
+    setHierarchy(hierarchyFromBorrower(borrower));
   }, [borrower]);
 
   // A complete 6-digit pincode looks up its city/state/district via Google's
@@ -92,9 +95,14 @@ const BorrowerFormModal = ({ borrower = null, onClose, onSaved }) => {
     }
     setSaving(true);
     try {
+      const groupId = await resolveHierarchyGroupId(hierarchy);
+      const payload = {
+        ...form, groupId,
+        isSubsidiary: hierarchy.isSubsidiary, isSpv: hierarchy.isSpv,
+      };
       const saved = borrower?.id
-        ? await borrowerApi.update(borrower.id, { ...form, id: borrower.id })
-        : await borrowerApi.create(form);
+        ? await borrowerApi.update(borrower.id, { ...payload, id: borrower.id })
+        : await borrowerApi.create(payload);
       onSaved?.(saved);
     } catch (e) {
       setError(e.message || 'Could not save');
@@ -173,6 +181,11 @@ const BorrowerFormModal = ({ borrower = null, onClose, onSaved }) => {
               </div>
             </fieldset>
           ))}
+
+          <fieldset className="br-fieldset">
+            <legend className="br-fieldset-legend">Organization / hierarchy</legend>
+            <HierarchyPicker value={hierarchy} onChange={setHierarchy} />
+          </fieldset>
         </div>
 
         {error && <div className="br-banner br-banner-danger">{error}</div>}

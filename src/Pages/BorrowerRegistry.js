@@ -1,289 +1,103 @@
 // src/Pages/BorrowerRegistry.js
 //
-// Landing page for the Lender module. Lays out every borrower the way the
-// lender's own registry sheet does — grouped header bands over ~32 columns —
-// and carries the two ways a record starts: importing a sanction letter, or
-// typing one in.
-//
-// The table is driven entirely by COLUMN_GROUPS below. The two header rows, the
-// colSpan on the loading and empty rows, and the body cells all derive from it,
-// so adding a column is one line rather than four edits that fall out of step.
+// Landing page for the Lender module. Shows the Group > Sub Group > Company
+// hierarchy (via HierarchyTree) and carries the two ways a record starts:
+// importing a sanction letter, or typing one in.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Upload, Search, FileText, Trash2, AlertTriangle, Columns3,
-  Users, Wallet, Percent, MapPin, Package, ShieldCheck, FileCheck,
-  CalendarClock, TrendingUp, IndianRupee, AlertCircle, Clock,
+  Plus, Upload, Search, Trash2, AlertTriangle,
+  Users, FileCheck,
+  IndianRupee, Building2, X,
 } from 'lucide-react';
 import borrowerApi from '../services/borrowerApi';
+import CrmPreloader from '../components/preLoader';
 import BorrowerFormModal from '../components/borrowers/BorrowerFormModal';
 import SanctionFormModal from '../components/borrowers/SanctionFormModal';
-import { parseMoney, formatCrore } from '../components/borrowers/sanctionDerive';
-import { SANCTION_FIELDS, latestSanction } from '../components/borrowers/sanctionFields';
+import CompanyMatchModal from '../components/borrowers/CompanyMatchModal';
+import HierarchyTree from '../components/borrowers/HierarchyTree';
+import HierarchyPicker, {
+  EMPTY_HIERARCHY, hierarchyFromBorrower, resolveHierarchyGroupId,
+} from '../components/borrowers/HierarchyPicker';
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import '../pages-css/BorrowerRegistry.css';
 import '../pages-css/BorrowerRegistryPremium.css';
-
-const SF = SANCTION_FIELDS.reduce((a, f) => ({ ...a, [f.key]: f }), {});
-
-/** A column reading off the latest sanction, labelled from the field module. */
-const sanctionCol = (key, extra = {}) => ({
-  key,
-  label: SF[key].label,
-  width: SF[key].width,
-  align: SF[key].align,
-  get: (row, sanction) => sanction[key],
-  ...extra,
-});
-
-/** A column reading off the borrower row itself. */
-const borrowerCol = (key, label, extra = {}) => ({
-  key,
-  label,
-  get: (row) => row[key],
-  ...extra,
-});
-
-// The lender's sheet, band for band. `sticky` pins a column to the left edge;
-// its `left` offset is accumulated in JS from the widths, so changing a width
-// here keeps the header and the body aligned without touching the CSS.
-//
-// `compact: true` marks a column for the default view. Real letters fill maybe
-// a third of the sheet, so showing all thirty-two at once is a screen of
-// dashes; the rest arrive with the "Full sheet" toggle.
-const COLUMN_GROUPS = [
-  { id: 'borrower', label: 'Borrower Details', columns: [
-    sanctionCol('refNo', {
-      label: 'Ref. No', width: 160, mono: true, compact: true, sticky: true, link: true,
-    }),
-    borrowerCol('borrowerName', 'Borrower Name', { width: 240, compact: true }),
-    borrowerCol('promoterName', 'Promoter Name', { width: 170 }),
-    borrowerCol('sponsorName', 'Sponsor Name', { width: 170 }),
-    borrowerCol('guarantorName', 'Guarantor Name', { width: 170 }),
-    borrowerCol('groupName', 'Group Name', { width: 150 }),
-  ] },
-  { id: 'mof', label: 'Project Cost & Means of Finance', columns: [
-    sanctionCol('projectCost', { compact: true }),
-    sanctionCol('debtAmount', { compact: true }),
-    sanctionCol('equityAmount'),
-    sanctionCol('debtPct'),
-    sanctionCol('equityPct'),
-  ] },
-  { id: 'roi', label: 'Rate of Interest', columns: [
-    sanctionCol('baseRatePct'),
-    sanctionCol('spreadPct'),
-    // In both views, not just Key columns — plenty of letters give the ROI
-    // outright without ever breaking it into base rate + spread, so on the
-    // full sheet it's often the only one of the three with anything in it.
-    sanctionCol('roiPct', { compact: true }),
-  ] },
-  { id: 'project', label: 'Project Details', columns: [
-    sanctionCol('technology'),
-    sanctionCol('village'),
-    sanctionCol('district'),
-    // State is the borrower's registered state, not a sanction column — the
-    // sheet has one State and duplicating it per letter would only let the two
-    // disagree.
-    borrowerCol('state', 'State', { width: 130 }),
-  ] },
-  { id: 'product', label: 'Product', columns: [
-    sanctionCol('instrument'),
-  ] },
-  { id: 'security', label: 'Security', columns: [
-    // Free text long enough to run past one line — same fixed-height,
-    // hover-to-scroll cell as Cash Sweep, at this column's own width.
-    sanctionCol('coObligators', { clamp: true }),
-    sanctionCol('pledgeOfSharesPct'),
-  ] },
-  { id: 'covenants', label: 'Financial Covenants', columns: [
-    sanctionCol('minDscr'),
-    sanctionCol('dsra', { clamp: true }),
-    sanctionCol('isra', { clamp: true }),
-    // A cash sweep is a covenant mechanic, not a date, so it sits here rather
-    // than under Time Lines. `clamp` marks it for the fixed-height, hover-to-
-    // scroll cell treatment — the clause text is a full sentence, too long
-    // for one line but not worth widening the column or the row for.
-    sanctionCol('cashSweep', { clamp: true }),
-  ] },
-  { id: 'timelines', label: 'Time Lines', columns: [
-    sanctionCol('sanctionDate', { compact: true }),
-    sanctionCol('disbursementDate'),
-    // Also compact — shown in Key columns too, so it gets the same clamped
-    // cell there as well, not just on the full sheet.
-    sanctionCol('tenorText', { compact: true, clamp: true }),
-    sanctionCol('repaymentStartDate'),
-    sanctionCol('repaymentEndDate'),
-    sanctionCol('scheduledCod', { label: 'Scheduled COD', compact: true }),
-  ] },
-  { id: 'assumptions', label: 'Base Case Assumptions', columns: [
-    sanctionCol('plfPct'),
-    sanctionCol('tariffPerUnit'),
-  ] },
-];
-
-// groupId is presentational only — it lets the header/cell rendering draw a
-// divider at each band boundary; it doesn't change what a column reads or how
-// it's grouped for COLUMN_GROUPS' own purposes.
-const FLAT_COLUMNS = COLUMN_GROUPS.flatMap((g) => g.columns.map((c) => ({ ...c, groupId: g.id })));
-const COMPACT_COLUMNS = FLAT_COLUMNS.filter((c) => c.compact);
-
-// Presentational only — icon + pastel tone for each band's header cell.
-// Keyed by the same ids as COLUMN_GROUPS; doesn't touch its grouping logic.
-const GROUP_META = {
-  borrower: { icon: Users, tone: 'blue' },
-  mof: { icon: Wallet, tone: 'green' },
-  roi: { icon: Percent, tone: 'lavender' },
-  project: { icon: MapPin, tone: 'orange' },
-  product: { icon: Package, tone: 'teal' },
-  security: { icon: ShieldCheck, tone: 'sky' },
-  covenants: { icon: FileCheck, tone: 'pink' },
-  timelines: { icon: CalendarClock, tone: 'yellow' },
-  assumptions: { icon: TrendingUp, tone: 'purple' },
-};
-
-// Left offsets for the pinned columns, accumulated from the widths so that
-// changing a width in the config keeps header and body aligned on its own.
-const stickyLeft = (columns) => {
-  const out = {};
-  let x = 0;
-  columns.forEach((c) => {
-    if (!c.sticky) return;
-    out[c.key] = x;
-    x += c.width || 0;
-  });
-  return out;
-};
-const LEFTS = { full: stickyLeft(FLAT_COLUMNS), compact: stickyLeft(COMPACT_COLUMNS) };
-
-const cellProps = (c, columns, lefts, fill) => {
-  const lastSticky = [...columns].reverse().find((x) => x.sticky)?.key;
-  const idx = columns.indexOf(c);
-  const prev = idx > 0 ? columns[idx - 1] : null;
-  // Only meaningful on the full sheet, where the band row above explains what
-  // the divider marks — in Key columns view there's no band row, so the same
-  // line would just be an unexplained rule between columns.
-  const groupStart = !fill && !!prev && prev.groupId !== c.groupId;
-  const className = [
-    c.align === 'right' ? 'brx-num' : '',
-    c.mono ? 'brx-mono' : '',
-    c.sticky ? 'brx-sticky-col' : '',
-    c.key === lastSticky ? 'brx-sticky-edge' : '',
-    groupStart ? 'brx-group-start' : '',
-  ].filter(Boolean).join(' ');
-  // Nine columns fit a normal screen, so only a minimum is set and the table
-  // shares the leftover width between them. Pinning an exact width there would
-  // leave the columns bunched at the left with dead space beside them — an
-  // inline width beats any stylesheet rule that tries to undo it.
-  const style = fill ? { minWidth: c.width } : { minWidth: c.width, width: c.width };
-  if (c.sticky) style.left = lefts[c.key];
-  return { className, style };
-};
-
-/**
- * Blank means the document didn't say. `0` and `"0%"` are values, not blanks —
- * a 0.00% spread on a concessional facility is real, and showing it as a dash
- * would be a data error rather than a cosmetic one.
- */
-const renderCell = (v) => (
-  v === null || v === undefined || v === ''
-    ? <span className="brx-dash">—</span>
-    : v
-);
 
 const BorrowerRegistry = () => {
   const navigate = useNavigate();
   const fileRef = useRef(null);
   const { toasts, removeToast, showSuccess, showWarning, showError } = useToast();
 
-  const [rows, setRows] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('');
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [parsing, setParsing] = useState(false);
+
+  // The banner is a persistent, page-level notice (unlike the toast shown
+  // alongside it for the same failure) — auto-clearing it after a few
+  // seconds keeps it from sitting on screen indefinitely once the user has
+  // seen it.
+  useEffect(() => {
+    if (!error) return undefined;
+    const t = setTimeout(() => setError(''), 5000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   const [addBorrower, setAddBorrower] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);   // row awaiting confirmation
   const [deleting, setDeleting] = useState(false);
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState(null); // Parent Group row awaiting confirmation
+  const [deletingGroup, setDeletingGroup] = useState(false);
   const [newBorrower, setNewBorrower] = useState(null); // awaiting its first sanction
-  const [review, setReview] = useState(null); // { initial, file }
-  // Nine columns by default; the whole registry sheet on request.
-  const [fullSheet, setFullSheet] = useState(false);
+  const [matchStep, setMatchStep] = useState(null); // { parsed, file } — company confirmation before review
+  const [review, setReview] = useState(null); // { initial, file, borrowerId }
+  const [hierarchyData, setHierarchyData] = useState({
+    groups: [], standalone: [], totalElements: 0, totalPages: 1, stats: null,
+  });
+  const [hierarchyLoading, setHierarchyLoading] = useState(true);
+  // 1-based in the UI/URL sense (matches Pagination's own page numbering);
+  // converted to the 0-based index the API expects when fetching.
+  const [hierarchyPage, setHierarchyPage] = useState(1);
+  const [hierarchyPageSize, setHierarchyPageSize] = useState(10);
+  // Reorganize-instead-of-delete: fetched fresh (the hierarchy tree's own
+  // company rows don't carry group/type fields) once the user asks for it
+  // from the delete-confirm dialog, never eagerly.
+  const [orgTarget, setOrgTarget] = useState(null); // full BorrowerWrapper
+  const [orgValue, setOrgValue] = useState(EMPTY_HIERARCHY);
+  const [orgLoading, setOrgLoading] = useState(false);
+  const [savingOrg, setSavingOrg] = useState(false);
+  const [orgError, setOrgError] = useState('');
 
-  const columns = fullSheet ? FLAT_COLUMNS : COMPACT_COLUMNS;
-  const lefts = fullSheet ? LEFTS.full : LEFTS.compact;
-  const totalCols = columns.length + 1;   // + the pinned Actions column
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const loadHierarchy = useCallback(async () => {
+    setHierarchyLoading(true);
     try {
-      // Both filters go to the server. Filtering client-side only ever saw the
-      // rows already fetched, so it silently disagreed with the counts above it.
-      setRows(await borrowerApi.getAll(search, category));
+      // Server-paginated and server-filtered — page/size/search all go to
+      // the database, so a page never holds more than it needs to and a
+      // search matches the whole registry, not just whatever page happened
+      // to be loaded already.
+      setHierarchyData(await borrowerApi.getHierarchy(hierarchyPage - 1, hierarchyPageSize, search));
     } catch (e) {
-      setError(e.message || 'Could not load borrowers');
+      setError(e.message || 'Could not load the hierarchy');
     } finally {
-      setLoading(false);
+      setHierarchyLoading(false);
     }
-  }, [search, category]);
+  }, [hierarchyPage, hierarchyPageSize, search]);
 
-  // Debounced so typing in the search box doesn't fire a request per keystroke.
-  // Category changes apply at once — a dropdown has no keystrokes to wait for.
   useEffect(() => {
-    const t = setTimeout(load, search ? 300 : 0);
+    const t = setTimeout(loadHierarchy, search ? 300 : 0);
     return () => clearTimeout(t);
-  }, [load, search]);
+  }, [loadHierarchy, search]);
 
-  // Categories come from the whole table, not the current page of results —
-  // otherwise choosing one would shrink the list it was chosen from.
-  useEffect(() => {
-    borrowerApi.getCategories()
-      .then(setCategories)
-      .catch(() => setCategories([]));
-  }, []);
-
-  const visible = rows;
-
-  const stats = useMemo(() => {
-    const total = visible.reduce(
-      (sum, r) => sum + (parseMoney(r.latestSanctionedAmount) || 0), 0,
-    );
-    return {
-      count: visible.length,
-      sanctioned: formatCrore(total) || '₹0.00 Cr',
-      pending: visible.filter((r) => (r.identityFilled ?? 0) < (r.identityTotal ?? 7)).length,
-      overdue: visible.filter((r) => /Overdue/i.test(r.latestCodStatus || '')).length,
-    };
-  }, [visible]);
-
-  /**
-   * Track whether the table is scrolled away from either edge, so the pinned
-   * columns only draw a divider when something is genuinely passing under them.
-   * Re-run when the column set or the rows change — switching to the full sheet
-   * makes the table overflow where it did not before.
-   */
-  const scrollRef = useRef(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
-
-  const syncEdges = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const max = el.scrollWidth - el.clientWidth;
-    setEdges({
-      left: el.scrollLeft > 1,
-      right: max > 1 && el.scrollLeft < max - 1,
-    });
-  }, []);
-
-  useEffect(() => {
-    syncEdges();
-    window.addEventListener('resize', syncEdges);
-    return () => window.removeEventListener('resize', syncEdges);
-  }, [syncEdges, fullSheet, visible.length, loading]);
+  // Registry-wide, computed server-side independently of which page is
+  // loaded (see BorrowerService.getHierarchyStats) — so these never read
+  // like a count of just the current page.
+  const hierarchyStats = {
+    groups: hierarchyData.stats?.totalGroups ?? 0,
+    companies: hierarchyData.stats?.totalCompanies ?? 0,
+    sanctions: hierarchyData.stats?.totalSanctionLetters ?? 0,
+    sanctioned: hierarchyData.stats?.totalSanctionedAmount || '₹0.00 Cr',
+  };
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -294,8 +108,10 @@ const BorrowerRegistry = () => {
     setError('');
     try {
       const parsed = await borrowerApi.parseSanction(file);
-      setReview({ initial: parsed, file });
-      showSuccess('Sanction letter read. Review the details before saving.', 'Ready to review');
+      // Confirm which company the letter belongs to (or create a new one)
+      // before the review screen opens, so the sanction never gets attached
+      // to the wrong record on a name that merely looks similar.
+      setMatchStep({ parsed, file });
     } catch (err) {
       const msg = err.message || 'Could not read the document';
       setError(msg);
@@ -306,8 +122,10 @@ const BorrowerRegistry = () => {
   };
 
   /**
-   * Soft-deletes the borrower and, on the server, its sanctions with it — so a
-   * ref no. from a deleted record doesn't block a later re-import.
+   * Permanently deletes the borrower and, on the server, every sanction and
+   * document that hangs off it (aliases cascade at the DB level) — nothing is
+   * left behind, so a ref no. from a deleted record doesn't block a later
+   * re-import.
    */
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -317,7 +135,7 @@ const BorrowerRegistry = () => {
     try {
       await borrowerApi.remove(deleteTarget.id);
       setDeleteTarget(null);
-      await load();
+      loadHierarchy();
       showSuccess(`${name} and its sanction letters were permanently deleted.`, 'Deleted');
     } catch (err) {
       const msg = err.message || 'Could not delete this borrower';
@@ -329,8 +147,80 @@ const BorrowerRegistry = () => {
     }
   };
 
+  /**
+   * Same permanent, cascading delete as a Sub Group's own delete action on
+   * Group Detail — this is a Parent Group, so everything under it (its
+   * companies, its Sub Groups, and every one of THEIR companies/sanctions/
+   * documents) goes with it. The hierarchy row here doesn't carry those
+   * nested counts (Level 1's API response is a lighter summary than
+   * GroupDetail's), so the confirm dialog below warns in general terms
+   * rather than an exact breakdown.
+   */
+  const handleDeleteGroup = async () => {
+    if (!deleteGroupTarget) return;
+    setDeletingGroup(true);
+    setError('');
+    const name = deleteGroupTarget.groupName;
+    try {
+      await borrowerApi.deleteGroup(deleteGroupTarget.id);
+      setDeleteGroupTarget(null);
+      loadHierarchy();
+      showSuccess(`${name} and everything under it were permanently deleted.`, 'Deleted');
+    } catch (err) {
+      const msg = err.message || 'Could not delete this group';
+      setError(msg);
+      setDeleteGroupTarget(null);
+      showError(msg, 'Delete failed');
+    } finally {
+      setDeletingGroup(false);
+    }
+  };
+
+  /**
+   * The hierarchy tree's own company rows don't carry group/type fields
+   * (only a rolled-up companyType label), so a fresh full record is fetched
+   * before the picker opens rather than trying to keep that in sync
+   * everywhere the tree is rendered.
+   */
+  const openChangeOrg = async (target) => {
+    setDeleteTarget(null);
+    setOrgError('');
+    setOrgLoading(true);
+    setOrgTarget(target);
+    try {
+      const full = await borrowerApi.getById(target.id);
+      setOrgTarget(full);
+      setOrgValue(hierarchyFromBorrower(full));
+    } catch (e) {
+      setOrgTarget(null);
+      showError(e.message || 'Could not load this company', 'Could not open');
+    } finally {
+      setOrgLoading(false);
+    }
+  };
+
+  const handleSaveOrg = async () => {
+    if (!orgTarget) return;
+    setOrgError('');
+    setSavingOrg(true);
+    try {
+      const groupId = await resolveHierarchyGroupId(orgValue);
+      await borrowerApi.updateHierarchy(orgTarget.id, {
+        groupId, isSubsidiary: orgValue.isSubsidiary, isSpv: orgValue.isSpv,
+      });
+      setOrgTarget(null);
+      loadHierarchy();
+      showSuccess(`${orgTarget.borrowerName}'s organization was updated.`, 'Updated');
+    } catch (e) {
+      setOrgError(e.message || 'Could not update the organization');
+    } finally {
+      setSavingOrg(false);
+    }
+  };
+
   return (
     <div className="br-page brx-registry">
+      {parsing && <CrmPreloader text="Reading sanction letter…" />}
       <div className="brx-head">
         <div className="brx-head-text">
           <p className="brx-eyebrow">Lender</p>
@@ -371,222 +261,38 @@ const BorrowerRegistry = () => {
             className="brx-input brx-input-icon"
             placeholder="Search by borrower, SL ref., ref no., group, or CIN"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              // A filtered result set can't be assumed to still have
+              // whatever page was showing before.
+              setHierarchyPage(1);
+            }}
           />
         </div>
-        <select
-          className="brx-input brx-select"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          title="Filter by the project category on a borrower's sanction letters"
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-
-        {/* A letter states maybe a third of the registry sheet, so the other
-            two-thirds default to hidden rather than filling the table with
-            dashes. */}
-        <button
-          type="button"
-          className={`brx-btn ${fullSheet ? 'brx-btn-active' : ''}`}
-          onClick={() => setFullSheet((v) => !v)}
-          title={fullSheet
-            ? 'Show only the columns that usually carry a value'
-            : `Show all ${FLAT_COLUMNS.length} columns of the registry sheet`}
-        >
-          <Columns3 size={15} aria-hidden="true" />
-          {fullSheet ? 'Key columns' : 'Full sheet'}
-        </button>
       </div>
 
       <div className="brx-stats">
-        <Stat icon={Users} tone="blue" label="Borrowers" value={stats.count} />
-        <Stat icon={IndianRupee} tone="green" label="Sanctioned" value={stats.sanctioned} />
-        <Stat icon={AlertCircle} tone="amber" label="Details pending" value={stats.pending} />
-        <Stat icon={Clock} tone="rose" label="COD overdue" value={stats.overdue} />
+        <Stat icon={Users} tone="blue" label="Total Groups" value={hierarchyStats.groups} sub="Active groups" />
+        <Stat icon={Building2} tone="teal" label="Total Companies" value={hierarchyStats.companies} sub="Including standalone" />
+        <Stat icon={FileCheck} tone="amber" label="Total Sanction Letters" value={hierarchyStats.sanctions} sub="Across all companies" />
+        <Stat icon={IndianRupee} tone="green" label="Total Sanctioned Amount" value={hierarchyStats.sanctioned} sub="Across all groups" />
       </div>
 
-      <div className="brx-table-card">
-        <div
-          className={[
-            'brx-table-wrap',
-            edges.left ? 'brx-scroll-left' : '',
-            edges.right ? 'brx-scroll-right' : '',
-          ].filter(Boolean).join(' ')}
-          ref={scrollRef}
-          onScroll={syncEdges}
-        >
-        <table className={`brx-table ${fullSheet ? '' : 'brx-table-compact'}`}>
-          {/* Pins every column to its configured width regardless of content
-              length — without it, a long value (e.g. Cash Sweep's free text)
-              can widen its column past the width set in COLUMN_GROUPS. Only
-              needed on the full sheet: the compact view intentionally shares
-              leftover width between its nine columns instead. */}
-          {fullSheet && (
-            <colgroup>
-              {columns.map((c) => <col key={c.key} style={{ width: c.width }} />)}
-              <col style={{ width: 96 }} />
-            </colgroup>
-          )}
-          <thead>
-            {/* The band row only earns its place on the full sheet. With nine
-                columns drawn from six different bands it was label noise. */}
-            {fullSheet && (
-              <tr>
-                {COLUMN_GROUPS.map((g) => {
-                  const meta = GROUP_META[g.id] || {};
-                  const Icon = meta.icon;
-                  return (
-                    <th
-                      key={g.id}
-                      className={`brx-th-group brx-band-${meta.tone || 'slate'}`}
-                      colSpan={g.columns.length}
-                      scope="colgroup"
-                    >
-                      <span className="brx-band-label">
-                        {Icon && <Icon size={13} className="brx-band-icon" aria-hidden="true" />}
-                        {g.label}
-                      </span>
-                    </th>
-                  );
-                })}
-                {/* An empty cell above Actions rather than a rowSpan on the
-                    label. A rowSpan'd sticky cell sits between the two header
-                    rows in Chrome — it painted over the band beside it and the
-                    word "Actions" floated in the gap. */}
-                <th className="brx-sticky-right" aria-hidden="true" />
-              </tr>
-            )}
-            <tr>
-              {columns.map((c) => {
-                const { className, style } = cellProps(c, columns, lefts, !fullSheet);
-                return (
-                  <th key={c.key} className={className} style={style} scope="col">
-                    {c.label}
-                  </th>
-                );
-              })}
-              {/* Pinned right: on the full sheet, Edit and Delete would
-                  otherwise need a horizontal scroll on every row. */}
-              <th className="brx-sticky-right brx-right" scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={totalCols} className="brx-muted brx-pad">Loading…</td></tr>
-            )}
-
-            {!loading && visible.length === 0 && (
-              <tr>
-                <td colSpan={totalCols} className="brx-pad">
-                  <div className="brx-empty">
-                    {search || category ? (
-                      <>
-                        <p><strong>No borrowers match</strong></p>
-                        <p className="brx-muted">
-                          {search && `Nothing found for "${search}"`}
-                          {search && category && ' in '}
-                          {category && `category "${category}"`}
-                          {category && '. Borrowers with no sanction letter have no category, '
-                            + 'so they are excluded while a category is selected.'}
-                        </p>
-                        <button
-                          type="button"
-                          className="brx-btn"
-                          onClick={() => { setSearch(''); setCategory(''); }}
-                        >
-                          Clear filters
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <p><strong>No borrowers yet</strong></p>
-                        <p className="brx-muted">
-                          Import a sanction letter to create the first record, or add one manually.
-                        </p>
-                        <button
-                          type="button"
-                          className="brx-btn"
-                          onClick={() => fileRef.current?.click()}
-                        >
-                          <FileText size={15} aria-hidden="true" />
-                          Import sanction letter
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            )}
-
-            {!loading && visible.map((r) => {
-              const s = latestSanction(r);
-              return (
-                <tr key={r.id} className="brx-row">
-                  {columns.map((c) => {
-                    const { className, style } = cellProps(c, columns, lefts, !fullSheet);
-                    const v = c.get(r, s);
-                    if (c.link) {
-                      return (
-                        <td key={c.key} className={className} style={style}>
-                          <button
-                            type="button"
-                            className="brx-ref-link"
-                            onClick={() => navigate(`/lender/borrowers/${r.id}`)}
-                          >
-                            {renderCell(v)}
-                          </button>
-                        </td>
-                      );
-                    }
-                    // Full sheet only — in Key columns view this would force
-                    // every row up to the clamp's 3-line height even when a
-                    // column like Tenor is the only long value in the row, so
-                    // compact view keeps the plain single-line truncation
-                    // every other compact column already uses.
-                    if (c.clamp && fullSheet) {
-                      return (
-                        <td key={c.key} className={className} style={style}>
-                          <div
-                            className="brx-clamp"
-                            // Only resets the box's own scroll offset — no
-                            // state, no re-render, doesn't touch anything the
-                            // table's own scroll tracking depends on.
-                            onMouseLeave={(e) => { e.currentTarget.scrollTop = 0; }}
-                          >
-                            {renderCell(v)}
-                          </div>
-                        </td>
-                      );
-                    }
-                    return (
-                      <td key={c.key} className={className} style={style} title={String(v ?? '')}>
-                        {renderCell(v)}
-                      </td>
-                    );
-                  })}
-
-                  <td className="brx-sticky-right brx-right">
-                    <div className="brx-row-actions">
-                      <button
-                        type="button"
-                        className="brx-icon-btn brx-icon-danger"
-                        title={`Delete ${r.borrowerName}`}
-                        aria-label={`Delete ${r.borrowerName}`}
-                        onClick={() => setDeleteTarget(r)}
-                      >
-                        <Trash2 size={15} aria-hidden="true" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        </div>
-      </div>
+      <HierarchyTree
+        data={hierarchyData}
+        loading={hierarchyLoading}
+        search={search}
+        onSelectCompany={(id) => navigate(`/lender/borrowers/${id}`)}
+        onSelectGroup={(id) => navigate(`/lender/borrowers/group/${id}`)}
+        onDeleteCompany={(c) => setDeleteTarget(c)}
+        onDeleteGroup={(g) => setDeleteGroupTarget(g)}
+        page={hierarchyPage}
+        pageCount={hierarchyData.totalPages || 1}
+        pageSize={hierarchyPageSize}
+        totalRows={hierarchyData.totalElements || 0}
+        onPageChange={setHierarchyPage}
+        onPageSizeChange={(n) => { setHierarchyPageSize(n); setHierarchyPage(1); }}
+      />
 
       {deleteTarget && (
         <div className="br-modal-backdrop" onMouseDown={() => setDeleteTarget(null)}>
@@ -611,14 +317,26 @@ const BorrowerRegistry = () => {
                 {deleteTarget.latestRefNo
                   ? <>Its sanction letters, including <strong>{deleteTarget.latestRefNo}</strong>,
                       and the stored documents will be removed with it.</>
+                  : deleteTarget.sanctionsCount > 0
+                  ? <>Its {deleteTarget.sanctionsCount} sanction letter{deleteTarget.sanctionsCount === 1 ? '' : 's'}
+                      and the stored documents will be removed with it.</>
                   : 'This borrower has no sanction letters recorded.'}
               </p>
               <p className="br-muted br-confirm-note">
-                The record is archived rather than erased, so the reference number
-                becomes free for a future import.
+                This is permanent — the company, its sanctions and their documents
+                are deleted outright, not archived. If you only meant to move it
+                elsewhere, use Change organization instead.
               </p>
             </div>
             <div className="br-modal-foot">
+              <button
+                type="button"
+                className="br-btn"
+                onClick={() => openChangeOrg(deleteTarget)}
+                disabled={deleting}
+              >
+                Change organization
+              </button>
               <button
                 type="button"
                 className="br-btn"
@@ -641,17 +359,120 @@ const BorrowerRegistry = () => {
         </div>
       )}
 
+      {deleteGroupTarget && (
+        <div className="br-modal-backdrop" onMouseDown={() => setDeleteGroupTarget(null)}>
+          <div
+            className="br-modal br-modal-confirm"
+            onMouseDown={(e) => e.stopPropagation()}
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Confirm delete"
+          >
+            <div className="br-modal-head">
+              <div className="br-viewer-title">
+                <AlertTriangle size={18} className="br-tone-warn" aria-hidden="true" />
+                <div className="br-viewer-title-text">
+                  <h3 className="br-modal-title">Delete this Parent Group?</h3>
+                  <p className="br-modal-sub">{deleteGroupTarget.groupName}</p>
+                </div>
+              </div>
+            </div>
+            <div className="br-modal-body br-modal-body-single">
+              <p className="br-confirm-text">
+                Every company under it — directly or under any of its Sub Groups —
+                along with all of their sanction letters and stored documents, will
+                be permanently deleted with it.
+              </p>
+              <p className="br-muted br-confirm-note">
+                This is permanent and cannot be undone.
+              </p>
+            </div>
+            <div className="br-modal-foot">
+              <button
+                type="button"
+                className="br-btn"
+                onClick={() => setDeleteGroupTarget(null)}
+                disabled={deletingGroup}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="br-btn br-btn-danger"
+                onClick={handleDeleteGroup}
+                disabled={deletingGroup}
+              >
+                <Trash2 size={15} aria-hidden="true" />
+                {deletingGroup ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(orgLoading || orgTarget) && (
+        <div className="br-modal-backdrop" onMouseDown={() => { if (!savingOrg) { setOrgTarget(null); } }}>
+          <div
+            className="br-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Change organization"
+          >
+            <div className="br-modal-head">
+              <div className="br-viewer-title">
+                <div className="br-viewer-title-text">
+                  <h3 className="br-modal-title">Change organization</h3>
+                  {orgTarget && (
+                    <p className="br-modal-sub">
+                      {orgTarget.borrowerName}
+                      {orgTarget.sanctions?.[0] && (
+                        <> (<span className="brx-ref-highlight">{orgTarget.sanctions[0].refNo}</span>)</>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button type="button" className="br-icon-btn" onClick={() => setOrgTarget(null)} aria-label="Close">
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="br-modal-body br-modal-body-single">
+              {orgLoading ? (
+                <p className="br-muted">Loading…</p>
+              ) : (
+                <HierarchyPicker value={orgValue} onChange={setOrgValue} />
+              )}
+            </div>
+            {orgError && <div className="br-banner br-banner-danger">{orgError}</div>}
+            <div className="br-modal-foot">
+              <button type="button" className="br-btn" onClick={() => setOrgTarget(null)} disabled={savingOrg}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="br-btn br-btn-primary"
+                onClick={handleSaveOrg}
+                disabled={savingOrg || orgLoading}
+              >
+                {savingOrg ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {addBorrower && (
         <BorrowerFormModal
           onClose={() => setAddBorrower(false)}
           onSaved={(saved) => {
             setAddBorrower(false);
+            loadHierarchy();
             // Identity is only half the record. Go straight on to the sanction
             // form for the borrower just created, rather than making the user
             // find it and click Add sanction — but leave it skippable, since a
             // borrower can legitimately exist before any facility does.
             if (saved?.id) setNewBorrower(saved);
-            else load();
           }}
         />
       )}
@@ -663,15 +484,30 @@ const BorrowerRegistry = () => {
           borrowerName={newBorrower.borrowerName}
           allowAttach
           onClose={() => {
-            // Skipping is fine — the borrower is already saved.
+            // Skipping is fine — the borrower is already saved. Also fires
+            // right after onSaved on a successful save (the modal closes
+            // unconditionally now) — replace rather than push so that case
+            // doesn't leave a redundant duplicate entry in browser history.
             const id = newBorrower.id;
             setNewBorrower(null);
-            navigate(`/lender/borrowers/${id}`);
+            navigate(`/lender/borrowers/${id}`, { replace: true });
           }}
           onSaved={(saved) => {
             const id = saved?.id || newBorrower.id;
             setNewBorrower(null);
+            loadHierarchy();
             navigate(`/lender/borrowers/${id}`);
+          }}
+        />
+      )}
+
+      {matchStep && (
+        <CompanyMatchModal
+          parsed={matchStep.parsed}
+          onClose={() => setMatchStep(null)}
+          onResolved={(borrowerId) => {
+            setReview({ initial: matchStep.parsed, file: matchStep.file, borrowerId });
+            setMatchStep(null);
           }}
         />
       )}
@@ -679,16 +515,17 @@ const BorrowerRegistry = () => {
       {review && (
         <SanctionFormModal
           mode="import"
+          borrowerId={review.borrowerId}
           initial={review.initial}
           file={review.file}
           onClose={() => setReview(null)}
           onSaved={(saved) => {
             setReview(null);
+            loadHierarchy();
             showSuccess('Sanction letter saved to the registry.', 'Saved');
             // Land on the record just created — that is where the derived
             // panel shows what the import worked out.
             if (saved?.id) navigate(`/lender/borrowers/${saved.id}`);
-            else load();
           }}
         />
       )}
@@ -698,10 +535,14 @@ const BorrowerRegistry = () => {
   );
 };
 
-const Stat = ({ icon: Icon, tone, label, value }) => (
+// .brx-stat-body is flex-direction: column-reverse (see CSS), so DOM order
+// here is bottom-to-top visually: sub sits first so it lands at the very
+// bottom, under the value, with the label staying on top as it always was.
+const Stat = ({ icon: Icon, tone, label, value, sub }) => (
   <div className={`brx-stat brx-stat-${tone}`}>
     <span className="brx-stat-icon"><Icon size={19} aria-hidden="true" /></span>
     <span className="brx-stat-body">
+      {sub && <span className="brx-stat-sub">{sub}</span>}
       <span className="brx-stat-value">{value}</span>
       <span className="brx-stat-label">{label}</span>
     </span>

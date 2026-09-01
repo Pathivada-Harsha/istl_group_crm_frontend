@@ -336,6 +336,7 @@ export function NotificationBell() {
         aria-label={
           unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
         }
+        data-tooltip="Notifications"
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}

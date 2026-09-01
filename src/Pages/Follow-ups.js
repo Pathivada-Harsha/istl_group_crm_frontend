@@ -6,7 +6,11 @@ import "../pages-css/Follow-ups.css";
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import FilterSelect from './../components/Dropdowns/FilterSelect.js';
-import { FiTrash2, FiEdit, FiHome } from 'react-icons/fi';
+import {
+  FiTrash2, FiEdit, FiUser, FiBriefcase, FiPhone, FiMail, FiUsers,
+  FiMapPin, FiMonitor, FiFileText, FiTag, FiAlertTriangle, FiCalendar,
+  FiCheckCircle, FiClipboard, FiBarChart2, FiHome
+} from 'react-icons/fi';
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
@@ -1450,7 +1454,7 @@ export default function ClientDashboardFollowUps() {
                       <div className="followup-lead-info">
                         {followup.relatedType === 'CUSTOMER' ? (
                           <>
-                            <span style={{ display:'inline-block', padding:'1px 7px', background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:2 }}>🏢 Customer</span>
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'1px 7px', color:'#1d4ed8', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:2 }}><FiBriefcase size={11}/> Customer</span>
                             <strong style={{ display:'block', fontSize:13 }}>{followup.customerCode ? followup.customerCode.split(' — ')[0] : 'N/A'}</strong>
                             {followup.customerCode && followup.customerCode.includes(' — ') && (
                               <span className="followup-group-badge">{followup.customerCode.split(' — ')[1]}</span>
@@ -1458,23 +1462,23 @@ export default function ClientDashboardFollowUps() {
                           </>
                         ) : (
                           <>
-                            <span style={{ display:'inline-block', padding:'1px 7px', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:2 }}>👤 Lead</span>
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'1px 7px', color:'#15803d', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:2 }}><FiUser size={11}/> Lead</span>
                             <strong style={{ display:'block', fontSize:13 }}>{followup.leadName || followup.leadCode || 'N/A'}</strong>
                             <span style={{ fontSize:11, color:'#6b7280' }}>{followup.leadCode}</span>
-                            {followup.leadPhone && <span style={{ fontSize:11, color:'#6b7280', display:'block' }}>📞 {followup.leadPhone}</span>}
+                            {followup.leadPhone && <span style={{ fontSize:11, color:'#6b7280', display:'flex', alignItems:'center', gap:4 }}><FiPhone size={10}/> {followup.leadPhone}</span>}
                           </>
                         )}
                       </div>
                     </td>
                     <td data-label="Type">
-                      <span className="followup-type-badge">
-                        {followup.followupType === 'Call' && '📞'}
-                        {followup.followupType === 'Email' && '📧'}
-                        {followup.followupType === 'Meeting' && '👥'}
-                        {followup.followupType === 'Visit' && '🏢'}
-                        {followup.followupType === 'Demo' && '💻'}
-                        {followup.followupType === 'Proposal' && '📄'}
-                        {followup.followupType === 'Other' && '📌'}
+                      <span className="followup-type-badge" style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
+                        {followup.followupType === 'Call' && <FiPhone size={11}/>}
+                        {followup.followupType === 'Email' && <FiMail size={11}/>}
+                        {followup.followupType === 'Meeting' && <FiUsers size={11}/>}
+                        {followup.followupType === 'Visit' && <FiMapPin size={11}/>}
+                        {followup.followupType === 'Demo' && <FiMonitor size={11}/>}
+                        {followup.followupType === 'Proposal' && <FiFileText size={11}/>}
+                        {followup.followupType === 'Other' && <FiTag size={11}/>}
                         {' '}{followup.followupType}
                       </span>
                     </td>
@@ -1843,8 +1847,8 @@ export default function ClientDashboardFollowUps() {
                                       )}
                                     </div>
                                     <div style={{ fontSize: '12px', color: lp.sub, marginTop: 3, display: 'flex', gap: 10 }}>
-                                      {l.phone && <span>📞 {l.phone}</span>}
-                                      {l.email && <span>✉️ {l.email}</span>}
+                                      {l.phone && <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}><FiPhone size={11}/> {l.phone}</span>}
+                                      {l.email && <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}><FiMail size={11}/> {l.email}</span>}
                                     </div>
                                   </div>
                                 );
@@ -2020,8 +2024,8 @@ export default function ClientDashboardFollowUps() {
                 <span className="followup-info-label">Source:</span>
                 <span className="followup-info-value">
                   {editingFollowup.relatedType === 'CUSTOMER'
-                    ? <span style={{ background:'#eff6ff', color:'#1d4ed8', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700 }}>🏢 Customer</span>
-                    : <span style={{ background:'#f0fdf4', color:'#15803d', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700 }}>👤 Lead</span>
+                    ? <span style={{ display:'inline-flex', alignItems:'center', gap:4, color:'#1d4ed8', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700 }}><FiBriefcase size={12}/> Customer</span>
+                    : <span style={{ display:'inline-flex', alignItems:'center', gap:4, color:'#15803d', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700 }}><FiUser size={12}/> Lead</span>
                   }
                 </span>
               </div>
@@ -2172,7 +2176,8 @@ export default function ClientDashboardFollowUps() {
       {showViewModal && viewingFollowup && (() => {
         const f = viewingFollowup;
         const isCustomer = f.relatedType === 'CUSTOMER';
-        const TYPE_ICON  = { Call:'📞', Email:'✉️', Meeting:'🤝', Visit:'🏠', Demo:'💻', Proposal:'📄', Other:'📌' };
+        const TYPE_ICON  = { Call:FiPhone, Email:FiMail, Meeting:FiUsers, Visit:FiMapPin, Demo:FiMonitor, Proposal:FiFileText, Other:FiTag };
+        const TypeIconComp = TYPE_ICON[f.followupType] || FiClipboard;
         const TYPE_COLOR = { Call:'#2563EB', Email:'#059669', Meeting:'#7C3AED', Visit:'#D97706', Demo:'#DC2626', Proposal:'#0891B2', Other:'#6B7280' };
         const TYPE_BG    = { Call:'#EFF6FF', Email:'#ECFDF5', Meeting:'#F5F3FF', Visit:'#FFFBEB', Demo:'#FFF1F2', Proposal:'#F0F9FF', Other:'#F9FAFB' };
         const TYPE_BORDER= { Call:'#BFDBFE', Email:'#A7F3D0', Meeting:'#DDD6FE', Visit:'#FDE68A', Demo:'#FECDD3', Proposal:'#BAE6FD', Other:'#E5E7EB' };
@@ -2193,7 +2198,7 @@ export default function ClientDashboardFollowUps() {
               <div style={{ background:__sbg(tb), padding:'20px 24px', borderRadius:'16px 16px 0 0', borderBottom:`2px solid ${tc}20`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
                   <div style={{ width:44, height:44, borderRadius:12, background:__sbg('#fff'), display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, border:`1.5px solid ${__sbg(tbd)}` }}>
-                    {TYPE_ICON[f.followupType] || '📋'}
+                    <TypeIconComp/>
                   </div>
                   <div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
@@ -2201,7 +2206,7 @@ export default function ClientDashboardFollowUps() {
                       <span style={{ background:sm.bg, color:sm.color, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:700, display:'inline-flex', alignItems:'center', gap:4 }}>
                         <span style={{ width:7, height:7, borderRadius:'50%', background:sm.dot, display:'inline-block' }}/>{f.status}
                       </span>
-                      {overdue && <span style={{ background:__sbg('#FEE2E2'), color:__stc('#991B1B'), borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:700 }}>⚠ OVERDUE</span>}
+                      {overdue && <span style={{ background:__sbg('#FEE2E2'), color:__stc('#991B1B'), borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:700, display:'inline-flex', alignItems:'center', gap:4 }}><FiAlertTriangle size={10}/> OVERDUE</span>}
                     </div>
                     <p style={{ margin:'3px 0 0', fontSize:12, color:__stc('#64748b') }}>Follow-up #{f.id}</p>
                   </div>
@@ -2218,20 +2223,20 @@ export default function ClientDashboardFollowUps() {
                     <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>Source</div>
                     {isCustomer ? (
                       <>
-                        <span style={{ display:'inline-block', padding:'1px 8px', background:__sbg('#eff6ff'), color:__stc('#1d4ed8'), border:'1px solid #bfdbfe', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>🏢 Customer</span>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'1px 8px', color:__stc('#1d4ed8'), borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}><FiBriefcase size={11}/> Customer</span>
                         <div style={{ fontWeight:700, fontSize:13, color:__stc('#0f172a') }}>{f.customerCode ? f.customerCode.split(' — ')[0] : 'N/A'}</div>
                         {f.customerCode && f.customerCode.includes(' — ') && <div style={{ fontSize:11, color:__stc('#64748b'), marginTop:2 }}>{f.customerCode.split(' — ')[1]}</div>}
                       </>
                     ) : (
                       <>
-                        <span style={{ display:'inline-block', padding:'1px 8px', background:__sbg('#f0fdf4'), color:__stc('#15803d'), border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>👤 Lead</span>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'1px 8px', color:__stc('#15803d'), borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}><FiUser size={11}/> Lead</span>
                         {f.leadName && <div style={{ fontWeight:700, fontSize:14, color:__stc('#0f172a'), marginBottom:2 }}>{f.leadName}</div>}
                         <div style={{ fontWeight: f.leadName ? 500 : 700, fontSize:12, color:__stc('#64748b') }}>{f.leadCode || 'N/A'}</div>
                         {f.groupName && <div style={{ fontSize:11, color:__stc('#64748b'), marginTop:2 }}>{f.groupName}{f.subGroupName ? ` › ${f.subGroupName}` : ''}</div>}
                         {(f.leadPhone || f.leadEmail) && (
                           <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:3 }}>
-                            {f.leadPhone && <div style={{ fontSize:12, color:__stc('#374151'), display:'flex', alignItems:'center', gap:5 }}><span>📞</span>{f.leadPhone}</div>}
-                            {f.leadEmail && <div style={{ fontSize:12, color:__stc('#374151'), display:'flex', alignItems:'center', gap:5 }}><span>✉️</span>{f.leadEmail}</div>}
+                            {f.leadPhone && <div style={{ fontSize:12, color:__stc('#374151'), display:'flex', alignItems:'center', gap:5 }}><FiPhone size={12}/>{f.leadPhone}</div>}
+                            {f.leadEmail && <div style={{ fontSize:12, color:__stc('#374151'), display:'flex', alignItems:'center', gap:5 }}><FiMail size={12}/>{f.leadEmail}</div>}
                           </div>
                         )}
                         {f.leadStatus && (
@@ -2253,12 +2258,12 @@ export default function ClientDashboardFollowUps() {
                 {/* Scheduled + People */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                   <div style={{ background:__sbg('#f8fafc'), borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📅 Scheduled</div>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6, display:'flex', alignItems:'center', gap:4 }}><FiCalendar size={11}/> Scheduled</div>
                     <div style={{ fontWeight:700, fontSize:13, color: overdue ? __stc('#DC2626') : __stc('#0f172a') }}>{formatDateTime(f.scheduledAt) || '—'}</div>
-                    {f.completedAt && <div style={{ fontSize:11, color:__stc('#059669'), marginTop:4 }}>✓ Completed: {formatDateTime(f.completedAt)}</div>}
+                    {f.completedAt && <div style={{ fontSize:11, color:__stc('#059669'), marginTop:4, display:'flex', alignItems:'center', gap:4 }}><FiCheckCircle size={11}/> Completed: {formatDateTime(f.completedAt)}</div>}
                   </div>
                   <div style={{ background:__sbg('#f8fafc'), borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>👥 People</div>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6, display:'flex', alignItems:'center', gap:4 }}><FiUsers size={11}/> People</div>
                     <div style={{ fontSize:13, marginBottom:4 }}><span style={{ color:__stc('#64748b') }}>Assigned: </span><strong>{f.assignedToName || 'Unassigned'}</strong></div>
                     <div style={{ fontSize:13 }}><span style={{ color:__stc('#64748b') }}>Created by: </span><strong>{f.createdByName || '—'}</strong></div>
                     {f.createdAt && <div style={{ fontSize:11, color:__stc('#94a3b8'), marginTop:3 }}>On {formatDateTime(f.createdAt)}</div>}
@@ -2268,7 +2273,7 @@ export default function ClientDashboardFollowUps() {
                 {/* Notes */}
                 {f.notes && (
                   <div style={{ background:__sbg('#f0f9ff'), border:'1px solid #bae6fd', borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#0369a1'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>📋 Pre-call Notes</div>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#0369a1'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8, display:'flex', alignItems:'center', gap:4 }}><FiClipboard size={11}/> Pre-call Notes</div>
                     <p style={{ margin:0, fontSize:13, color:__stc('#0f172a'), lineHeight:1.7, whiteSpace:'pre-wrap' }}>{f.notes}</p>
                   </div>
                 )}
@@ -2276,7 +2281,7 @@ export default function ClientDashboardFollowUps() {
                 {/* Outcome */}
                 {f.outcome && (
                   <div style={{ background:__sbg('#f0fdf4'), border:'1px solid #bbf7d0', borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#15803d'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>📊 Outcome / Result</div>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#15803d'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8, display:'flex', alignItems:'center', gap:4 }}><FiBarChart2 size={11}/> Outcome / Result</div>
                     <p style={{ margin:0, fontSize:13, color:__stc('#0f172a'), lineHeight:1.7, whiteSpace:'pre-wrap' }}>{f.outcome}</p>
                   </div>
                 )}
@@ -2291,8 +2296,8 @@ export default function ClientDashboardFollowUps() {
                   {hasSiteVisitReport(f) && (
                     <button className="followups-btn followups-btn-primary"
                       style={{ background:'#D97706' }}
-                      onClick={() => { setShowViewModal(false); openSiteVisit(f); }}>
-                      🏠 Fill Site Visit Report
+                      onClick={() => { setShowViewModal(false); setSiteVisitLoading(true); setSiteVisitReport(null); openSiteVisit(f); }}>
+                      <FiHome size={13} style={{ marginRight:4 }}/> Fill Site Visit Report
                     </button>
                   )}
                   <button className="followups-btn followups-btn-primary" onClick={() => { closeFn(); handleEdit(f); }}>
@@ -2312,7 +2317,7 @@ export default function ClientDashboardFollowUps() {
           <div className="followup-modal svr-modal" style={{ maxWidth: 760, maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'18px 22px', borderBottom:'1px solid #e2e8f0', flexShrink:0 }}>
               <div>
-                <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:__stc('#0f172a') }}>🏠 Site Visit Report</h3>
+                <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:__stc('#0f172a'), display:'flex', alignItems:'center', gap:6 }}><FiHome size={15}/> Site Visit Report</h3>
                 <p style={{ margin:'3px 0 0', fontSize:12, color:__stc('#64748b') }}>
                   {siteVisitFollowup.leadName || siteVisitFollowup.leadCode || `Lead #${siteVisitFollowup.leadId}`}
                 </p>

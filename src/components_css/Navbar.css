@@ -329,3 +329,55 @@
   .theme-toggle-btn,
   .theme-toggle-icon { transition: none; }
 }
+
+/* ------------------------------
+   HOVER TOOLTIP FOR NAVBAR ICON BUTTONS
+   Same pill-with-arrow tooltip already used for the expense table's action
+   buttons (see .exp-act-btn[data-tooltip] in ProjectCostExpenseManagement.css) —
+   opening below rather than above, since these buttons sit at the very top
+   of the page and an upward tooltip would run off-screen.
+------------------------------ */
+.navbar [data-tooltip] { position: relative; }
+.navbar [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--c-1e293b, #1e293b);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 7px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 60;
+}
+.navbar [data-tooltip]::before {
+  content: '';
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  border: 5px solid transparent;
+  border-bottom-color: var(--c-1e293b, #1e293b);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 60;
+}
+.navbar [data-tooltip]:hover::after,
+.navbar [data-tooltip]:hover::before,
+.navbar [data-tooltip]:focus-visible::after,
+.navbar [data-tooltip]:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}

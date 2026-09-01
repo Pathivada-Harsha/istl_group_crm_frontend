@@ -474,7 +474,7 @@ export function CRMBotNavButton() {
     <button
       type="button"
       className="crm-bot-nav-btn"
-      title="CRM Assistant"
+      data-tooltip="CRM Assistant"
       aria-label="Toggle CRM Assistant"
       onClick={() => window.dispatchEvent(new CustomEvent('crm-bot-toggle'))}
     >

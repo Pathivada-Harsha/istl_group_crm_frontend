@@ -83,6 +83,18 @@
   color: var(--ct-2563eb, #2563eb);
 }
 
+/* Same shape as .brx-btn-primary, red instead of blue — a page-header-level
+   destructive action (e.g. "Delete" on a Group Detail page), as opposed to
+   .brx-icon-danger which only tints an icon-only .brx-icon-btn used inline
+   in a row/accordion header. */
+.brx-btn-danger {
+  background: var(--c-fef2f2, #fef2f2); border-color: var(--c-fecaca, #fecaca);
+  color: var(--ct-b91c1c, #b91c1c);
+}
+.brx-btn-danger:hover:not(:disabled) {
+  background: var(--c-fee2e2, #fee2e2); border-color: var(--c-fca5a5, #fca5a5);
+}
+
 /* ── filters ────────────────────────────────────────────────────────────── */
 
 .brx-filters {
@@ -144,6 +156,7 @@
 .brx-stat-green .brx-stat-icon { background: var(--brx-green-bg); color: var(--brx-green-fg); }
 .brx-stat-amber .brx-stat-icon { background: var(--brx-amber-bg); color: var(--brx-amber-fg); }
 .brx-stat-rose .brx-stat-icon { background: var(--brx-rose-bg); color: var(--brx-rose-fg); }
+.brx-stat-teal .brx-stat-icon { background: var(--c-ccfbf1, #ccfbf1); color: var(--ct-0f766e, #0f766e); }
 
 .brx-stat-body { display: flex; flex-direction: column-reverse; gap: 2px; min-width: 0; }
 .brx-stat-label { font-size: 12.5px; color: var(--ct-6b7280, #6b7280); }
@@ -151,6 +164,7 @@
   font-size: 22px; font-weight: 700; letter-spacing: -.01em;
   color: var(--ct-111827, #111827); font-variant-numeric: tabular-nums;
 }
+.brx-stat-sub { font-size: 11.5px; color: var(--ct-9ca3af, #9ca3af); }
 
 /* ── table card ─────────────────────────────────────────────────────────── */
 
@@ -311,7 +325,7 @@
 
 /* ── incidental states (loading / empty) ───────────────────────────────── */
 
-.brx-pad { padding: 32px 16px; }
+.brx-pad { padding: 32px 16px; text-align: center; }
 .brx-muted { color: var(--ct-9ca3af, #9ca3af); }
 .brx-empty { text-align: center; padding: 24px 8px; }
 .brx-empty p { margin: 0 0 10px; }
@@ -353,6 +367,10 @@
   .brx-stat-value { font-size: 19px; }
   .brx-head-actions { flex-direction: column; }
   .brx-head-actions .brx-btn { width: 100%; }
+  /* Column minimums stop shrinking here — .brx-tree-scroll's horizontal
+     scroll (already there) takes over rather than squeezing every cell
+     past the point of being readable. */
+  .brx-tree-table th, .brx-tree-table td { padding: 8px 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

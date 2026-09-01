@@ -9,12 +9,31 @@
 //   key         wrapper property name, identical on the Java DTO
 //   group       the sheet's header band; drives form sections and table groups
 //   label       exactly as the sheet prints it
-//   kind        text | money | pct | multiple | date | ratio — how the value is
-//               compared and what unit hint the form shows. Inputs stay
-//               type="text" regardless; see the note at the bottom.
+//   kind        text | money | pct | multiple | date | ratio | select — how
+//               the value is compared and what unit hint the form shows.
+//               Inputs stay type="text" regardless (select is a real
+//               <select>); see the note at the bottom.
 //   suffix      unit hint rendered beside the input
 //   align       'right' for numerics in the registry table
 //   width       column width in the registry table, px
+//   readOnly    the form shows this field but never as a typeable box — its
+//               value is always worked out from others (e.g. roiPct)
+//   derivedKey  for a readOnly field, the deriveSanction() output property
+//               its display value comes from
+//   persisted   false excludes a field from the save payload entirely — for
+//               a readOnly field with no entity column of its own (e.g. the
+//               calculated DSRA/ISRA amounts). Defaults to true.
+//   options     for kind: 'select' — [{ value, label }] shown in the dropdown
+//   formLabel   overrides `label` on the sanction form only — the detail
+//               page and registry table keep showing `label`
+//   hint        short caption explaining what the value means (e.g. which
+//               period it covers); shown under the value on the sanction
+//               form and the detail page, never in the registry table
+//   textarea    render as a multi-line box on the sanction form instead of
+//               a single-line input — for a value long enough to need
+//               wrapping (a full clause, not a phrase)
+
+import { REPAYMENT_FREQUENCIES } from './sanctionDerive';
 
 export const SANCTION_FIELDS = [
   // ── Number ──
@@ -55,71 +74,144 @@ export const SANCTION_FIELDS = [
     kind: 'ratio', placeholder: '75:25', width: 110, listHidden: true },
 
   // ── Rate of Interest ──
-  { key: 'baseRatePct', group: 'Rate of Interest', label: 'Base Rate',
-    kind: 'pct', placeholder: '7.25', align: 'right', width: 100 },
-  { key: 'spreadPct', group: 'Rate of Interest', label: 'Spread',
-    kind: 'pct', placeholder: '2.50', align: 'right', width: 90 },
-  // Not a separate box to type into — Rate of interest already states it, and
-  // fillGaps (backend) / deriveSanction (client) pull the number out of that
-  // text on every read. Kept out of the sanction form and the borrower detail
-  // page for the same reason — Rate of interest already carries the number in
-  // full there — and shown only as its own column in the registry table's Key
-  // columns view, where a bare percentage is worth having without opening a
-  // record just to read it off the sentence.
-  { key: 'roiPct', group: 'Rate of Interest', label: 'ROI',
+  // Base Rate and Spread default their box to "0" (via placeholder, not a
+  // real stored value) rather than sitting empty — see the placeholder note
+  // on each. A blank box still parses to null, so a letter that states a
+  // fixed rate with no base/spread breakdown at all is never zeroed out by
+  // this default; it only takes effect once both are genuinely known.
+  { key: 'baseRatePct', group: 'Rate of Interest', label: 'Base Rate (%)',
+    kind: 'pct', placeholder: '0', align: 'right', width: 100 },
+  { key: 'spreadPct', group: 'Rate of Interest', label: 'Spread (%)',
+    kind: 'pct', placeholder: '0', align: 'right', width: 90 },
+  // Not a box to type into — its value is always worked out: Base Rate +
+  // Spread once both are known (even overriding a figure the letter states
+  // separately, flagged via the reconcile check below rather than trusted
+  // outright), else whatever the letter states directly. Kept out of the
+  // borrower detail page — Rate of interest already carries the number in
+  // full there — but shown here, read-only, since this is where Base
+  // Rate/Spread are actually entered and the resulting rate needs to be
+  // visible as they change. Still shown as its own column in the registry
+  // table, under its usual "ROI" heading — `formLabel` only changes what the
+  // sanction form itself calls it, not the table or the detail page.
+  { key: 'roiPct', group: 'Rate of Interest', label: 'ROI', formLabel: 'Rate of Interest (%)',
     kind: 'pct', placeholder: '9.75', align: 'right', width: 90,
-    formHidden: true, detailHidden: true },
+    readOnly: true, detailHidden: true, derivedKey: 'roi' },
+  // The letter's own wording — kept as the full sentence rather than having
+  // the rate number surgically cut out of it, so the original phrasing stays
+  // intact for anyone checking this against the document itself. Still
+  // labelled "Rate of interest" on the detail page; `formLabel` only renames
+  // it on the sanction form, next to the new Rate of Interest (%) figure,
+  // where the two sitting side by side under the same name would be confusing.
   { key: 'interestRateText', group: 'Rate of Interest', label: 'Rate of interest',
-    kind: 'text', placeholder: '10.35% p.a. (floating)', width: 200, listHidden: true },
+    formLabel: 'Interest Terms',
+    kind: 'text', placeholder: 'p.a. (floating, linked to 1-yr MCLR + spread)',
+    width: 200, listHidden: true },
 
   // ── Project Details ──
   // State is the borrower's, not the sanction's — the registry column reads it
   // off the borrower row, so there is no field for it here.
   { key: 'technology', group: 'Project Details', label: 'Technology',
-    kind: 'text', placeholder: 'Solar PV', width: 130 },
-  { key: 'village', group: 'Project Details', label: 'Village',
-    kind: 'text', placeholder: 'Bhadla', width: 130 },
-  { key: 'district', group: 'Project Details', label: 'District',
-    kind: 'text', placeholder: 'Jodhpur', width: 130 },
+    kind: 'text', textarea: true, wide: true, placeholder: 'Solar PV', width: 300 },
 
   // ── Product ──
   { key: 'instrument', group: 'Product', label: 'Instrument',
-    kind: 'text', placeholder: 'Rupee Term Loan', width: 150 },
+    kind: 'text', placeholder: 'Term Loan', width: 150 },
 
   // ── Security ──
   { key: 'coObligators', group: 'Security', label: 'Co Obligators',
     kind: 'text', placeholder: 'Names of any co-obligators', width: 190 },
-  { key: 'pledgeOfSharesPct', group: 'Security', label: 'Pledge of share of borrower',
+  { key: 'pledgeOfSharesPct', group: 'Security', label: 'Pledge of share of borrower (%)',
     kind: 'pct', placeholder: '75', align: 'right', width: 150 },
-
-  // ── Financial Covenants ──
-  // DSRA, ISRA and cash sweep are phrases in real letters, not numbers, so they
-  // stay free text and are compared as text.
-  { key: 'minDscr', group: 'Financial Covenants', label: 'Min. DSCR',
-    kind: 'multiple', placeholder: '1.12x', align: 'right', width: 100 },
-  { key: 'dsra', group: 'Financial Covenants', label: 'DSRA',
-    kind: 'text', placeholder: "One quarter's debt service", width: 170 },
-  { key: 'isra', group: 'Financial Covenants', label: 'ISRA',
-    kind: 'text', placeholder: 'As printed in the letter', width: 170 },
-  { key: 'cashSweep', group: 'Financial Covenants', label: 'Cash Sweep',
-    kind: 'text', placeholder: '100% above 1.30x DSCR', width: 300 },
 
   // ── Time Lines ──
   { key: 'sanctionDate', group: 'Time Lines', label: 'Sanction Date',
     kind: 'date', placeholder: '14 March 2025', width: 130 },
-  { key: 'disbursementDate', group: 'Time Lines', label: 'Disb. Date',
+  { key: 'disbursementDate', group: 'Time Lines', label: 'Disb. Date', required: true,
     kind: 'date', placeholder: '30 April 2025', width: 130 },
   { key: 'tenorText', group: 'Time Lines', label: 'Tenor',
     kind: 'text', placeholder: '16 years including moratorium of 6 months', width: 300 },
+  // Some letters state Tenor and Moratorium as two separate clauses instead
+  // of one combined sentence ("Tenor: 204 months ... inclusive of
+  // moratorium" / "Moratorium: 6 months..."). This box carries that count
+  // when the letter split it out — see the equivalent precedence in
+  // resolveRepaymentWindow (sanctionDerive.js) and BorrowerService (Java):
+  // an explicit value here always wins over what would otherwise be parsed
+  // out of the Tenor text. Blank simply falls back to that parse, exactly
+  // as every record before this field existed already behaves.
+  { key: 'moratoriumMonths', group: 'Time Lines', label: 'Moratorium (Months)',
+    kind: 'text', placeholder: 'e.g. 6', width: 150, listHidden: true,
+    hint: 'Only needed when the letter states Tenor and Moratorium separately — overrides what would otherwise be parsed out of the Tenor text above.' },
+  { key: 'interestDuringMoratorium', group: 'Time Lines', label: 'Interest During Moratorium',
+    kind: 'select', width: 190,
+    options: [
+      { value: 'SERVICED', label: 'Interest Served' },
+      { value: 'CAPITALIZED', label: 'Interest Capitalized' },
+    ],
+    hint: 'How interest accrued during the moratorium is treated once repayment begins.' },
+  // Drives the interval between generated repayment dates (see
+  // REPAYMENT_FREQUENCIES/repaymentFrequencyMonths in sanctionDerive.js) —
+  // defaults to Quarterly, the interval every schedule used before this
+  // field existed, so a record that predates it keeps generating the same
+  // schedule it always did.
+  { key: 'repaymentFrequency', group: 'Time Lines', label: 'Repayment Frequency',
+    kind: 'select', width: 190, listHidden: true, defaultValue: 'QUARTERLY',
+    options: REPAYMENT_FREQUENCIES.map(({ value, label }) => ({ value, label })),
+    hint: 'How often repayment instalments fall — drives the generated repayment schedule.' },
+  { key: 'repaymentFrequencyOtherMonths', group: 'Time Lines', label: 'Custom Interval (Months)',
+    kind: 'text', placeholder: 'e.g. 4', width: 150, listHidden: true,
+    hint: 'Only used when Repayment Frequency is Other.' },
+  // Not a field anyone types into directly — edited via the per-period
+  // inputs on the Repayment Schedule tab itself (see RepaymentScheduleTab.js),
+  // which read/write this same JSON array. formHidden keeps it out of the
+  // Time Lines field grid; still persisted/loaded through the ordinary
+  // FIELDS-driven save/load pipeline like every other field here.
+  { key: 'repaymentProfileJson', group: 'Time Lines', label: 'Repayment Percentage Profile',
+    kind: 'text', width: 0, formHidden: true, listHidden: true, detailHidden: true },
   { key: 'repaymentStartDate', group: 'Time Lines', label: 'Repayment Start Date',
     kind: 'date', placeholder: '30 September 2026', width: 170 },
   { key: 'repaymentEndDate', group: 'Time Lines', label: 'Repayment End date',
     kind: 'date', placeholder: '30 September 2041', width: 170 },
-  { key: 'scheduledCod', group: 'Time Lines', label: 'Scheduled COD',
+  { key: 'scheduledCod', group: 'Time Lines', label: 'Planned COD Date',
     kind: 'date', placeholder: '14 February 2026', width: 150, listHidden: true },
+  { key: 'actualCod', group: 'Time Lines', label: 'Actual COD Date',
+    kind: 'date', placeholder: '20 September 2025', width: 150, listHidden: true },
+
+  // ── Financial Covenants ──
+  // DSRA, ISRA and cash sweep are phrases in real letters, not numbers, so they
+  // stay free text and are compared as text.
+  { key: 'minDscr', group: 'Financial Covenants', label: 'Min. DSCR (x)',
+    kind: 'multiple', placeholder: '1.12x', align: 'right', width: 100,
+    hint: 'The floor for any individual year, not the average.' },
+  { key: 'avgDscr', group: 'Financial Covenants', label: 'Avg. DSCR (x)',
+    kind: 'multiple', placeholder: '1.15x', align: 'right', width: 100,
+    hint: 'The average across the complete loan tenor, not any single year.' },
+  { key: 'dsra', group: 'Financial Covenants', label: 'DSRA',
+    kind: 'text', textarea: true, placeholder: "One quarter's debt service", width: 170 },
+  // Auto-filled from the DSRA requirement above and the repayment schedule
+  // (see the gap-fill effect in SanctionFormModal, mirroring how
+  // debtAmount/equityAmount pre-fill), but a real, persisted, editable
+  // field — not derived-only — so a reviewer can type over it with the
+  // figure the letter actually states, if that differs from the
+  // calculation. Clearing the box back to empty resumes auto-calculation.
+  { key: 'dsraAmount', group: 'Financial Covenants', label: 'DSRA Amount (Cr)',
+    kind: 'money', align: 'right', width: 140, listHidden: true,
+    hint: 'Auto-filled from the DSRA requirement above and the repayment schedule — edit to override.' },
+  { key: 'isra', group: 'Financial Covenants', label: 'ISRA',
+    kind: 'text', textarea: true, placeholder: 'As printed in the letter', width: 170 },
+  // Same auto-fill/editable split as DSRA above. When the letter has no
+  // separate ISRA clause, the auto-filled suggestion is the interest
+  // component of the DSRA calculation instead — never implying a separate
+  // contractual requirement unless the letter actually states one (see
+  // israIsContractual on the derived panel / SanctionFormModal's hint
+  // override for this field).
+  { key: 'israAmount', group: 'Financial Covenants', label: 'ISRA Amount (Cr)',
+    kind: 'money', align: 'right', width: 140, listHidden: true,
+    hint: 'Auto-filled. If ISRA is not separately stated, this is the interest component of the DSRA calculation.' },
+  { key: 'cashSweep', group: 'Financial Covenants', label: 'Cash Sweep',
+    kind: 'text', textarea: true, wide: true, placeholder: '100% above 1.30x DSCR', width: 300 },
 
   // ── Base Case Assumptions ──
-  { key: 'plfPct', group: 'Base Case Assumptions', label: 'PLF',
+  { key: 'plfPct', group: 'Base Case Assumptions', label: 'PLF (%)',
     kind: 'pct', placeholder: '24.5', align: 'right', width: 90 },
   { key: 'tariffPerUnit', group: 'Base Case Assumptions', label: 'Tariff',
     kind: 'text', placeholder: '2.53', suffix: '₹ / kWh', align: 'right', width: 110 },
