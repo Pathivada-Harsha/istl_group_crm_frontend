@@ -25,6 +25,7 @@ import CrmPreloader from "../components/preLoader.js";
 // each project. Its CSS lives in OrderBookDetail.css.
 import { ProgressTab } from '../components/projects/orderBookTabsPorted.js';
 import projectsApi from '../services/projectsApi.js';
+import { techProgressPct, fmtTechProgress, NO_TECH_PROGRESS } from '../utils/projectProgress.js';
 import '../pages-css/OrderBookDetail.css';
 import {
   BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell,
@@ -2073,14 +2074,24 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           // Computed locally — same basis as List/Graphical (received/billed, paid/procurement)
           // so the % shown here always matches those other two views instead of relying on
           // backend %-fields that can use a different denominator.
+          /* "Received" is SUM(receipts) — ALL cash in, including advances taken
+             before any invoice exists. "Billed" is invoices raised. So the ratio
+             legitimately exceeds 100% on a project collecting in advance, and
+             calling that "174.9% collected" reads as a bug when it is not.
+             Past 100% the tile says how much is advance instead. */
           const recvPct = financial.totalBilled  > 0 ? (financial.totalReceived / financial.totalBilled)  * 100 : 0;
+          const recvSub = financial.totalBilled > 0
+            ? (financial.totalReceived > financial.totalBilled
+                ? `${formatCurrency(financial.totalReceived - financial.totalBilled)} in advance`
+                : `${recvPct.toFixed(1)}% of billed`)
+            : (financial.totalReceived > 0 ? 'Advance — nothing billed yet' : 'Nothing received yet');
           const paidPct = financial.totalPayable > 0 ? (financial.totalPaid     / financial.totalPayable) * 100 : 0;
           return (
           <div className="kpi-grid kpi-grid-4col">
             {[
               { label: 'Total Project Value',   val: formatCurrency(financial.totalProjectValue),  color: '#3b82f6', icon: <Wallet size={32} />,      sub: 'Sum of all budgets' },
               { label: 'Total Billed',          val: formatCurrency(financial.totalBilled),         color: '#8b5cf6', icon: <FileText size={32} />,    sub: 'All invoices raised' },
-              { label: 'Total Received',        val: formatCurrency(financial.totalReceived),       color: '#22c55e', icon: <TrendingUp size={32} />,  sub: `${recvPct.toFixed(1)}% collected` },
+              { label: 'Total Received',        val: formatCurrency(financial.totalReceived),       color: '#22c55e', icon: <TrendingUp size={32} />,  sub: recvSub },
               { label: 'Pending Receipts',      val: formatCurrency(financial.pendingReceipts),     color: '#f59e0b', icon: <Clock size={32} />,       sub: 'Yet to receive' },
               { label: 'Total Procurement',     val: formatCurrency(financial.totalPayable),        color: '#ef4444', icon: <ShoppingCart size={32} />,sub: 'All vendor bills' },
               { label: 'Total Paid (Vendors)',  val: formatCurrency(financial.totalPaid),           color: '#06b6d4', icon: <CreditCard size={32} />,  sub: `${paidPct.toFixed(1)}% paid` },
@@ -3224,55 +3235,13 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
 };
 
 // ─── Single-project dashboard helpers ────────────────────────────────────────
-const calculateProgress = (dashboardData) => {
-  if (!dashboardData) return 0;
+// (A client-side re-derivation of the financial 40/30/20/10 score used to live
+//  here as calculateProgress, purely to stand in for missing technical progress.
+//  The financial score comes from the backend — dashboardData.progressBreakdown —
+//  so the duplicate is gone rather than left to drift from it.)
 
-  // Priority 1: manual override stored in DB (set via Edit Status modal)
-  const manual = Number(dashboardData.progressPercentage || 0);
-  if (manual > 0) return Number(manual.toFixed(1));
-
-  const fin  = dashboardData.financialData  || {};
-  const proc = dashboardData.procurementData || {};
-  const budget = Number(dashboardData.budget || fin.totalProjectValue || 0);
-
-  // Priority 2: weighted formula across 4 signals
-  // Financial collection 40% — actual cash received vs budget
-  const billingPct   = Number(fin.billingPercentage   || 0);           // already a %
-  // PO delivery      30% — delivered POs vs total non-cancelled POs
-  const totalPOs     = Number(proc.totalPOs     || 0);
-  const deliveredPOs = Number(proc.deliveredPOs || 0);
-  const cancelledPOs = Number(proc.cancelledPOs || 0);
-  const activePOs    = Math.max(1, totalPOs - cancelledPOs);
-  const deliveryPct  = totalPOs > 0 ? Math.min(100, (deliveredPOs / activePOs) * 100) : 0;
-  // Invoicing        20% — total invoiced vs budget (billing coverage)
-  const totalInvoiced = Number(fin.amountToBeReceived || 0);
-  const invoicingPct  = budget > 0 ? Math.min(100, (totalInvoiced / budget) * 100) : 0;
-  // PO commitment    10% — budget utilization (committed spend vs budget)
-  const commitPct    = Math.min(100, Number(fin.budgetUtilizationPercent || 0));
-
-  const weighted = (billingPct  * 0.40)
-                 + (deliveryPct * 0.30)
-                 + (invoicingPct* 0.20)
-                 + (commitPct   * 0.10);
-
-  // Priority 3: timeline fallback only when truly zero activity
-  if (weighted === 0 && dashboardData.startDate && dashboardData.endDate) {
-    const start   = new Date(dashboardData.startDate);
-    const end     = new Date(dashboardData.endDate);
-    const elapsed = ((new Date() - start) / (end - start)) * 100;
-    return Math.min(Math.max(elapsed, 0), 5).toFixed(1); // cap 5% — just shows "started"
-  }
-
-  return Math.min(100, weighted).toFixed(1);
-};
-
-// Headline progress = TECHNICAL (physical). Falls back to the financial
-// calculateProgress only when there's no scope (physicalProgress == null).
-const techProgress = (d) => {
-  if (!d) return 0;
-  if (d.physicalProgress != null) return Number(Number(d.physicalProgress).toFixed(1));
-  return Number(calculateProgress(d));
-};
+// Headline progress = TECHNICAL (physical) — techProgressPct, null when the project
+// has no scope. See utils/projectProgress for why there is no financial fallback.
 // Financial progress (40/30/20/10) — shown separately, never blended into the headline.
 const financialProgress = (d) => {
   const f = d?.progressBreakdown?.financialProgress;
@@ -3859,15 +3828,24 @@ const ProjectDashboard = () => {
                   } catch { setProgressPhases([]); }
                 }}>
                 <div className="progress-circle">
-                  <svg viewBox="0 0 120 120">
-                    <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" strokeWidth="12" />
-                    <circle cx="60" cy="60" r="54" fill="none"
-                      stroke={getStatusColor(dashboardData.status)} strokeWidth="12"
-                      strokeDasharray={`${techProgress(dashboardData) * 3.39} 339`}
-                      strokeLinecap="round" transform="rotate(-90 60 60)" />
-                    <text x="60" y="54" textAnchor="middle" className="progress-value">{techProgress(dashboardData)}%</text>
-                    <text x="60" y="70" textAnchor="middle" className="progress-label">Technical</text>
-                  </svg>
+                  {(() => {
+                    const tech = techProgressPct(dashboardData);
+                    return (
+                      <svg viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" strokeWidth="12" />
+                        <circle cx="60" cy="60" r="54" fill="none"
+                          stroke={getStatusColor(dashboardData.status)} strokeWidth="12"
+                          strokeDasharray={`${(tech ?? 0) * 3.39} 339`}
+                          strokeLinecap="round" transform="rotate(-90 60 60)" />
+                        <text x="60" y="54" textAnchor="middle" className="progress-value">
+                          {tech != null ? `${tech}%` : NO_TECH_PROGRESS}
+                        </text>
+                        <text x="60" y="70" textAnchor="middle" className="progress-label">
+                          {tech != null ? 'Technical' : 'No scope'}
+                        </text>
+                      </svg>
+                    );
+                  })()}
                 </div>
                 <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
                   Financial: <strong style={{ color: '#0f172a' }}>{financialProgress(dashboardData)}%</strong>
@@ -4750,7 +4728,7 @@ const ProjectDashboard = () => {
       {/* ─── Amount Spent Breakdown Modal ──────────────────────────────────── */}
       {/* ── Progress breakdown: Technical vs Financial ── */}
       {showProgressModal && dashboardData && (
-        <div className="spent-modal-overlay" onClick={() => setShowProgressModal(false)}>
+        <div className="spent-modal-overlay">
           <div className="spent-modal" onClick={e => e.stopPropagation()}>
             <div className="spent-modal-header">
               <div className="spent-modal-title-row">
@@ -4765,7 +4743,7 @@ const ProjectDashboard = () => {
               <div className="spent-block">
                 <div className="spent-block-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Technical progress — site execution</span>
-                  <strong>{techProgress(dashboardData)}%</strong>
+                  <strong>{fmtTechProgress(dashboardData)}</strong>
                 </div>
                 {progressPhases == null ? (
                   <div className="spent-row"><span className="spent-row-label">Loading phases…</span></div>

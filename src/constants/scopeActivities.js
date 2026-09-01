@@ -104,4 +104,36 @@ export const SUGGESTION_WARNING_LABELS = {
   NEEDS_MODULE_DRIVER: 'A per-module item could not size — there is no module (watt-peak) line to scale from.',
   NEEDS_INVERTER_DRIVER: 'A per-inverter item could not size — there is no inverter line to scale from.',
   MULTIPLE_DRIVERS: 'More than one module/inverter driver line was found — counts were summed; verify.',
+  NEEDS_BASIS_VALUE: 'Some template lines have a quantity rule but no value for it — fix them in Lead Scope / BOM Templates.',
+  NEEDS_STEP_VALUE: 'Some per-step template lines have no kW-per-unit set — fix them in Lead Scope / BOM Templates.',
+  NEEDS_SITE_VISIT_FIELD: 'Some template lines read from the site visit but name no field — fix them in Lead Scope / BOM Templates.',
+};
+
+/**
+ * The same codes said on ONE ROW, in the space of a caption. The banner labels
+ * above speak about the BOM as a whole ("some items…"); a row has to name the
+ * one input it is waiting for, or a blank quantity is indistinguishable from a
+ * quantity that is still being calculated.
+ *
+ * `attr` is the catalogue's own name for the numeric attribute the line reads
+ * off the selected make (driverAttrLabel), so the message points at the field
+ * the estimator would actually go and fill in.
+ */
+export const LINE_REASON_LABELS = {
+  NEEDS_CAPACITY: () => 'needs system capacity',
+  NEEDS_BASIS_VALUE: () => 'template line has no quantity value',
+  NEEDS_STEP_VALUE: () => 'template line has no kW per unit',
+  NEEDS_SITE_VISIT_FIELD: () => 'template line names no site-visit field',
+  NEEDS_SITE_VISIT: () => 'needs a site visit measurement',
+  NEEDS_MODULE_WATT: (attr) => `selected make has no ${attr || 'wattage'}`,
+  NEEDS_INVERTER_KW: (attr) => `selected make has no ${attr || 'kW rating'}`,
+  NEEDS_MODULE_DRIVER: () => 'no module line to scale from',
+  NEEDS_INVERTER_DRIVER: () => 'no inverter line to scale from',
+  BASIS_UNRESOLVED: () => 'no quantity rule for this line',
+};
+
+/** The one-line reason a BOM row shows in place of its "auto" caption. */
+export const lineReason = (code, attrLabel) => {
+  const f = LINE_REASON_LABELS[code];
+  return f ? f(attrLabel) : 'cannot be calculated';
 };

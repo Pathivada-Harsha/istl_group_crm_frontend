@@ -1,0 +1,358 @@
+/* ProjectBomActuals.css — the Comparison and Procured views of the project BOM tab.
+   Prefix `pvab-` (planned-vs-actual BOM) is owned exclusively by these components;
+   the editor keeps the shared `lbm-` namespace from the Leads BOM tab, so the two
+   can never silently overwrite each other's rules.
+   Colours follow the app theme convention: --c-* for surfaces (background, border),
+   --ct-* for foreground (color). Using --c-* on text would leave it dark-on-dark. */
+
+.pvab { display: block; }
+
+/* ── Tab bar (owned by ProjectBomTab) ─────────────────────────────────────── */
+.pvab-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+  flex-wrap: wrap;
+}
+
+.pvab-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ct-6b7280, #6b7280);
+  cursor: pointer;
+  font-family: inherit;
+}
+.pvab-tab:hover { color: var(--ct-374151, #374151); }
+.pvab-tab-on {
+  color: var(--ct-1d4ed8, #1d4ed8);
+  border-bottom-color: var(--c-3b82f6, #3b82f6);
+}
+
+.pvab-refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ct-4b5563, #4b5563);
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 6px;
+}
+.pvab-refresh:hover:not(:disabled) { background: var(--c-f3f4f6, #f3f4f6); }
+.pvab-refresh:disabled { opacity: 0.6; cursor: default; }
+.pvab-spin { animation: pvab-rot 0.9s linear infinite; }
+@keyframes pvab-rot { to { transform: rotate(360deg); } }
+
+/* ── Summary strip ────────────────────────────────────────────────────────── */
+.pvab-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pvab-stat {
+  flex: 1 1 150px;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--c-f9fafb, #f9fafb);
+  min-width: 0;
+}
+.pvab-stat-wide { flex: 1 1 100%; }
+.pvab-stat label {
+  display: block;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: var(--ct-6b7280, #6b7280);
+  margin-bottom: 3px;
+}
+.pvab-stat span {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pvab-stat span em {
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-left: 6px;
+}
+.pvab-gated { font-size: 12.5px !important; font-weight: 500 !important; color: var(--ct-6b7280, #6b7280); }
+
+/* Over / under budget. Never colour alone — the sign is always printed too. */
+.pvab-over  { color: var(--ct-b91c1c, #b91c1c); }
+.pvab-under { color: var(--ct-047857, #047857); }
+.pvab-level { color: var(--ct-4b5563, #4b5563); }
+.pvab-stat.pvab-over  { border-color: var(--c-fecaca, #fecaca); background: var(--c-fef2f2, #fef2f2); }
+.pvab-stat.pvab-under { border-color: var(--c-a7f3d0, #a7f3d0); background: var(--c-ecfdf5, #ecfdf5); }
+
+.pvab-note {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--c-f3f4f6, #f3f4f6);
+  color: var(--ct-4b5563, #4b5563);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.pvab-note svg { flex-shrink: 0; margin-top: 2px; }
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+.pvab-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px;
+}
+
+.pvab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.pvab-table th {
+  text-align: left;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: var(--ct-6b7280, #6b7280);
+  background: var(--c-f9fafb, #f9fafb);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+  white-space: nowrap;
+}
+
+.pvab-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--c-f3f4f6, #f3f4f6);
+  vertical-align: top;
+}
+
+.pvab-c-exp { width: 28px; text-align: center; color: var(--ct-9ca3af, #9ca3af); }
+.pvab-c-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pvab-c-amt { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pvab-table th.pvab-c-num, .pvab-table th.pvab-c-amt { text-align: right; }
+
+.pvab-row-scope { cursor: pointer; background: var(--c-f9fafb, #f9fafb); }
+.pvab-row-scope:hover { background: var(--c-f3f4f6, #f3f4f6); }
+.pvab-row-scope td { font-weight: 600; border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb); }
+
+.pvab-scope-name { display: block; font-size: 13px; font-weight: 700; }
+.pvab-scope-meta {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ct-6b7280, #6b7280);
+  margin-top: 1px;
+}
+
+.pvab-row-line:hover { background: var(--c-f9fafb, #f9fafb); }
+.pvab-indent  { padding-left: 22px !important; }
+.pvab-indent2 { padding-left: 38px !important; }
+
+.pvab-item { display: block; font-weight: 600; }
+.pvab-make {
+  display: block;
+  font-size: 11px;
+  color: var(--ct-6b7280, #6b7280);
+  margin-top: 1px;
+}
+
+.pvab-row-po td { color: var(--ct-4b5563, #4b5563); background: var(--c-f9fafb, #f9fafb); }
+.pvab-po-no { display: block; font-weight: 600; font-size: 12px; }
+.pvab-po-meta {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ct-6b7280, #6b7280);
+  margin-top: 1px;
+}
+.pvab-legacy { color: var(--ct-92400e, #92400e); font-weight: 600; }
+.pvab-dim { color: var(--ct-9ca3af, #9ca3af); }
+.pvab-inc { display: block; font-style: normal; font-size: 10.5px; color: var(--ct-6b7280, #6b7280); font-weight: 500; }
+
+/* ── Badges ───────────────────────────────────────────────────────────────── */
+.pvab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pvab-badge-none { background: var(--c-e5e7eb, #e5e7eb); color: var(--ct-4b5563, #4b5563); }
+.pvab-badge-over { background: var(--c-fee2e2, #fee2e2); color: var(--ct-b91c1c, #b91c1c); }
+
+.pvab-status {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pvab-st-draft { background: var(--c-e5e7eb, #e5e7eb); color: var(--ct-4b5563, #4b5563); }
+.pvab-st-open  { background: var(--c-dbeafe, #dbeafe); color: var(--ct-1d4ed8, #1d4ed8); }
+.pvab-st-part  { background: var(--c-fef3c7, #fef3c7); color: var(--ct-92400e, #92400e); }
+.pvab-st-done  { background: var(--c-d1fae5, #d1fae5); color: var(--ct-047857, #047857); }
+
+/* ── Blocks (GST, unattributed) ───────────────────────────────────────────── */
+.pvab-block { margin-top: 20px; }
+
+.pvab-block-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pvab-block-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ct-6b7280, #6b7280);
+}
+
+.pvab-block-lede {
+  margin: 0 0 9px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ct-6b7280, #6b7280);
+  max-width: 76ch;
+}
+
+.pvab-block-foot {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ct-9ca3af, #9ca3af);
+  max-width: 76ch;
+}
+
+.pvab-table-gst tfoot td {
+  font-weight: 700;
+  background: var(--c-f9fafb, #f9fafb);
+  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+.pvab-row-total td { font-size: 13px; }
+.pvab-row-norate td { background: var(--c-fffbeb, #fffbeb); }
+
+.pvab-toggle {
+  background: transparent;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  border-radius: 7px;
+  padding: 5px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ct-374151, #374151);
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 9px;
+}
+.pvab-toggle:hover { background: var(--c-f3f4f6, #f3f4f6); }
+
+/* ── Reconciliation ───────────────────────────────────────────────────────── */
+.pvab-recon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px dashed var(--c-d1d5db, #d1d5db);
+  border-radius: 10px;
+  background: var(--c-f9fafb, #f9fafb);
+}
+.pvab-recon > div { min-width: 0; }
+.pvab-recon label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: var(--ct-6b7280, #6b7280);
+}
+.pvab-recon span { font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pvab-recon-op { font-size: 16px; font-weight: 700; color: var(--ct-9ca3af, #9ca3af); }
+.pvab-recon-total span { color: var(--ct-1d4ed8, #1d4ed8); }
+
+/* ── Group-by bar (Procured tab) ──────────────────────────────────────────── */
+.pvab-groupbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.pvab-groupbar-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: var(--ct-6b7280, #6b7280);
+  margin-right: 2px;
+}
+.pvab-group-btn {
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ct-4b5563, #4b5563);
+  cursor: pointer;
+  font-family: inherit;
+}
+.pvab-group-btn:hover { background: var(--c-f3f4f6, #f3f4f6); }
+.pvab-group-btn-on {
+  background: var(--c-dbeafe, #dbeafe);
+  border-color: var(--c-93c5fd, #93c5fd);
+  color: var(--ct-1d4ed8, #1d4ed8);
+}
+
+/* ── Empty ────────────────────────────────────────────────────────────────── */
+.pvab-empty {
+  padding: 22px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ct-6b7280, #6b7280);
+  border: 1px dashed var(--c-d1d5db, #d1d5db);
+  border-radius: 10px;
+}
+
+/* A variance percentage sits next to its value; keep them from reading as one number. */
+.pvab-c-amt em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 6px;
+  opacity: 0.85;
+}

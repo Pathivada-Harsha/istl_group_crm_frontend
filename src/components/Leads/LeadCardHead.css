@@ -1,0 +1,42 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Shared card-header icon badge for the lead detail view.
+
+   Every tab (Overview, Site Visit, Technical Scope, BOM, Budget, Proposals,
+   Follow-ups, History) puts a tinted rounded-square badge to the left of its
+   card title, so all six read as one set of cards.
+
+   This lives in its own file — rather than in Leads-Enquire.css — because the
+   tab components also render outside the lead detail page (LeadSiteVisitTab in
+   Follow-ups.js, LeadBomTab in ProjectBomTab.js), and relying on another page's
+   stylesheet is exactly the cross-file coupling that made .ld-* collide with
+   .custd-* in the first place. Each component imports this directly.
+
+   Colours use the project convention: surfaces var(--c-<hex>), foreground
+   var(--ct-<hex>) — see src/theme.css. Dark mode falls out of the tokens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.lead-card-ico {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-2563eb, #2563eb);
+}
+
+/* The existing head rows sit at gap:8px, which is tight next to a 34px badge. */
+.lts-card-head,
+.lbm-card-head,
+.lbe-card-head,
+.lsv-head-left,
+.lfu-head-left { gap: 11px; }
+
+/* Smaller variant for subsection headings (BOM scope groups, site visit steps). */
+.lead-card-ico--sm {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}

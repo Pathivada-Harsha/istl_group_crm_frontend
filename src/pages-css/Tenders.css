@@ -473,3 +473,129 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Import review modal ──────────────────────────────────────────────────
+   A four-column grid rather than stacked cards, because a reviewer is doing a
+   column-wise comparison: field, what the PDF said, what the form already has.
+   Each row spills a second grid line for provenance (page + source line), which
+   is what saves re-reading a 105-page NIT to check one value.
+   Values are inputs, not text — a reviewer who spots a wrong figure has to be
+   able to fix it here, or the parser has saved nobody anything. */
+.tnd-import-modal {
+  max-width: 1040px; width: 100%; max-height: 90vh;
+  display: flex; flex-direction: column;
+}
+.tnd-import-heading { min-width: 0; }
+.tnd-import-sub { font-size: 11px; color: var(--ct-64748b, #64748b); margin-top: 3px; }
+
+.tnd-import-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 18px; font-size: 12px; line-height: 1.45;
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
+}
+.tnd-import-banner.ok { background: var(--c-f0fdf4, #f0fdf4); color: var(--ct-065f46, #065f46); }
+.tnd-import-banner.warn { background: var(--c-fffbeb, #fffbeb); color: var(--ct-92400e, #92400e); }
+.tnd-import-banner .tnd-btn { flex-shrink: 0; }
+
+.tnd-import-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 18px; border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
+  background: var(--c-f8fafc, #f8fafc);
+}
+.tnd-import-toolbar-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.tnd-import-body { padding: 0 18px 16px; overflow-y: auto; flex: 1; }
+.tnd-import-empty { font-size: 13px; color: var(--ct-475569, #475569); line-height: 1.5; padding: 20px 0; }
+
+/* The grid. Column 1 is the tick, then field / value / current; the provenance
+   line is a second grid row spanning columns 2-4. */
+.tnd-import-table { display: flex; flex-direction: column; }
+.tnd-import-head-row,
+.tnd-import-row {
+  display: grid;
+  grid-template-columns: 30px minmax(140px, 1fr) minmax(240px, 1.9fr) minmax(110px, .85fr);
+  column-gap: 12px;
+}
+.tnd-import-head-row {
+  position: sticky; top: 0; z-index: 1;
+  padding: 10px 10px 8px; background: var(--c-white, #fff);
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--ct-64748b, #64748b);
+}
+.tnd-import-row {
+  row-gap: 5px; padding: 10px; align-items: start;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+  border-left: 3px solid transparent;
+}
+.tnd-import-row:hover { background: var(--c-f8fafc, #f8fafc); }
+.tnd-import-row.is-checked { border-left-color: var(--c-2563eb, #2563eb); }
+
+.tnd-import-check { display: flex; justify-content: center; padding-top: 8px; }
+.tnd-import-check input { cursor: pointer; }
+
+.tnd-import-fieldcell { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; min-width: 0; }
+.tnd-import-field {
+  font-size: 12px; font-weight: 700; color: var(--ct-0f172a, #0f172a);
+  background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+  font-family: inherit; line-height: 1.35;
+}
+.tnd-import-field:hover:not(:disabled) { color: var(--ct-2563eb, #2563eb); }
+.tnd-import-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.tnd-import-flag {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  padding: 2px 6px; border-radius: 5px; white-space: nowrap;
+  background: var(--c-fef3c7, #fef3c7); color: var(--ct-92400e, #92400e);
+}
+.tnd-import-flag.ai { background: var(--c-ede9fe, #ede9fe); color: var(--ct-5b21b6, #5b21b6); }
+.tnd-import-flag.edited { background: var(--c-dbeafe, #dbeafe); color: var(--ct-1e40af, #1e40af); }
+
+.tnd-import-valuecell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tnd-import-input {
+  width: 100%; box-sizing: border-box; padding: 7px 9px;
+  font-size: 13px; font-family: inherit; line-height: 1.4;
+  border: 1px solid var(--c-d1d5db, #d1d5db); border-radius: 7px;
+  background: var(--c-white, #fff); color: var(--ct-0f172a, #0f172a);
+}
+textarea.tnd-import-input { resize: vertical; overflow-y: auto; display: block; }
+.tnd-import-input:focus {
+  outline: none; border-color: var(--c-2563eb, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37,99,235,.12);
+}
+.tnd-import-input:disabled { background: var(--c-f1f5f9, #f1f5f9); }
+.tnd-import-hint { font-size: 11px; color: var(--ct-475569, #475569); font-variant-numeric: tabular-nums; }
+.tnd-import-static { font-size: 13px; color: var(--ct-0f172a, #0f172a); padding-top: 7px; }
+
+.tnd-import-currentcell {
+  font-size: 12px; color: var(--ct-94a3b8, #94a3b8); padding-top: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Provenance line — page, the label as printed, and the source text. */
+.tnd-import-source {
+  grid-column: 2 / -1;
+  font-size: 10.5px; color: var(--ct-64748b, #64748b); line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.tnd-import-page { font-weight: 700; color: var(--ct-475569, #475569); }
+.tnd-import-reset {
+  margin-left: 8px; background: none; border: none; padding: 0; cursor: pointer;
+  font-family: inherit; font-size: 10.5px; font-weight: 600;
+  color: var(--ct-2563eb, #2563eb); text-decoration: underline;
+}
+
+.tnd-import-discarded { font-size: 11px; color: var(--ct-64748b, #64748b); margin-top: 14px; }
+.tnd-import-discarded summary { cursor: pointer; font-weight: 600; }
+.tnd-import-discarded ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+
+.tnd-import-foot-note { margin-right: auto; }
+
+/* Narrow screens: the comparison columns stack rather than crush. */
+@media (max-width: 820px) {
+  .tnd-import-head-row { display: none; }
+  .tnd-import-row { grid-template-columns: 30px 1fr; }
+  .tnd-import-valuecell,
+  .tnd-import-currentcell,
+  .tnd-import-source { grid-column: 2 / -1; }
+  .tnd-import-currentcell { padding-top: 0; }
+}

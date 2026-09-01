@@ -2093,13 +2093,30 @@
    ============================================================ */
 
 /* ── Detail page wrapper ── */
+/* The detail card fills the viewport below the app shell and becomes the scroll
+   container itself: topbar, hero and the tab strip stay put while only the tab
+   content scrolls under them. The page behind it does not scroll.
+
+   Offset = 64px fixed app header (.main-content padding-top in App.css)
+          + 24px .leads-enquiries-container top padding
+          + 12px breathing room at the bottom.
+   If either of those two paddings changes, this is the one value to retune. */
 .ld-detail-page {
+  --ld-shell-offset: 100px;
   background: var(--c-white, white);
   border: 1px solid var(--c-e5e7eb, #e5e7eb);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--ld-shell-offset));
 }
+
+/* Chrome above the content pane never scrolls away. */
+.ld-detail-topbar,
+.ld-hero,
+.ld-tabnav { flex: 0 0 auto; }
 
 /* ── Top bar with back button ── */
 .ld-detail-topbar {
@@ -2224,51 +2241,243 @@
 .ld-tab:hover  { color: var(--ct-374151, #374151); background: var(--c-f3f4f6, #f3f4f6); }
 .ld-tab.active { color: var(--ct-2563eb, #2563eb); border-bottom-color: var(--c-2563eb, #2563eb); font-weight: 600; background: transparent; }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   LEAD DETAIL — single-row tab navigation
+   Every tab on one line, each drawn as a chevron nesting into the next so the
+   selected tab reads as an arrow.
+   NOTE: .ld-tabs / .ld-tab above are still used by the Tenders detail view
+   (components/tenders/TenderDetail.js, which extends .ld-tab in Tenders.css),
+   so they are deliberately left in place rather than replaced.
+   ══════════════════════════════════════════════════════════════════════════ */
+.ld-tabnav {
+  background: var(--c-fafafa, #fafafa);
+  border-bottom: 2px solid var(--c-e5e7eb, #e5e7eb);
+  padding: 8px 16px;
+}
+
+/* Each segment is clipped to a chevron: a notch cut into the left edge, a
+   point on the right. Segments are pulled together by --ld-pipe-notch less a
+   hairline, so the shapes interlock while the seam stays readable between two
+   adjacent inactive (same-coloured) segments. Sized to hold up to nine tabs
+   on one line — hence the tight padding and 12px label.                      */
+.ld-pipe {
+  --ld-pipe-notch: 13px;
+  display: flex;
+  align-items: stretch;
+}
+
+.ld-pipe-step {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: calc(var(--ld-pipe-notch) * -1 + 2px);   /* 2px seam */
+  padding: 8px 8px 8px calc(var(--ld-pipe-notch) + 8px);
+  border: none;
+  background: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-475569, #475569);
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background .18s, color .18s;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--ld-pipe-notch)) 0,
+    100% 50%,
+    calc(100% - var(--ld-pipe-notch)) 100%,
+    0 100%,
+    var(--ld-pipe-notch) 50%
+  );
+}
+/* Flat left edge on the first segment, flat right edge on the last. */
+.ld-pipe-step:first-child {
+  margin-left: 0;
+  padding-left: 14px;
+  border-radius: 6px 0 0 6px;
+  clip-path: polygon(0 0, calc(100% - var(--ld-pipe-notch)) 0, 100% 50%, calc(100% - var(--ld-pipe-notch)) 100%, 0 100%);
+}
+.ld-pipe-step:last-child {
+  padding-right: 14px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--ld-pipe-notch) 50%);
+}
+.ld-pipe-step:first-child:last-child { clip-path: none; border-radius: 6px; }
+
+/* Icon keeps its size; only the label gives way when the strip is narrow. */
+.ld-pipe-ico { flex: 0 0 auto; }
+.ld-pipe-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Selected — the ONLY tab that differs. No done/pending/upcoming states. */
+.ld-pipe-step.active {
+  flex-grow: 1.15;
+  background: var(--c-2563eb, #2563eb);
+  color: var(--ct-white, white);
+  font-weight: 600;
+}
+.ld-pipe-step:not(.active):hover {
+  background: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-1d4ed8, #1d4ed8);
+}
+/* clip-path clips outlines, so the focus ring has to be drawn inside the box. */
+.ld-pipe-step:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--c-1d4ed8, #1d4ed8);
+}
+
+/* Narrow viewports: the strip scrolls rather than letting chevrons overlap or
+   squeeze their labels down to an ellipsis. */
+@media (max-width: 1100px) {
+  .ld-tabnav { padding: 8px 12px; }
+  .ld-pipe { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .ld-pipe-step { flex: 0 0 auto; min-width: 118px; }
+  .ld-pipe-step.active { flex-grow: 0; }
+}
+
 /* ── Tab content wrapper ── */
 .ld-tab-content {
   padding: 18px 20px;
   min-height: 280px;
 }
 
+/* The one scrolling pane — scoped to the lead detail card on purpose, so the
+   Tenders detail view (which also renders .ld-tab-content, but not inside a
+   .ld-detail-page) keeps its normal page-scroll behaviour.
+   min-height:0 is required: without it a flex child refuses to shrink below its
+   content and the card grows instead of scrolling. */
+.ld-detail-page > .ld-tab-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Short or narrow viewports: a fixed-height card would squeeze the content pane
+   to a sliver under the hero, so hand scrolling back to the page. */
+@media (max-width: 768px), (max-height: 620px) {
+  .ld-detail-page { height: auto; }
+  .ld-detail-page > .ld-tab-content { overflow-y: visible; }
+}
+
 /* ── Info grid (overview tab) ── */
+/* Two wide cards per row. NOT auto-fill — on a wide viewport that collapses to
+   five or six cramped columns, which is what the overview used to look like. */
 .ld-info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-  margin-bottom: 14px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
+/* Two columns get cramped well before the 640px breakpoint below. */
+@media (max-width: 900px) {
+  .ld-info-grid { grid-template-columns: 1fr; }
+}
+
+/* Bright white card on the page surface — a hairline border plus a soft shadow
+   rather than a flat grey fill, so the cards lift off the background. */
 .ld-info-card {
-  background: var(--c-f9fafb, #f9fafb);
-  border: 1px solid var(--c-e5e7eb, #e5e7eb);
-  border-radius: 7px;
-  padding: 14px;
+  background: var(--c-white, white);
+  border: 1px solid var(--c-f1f5f9, #f1f5f9);
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 
-.ld-card-title {
-  font-size: 12px;
-  font-weight: 700;
+/* ── Earlier-version chip: preview, download, then delete ───────────────── */
+.ld-docver {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--c-f3f4f6, #f3f4f6);
+}
+.ld-docver-view,
+.ld-docver-dl,
+.ld-docver-del {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
   color: var(--ct-374151, #374151);
-  text-transform: uppercase;
-  letter-spacing: .04em;
+  font-family: 'Poppins', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.ld-docver-view { padding: 3px 8px; }
+.ld-docver-dl   { padding: 3px 7px; border-left: 1px solid var(--c-d1d5db, #d1d5db); }
+.ld-docver-del  { padding: 3px 7px; border-left: 1px solid var(--c-d1d5db, #d1d5db); }
+.ld-docver-view:hover,
+.ld-docver-dl:hover { background: var(--c-eff6ff, #eff6ff); color: var(--ct-1d4ed8, #1d4ed8); }
+.ld-docver-del:hover { background: var(--c-fef2f2, #fef2f2); color: var(--ct-dc2626, #dc2626); }
+
+/* ── Card header: tinted icon badge + title ─────────────────────────────────
+   The badge itself is .lead-card-ico, defined once in
+   components/Leads/LeadCardHead.css and shared with every tab. */
+.ld-card-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 16px;
+}
+.ld-card-head .ld-card-title { margin: 0; }
+
+/* ── HEADING SCALE — LEVEL 1: card title ───────────────────────────────────
+   One treatment for every card/panel heading in every tab of the detail view.
+   15px / bold / near-black / sentence case. Mirrored in LeadTechnicalScopeTab,
+   LeadBomTab, LeadBudgetTab, LeadSiteVisitTab and LeadFollowupsTab — keep the
+   five in step.                                                              */
+.ld-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ct-111827, #111827);
   margin: 0 0 12px;
 }
 
-.ld-field-list { display: flex; flex-direction: column; gap: 8px; }
+.ld-field-list { display: flex; flex-direction: column; gap: 11px; }
 
+/* Label column then value column, both left-aligned. NOT space-between — that
+   flings the value to the far edge of a wide card and leaves a river of gap. */
 .ld-field-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 12px;
+  display: grid;
+  grid-template-columns: minmax(92px, 38%) 1fr;
+  align-items: start;
+  gap: 12px;
+  font-size: 13px;
 }
-.ld-field-label { color: var(--ct-6b7280, #6b7280); font-weight: 500; flex-shrink: 0; }
-.ld-field-val   { color: var(--ct-111827, #111827); font-weight: 500; text-align: right; word-break: break-word; }
+/* ── LABEL TREATMENT ───────────────────────────────────────────────────────
+   --ct-374151 is THE label colour for the whole detail view: overview field
+   labels, form field labels and every table column head. Values sit one step
+   darker on --ct-111827 so the two stay distinguishable. Do not add a third. */
+.ld-field-label {
+  color: var(--ct-374151, #374151);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.ld-field-val {
+  color: var(--ct-111827, #111827);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  word-break: break-word;
+}
 
 /* BD executive change / remove control (Team Assignment card) */
 .ld-bd-actions { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--c-e5e7eb, #e5e7eb); display: flex; flex-direction: column; gap: 6px; }
-.ld-bd-actions > .ld-field-label { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+/* .ld-field-label already carries the 11px uppercase label treatment. */
 .ld-bd-actions-row { display: flex; align-items: center; gap: 8px; }
 .ld-bd-select { flex: 1 1 auto; min-width: 0; }
 .ld-bd-remove-btn {
@@ -2281,12 +2490,14 @@
 [data-theme="dark"] .ld-bd-actions { border-top-color: #2b3445; }
 [data-theme="dark"] .ld-bd-remove-btn { color: #f08a8a; background: #2a1719; border-color: #3a1f22; }
 
+/* Full-width card under the info grid — same surface as .ld-info-card so the
+   overview reads as one set of cards rather than a tinted odd-one-out. */
 .ld-enquiry-card {
-  background: var(--c-f0f9ff, #f0f9ff);
-  border: 1px solid var(--c-bae6fd, #bae6fd);
-  border-radius: 7px;
-  padding: 14px;
-  border-left: 4px solid var(--c-2563eb, #2563eb);
+  background: var(--c-white, white);
+  border: 1px solid var(--c-f1f5f9, #f1f5f9);
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .ld-enquiry-text { font-size: 13px; color: var(--ct-374151, #374151); line-height: 1.6; margin: 0; }
 
@@ -2345,6 +2556,26 @@
 .ld-pact-delete:hover { border-color: var(--c-dc2626, #dc2626) !important; background: var(--c-fee2e2, #fee2e2); }
 
 /* ── History tab ── */
+/* The history pane is the one tab whose body should fill the card: the timeline
+   owns the scroll, so the pane itself stops scrolling and hands its leftover
+   height down. Without this the list stops at a fixed height and leaves dead
+   white space under it. */
+.ld-detail-page > .ld-tab-content--history {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ld-tab-content--history > .ld-card-head { flex: 0 0 auto; }
+.ld-tab-content--history > .ld-history-scroll { flex: 1 1 auto; min-height: 0; max-height: none; }
+
+/* Same short/narrow-viewport escape hatch as the other tabs: the page scrolls,
+   so the pane must not clip and the timeline must not own a second scrollbar.
+   Written after the rules above because a media query adds no specificity. */
+@media (max-width: 768px), (max-height: 620px) {
+  .ld-detail-page > .ld-tab-content--history { display: block; overflow: visible; }
+  .ld-tab-content--history > .ld-history-scroll { overflow-y: visible; max-height: none; }
+}
+
 /* ── Activity History Timeline ────────────────────────────────── */
 .ld-history-scroll {
   max-height: 520px;
@@ -2736,11 +2967,11 @@
 }
 
 .ld-ovp-stat-label {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--ct-9ca3af, #9ca3af);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ct-374151, #374151);
   text-transform: uppercase;
-  letter-spacing: .03em;
+  letter-spacing: .04em;
 }
 
 .ld-ovp-latest {
@@ -2752,11 +2983,11 @@
 }
 
 .ld-ovp-latest-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--ct-9ca3af, #9ca3af);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ct-374151, #374151);
   text-transform: uppercase;
-  letter-spacing: .03em;
+  letter-spacing: .04em;
   flex-shrink: 0;
 }
 
@@ -2832,10 +3063,10 @@
   padding: 0;
   font-size: 14px;
 }
-/* Telecaller interaction detail block */
+/* Telecaller interaction detail block — label stacked above a full-width value.
+   .ld-field-row is a grid, so this collapses it to one column. */
 .ld-field-row--block {
-  flex-direction: column;
-  align-items: flex-start;
+  grid-template-columns: 1fr;
   gap: 4px;
 }
 .ld-field-row--block .ld-field-val {
@@ -2936,6 +3167,15 @@
 }
 .ld-pact-offline-dl:hover { background: var(--c-dcfce7, #dcfce7); }
 
+/* PDF rendition download — red, the colour every user already reads as "PDF",
+   and distinct from the neutral Word button it sits beside. */
+.ld-pact-pdf {
+  background: var(--c-fef2f2, #fef2f2);
+  color: var(--ct-dc2626, #dc2626);
+  border-color: var(--c-fecaca, #fecaca);
+}
+.ld-pact-pdf:hover { background: var(--c-fee2e2, #fee2e2); }
+
 .ld-pact-upload {
   background: var(--c-faf5ff, #faf5ff);
   color: var(--ct-7c3aed, #7c3aed);
@@ -2961,6 +3201,22 @@
   background: var(--c-eff6ff, #eff6ff);
   color: var(--ct-2563eb, #2563eb);
   border: 1px solid var(--c-bfdbfe, #bfdbfe);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Marks a proposal the system produced from the lead's tabs, as opposed to a
+   file somebody uploaded. Green so it reads as "built here", distinct from the
+   blue offline-PDF badge — a proposal can legitimately carry both. */
+.ld-generated-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--c-f0fdf4, #f0fdf4);
+  color: var(--ct-15803d, #15803d);
+  border: 1px solid var(--c-bbf7d0, #bbf7d0);
   border-radius: 4px;
   padding: 1px 6px;
   font-size: 10px;

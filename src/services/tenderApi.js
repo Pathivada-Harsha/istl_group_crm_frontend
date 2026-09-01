@@ -55,9 +55,10 @@ const authHeadersRaw = () => {
   return { 'User-Id': id, 'User-Role': role, 'X-User-Id': id, 'X-User-Role': role };
 };
 
-const postFile = async (path, file, failLabel) => {
+const postFile = async (path, file, failLabel, extra) => {
   const fd = new FormData();
   fd.append('file', file);
+  Object.entries(extra || {}).forEach(([k, v]) => fd.append(k, String(v)));
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST', credentials: 'include', headers: authHeadersRaw(), body: fd,
   });
@@ -76,8 +77,14 @@ const tenderApi = {
   update: async (id, tender) => (await req(`/tender/update/${id}`, { method: 'PUT', body: tender })).data,
   remove: async (id) => req(`/tender/delete/${id}`, { method: 'DELETE' }),
 
-  // Stateless parse → partial field-map (works before the tender is saved).
-  parsePdf: async (file) => (await postFile('/tender/parse-pdf', file, 'Parse failed')) || {},
+  // Stateless parse (works before the tender is saved) → proposed values with
+  // the page and line each came from, for the import review modal. Nothing is
+  // written to the tender by this call.
+  //
+  // `ai: true` re-reads the document with the LLM. That is always the user's
+  // choice from inside the modal — the backend never escalates on its own.
+  parsePdf: async (file, { ai = false } = {}) =>
+    (await postFile('/tender/parse-pdf', file, 'Parse failed', { ai })) || {},
   // Store the PDF bytes on a saved tender; returns the updated wrapper.
   uploadSourcePdf: async (id, file) => postFile(`/tender/${id}/upload-source-pdf`, file, 'Upload failed'),
   // Fetch the stored PDF as a blob URL for the in-page viewer iframe.

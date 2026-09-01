@@ -47,11 +47,14 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
     const ROW_H      = 38;
     const searchBarH = isSearchable ? 44 : 0;
     const MARGIN     = 8;
-    const HARD_CAP   = isSearchable ? 380 : 340; // ~9 rows before scrolling
+    const HARD_CAP   = isSearchable ? 560 : 520; // ~13 rows before scrolling
     // Ideal height if nothing constrained us. +1 row accounts for the always-
     // rendered placeholder / "clear selection" row above the options, so the
-    // last real option is never clipped.
-    const rowCount   = filteredOptions.length + 1;
+    // last real option is never clipped. An empty list still renders one row
+    // ("No options available" / "No results for …"), so it counts as 1 — without
+    // this the menu is sized for the placeholder alone and the empty-state row
+    // is clipped behind a scrollbar.
+    const rowCount   = Math.max(filteredOptions.length, 1) + 1;
     const desired    = Math.min(rowCount * ROW_H + 8 + searchBarH, HARD_CAP);
     const spaceBelow = window.innerHeight - rect.bottom - MARGIN;
     const spaceAbove = rect.top - MARGIN;

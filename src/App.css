@@ -5,6 +5,28 @@
   overflow-x: hidden;
 }
 
+/* ── Why this exists ─────────────────────────────────────────────────────────
+   `overflow-x: hidden` above silently makes .app a scroll container (the other axis
+   computes to auto), and a scroll container that never itself scrolls — .app has no
+   fixed height, the DOCUMENT scrolls — breaks `position: sticky` on every descendant:
+   the sticky element resolves against .app and just scrolls away. Measured with the
+   real stylesheets: a tab bar with `top: 64px` sat at -320px after scrolling 600px
+   under `hidden`, and at exactly 64px under `clip`. `clip` clips identically but
+   creates NO scroll container.
+
+   Deliberately NOT applied globally. A dozen stylesheets already carry sticky rules
+   that resolve against the document and have therefore never fired (e.g.
+   `.da-form-panel`, the BorrowerRegistry side panel). Switching .app wholesale would
+   quietly bring all of them to life on pages nobody asked us to change. So the
+   override is scoped to the views that actually want a pinned header — add the page
+   class here when a page opts in.
+
+   Browsers without `:has()` or `clip` keep today's behaviour: no stickiness, which is
+   exactly what they have now. ────────────────────────────────────────────────── */
+.app:has(.pd-page) {
+  overflow-x: clip;
+}
+
 /* ── Global modal scroll lock ────────────────────────────────────────────────
    Applied to <body> by App.js whenever any fixed full-screen overlay is open.
    Prevents the background page from scrolling on ANY page in the application.

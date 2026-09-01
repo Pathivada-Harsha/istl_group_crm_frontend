@@ -10,6 +10,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaColumns } from 'react-icons/fa';
+import {
+  Settings2, IndianRupee, Briefcase, ArrowDownToLine, Scale,
+  Building2, Layers, MapPin, CalendarDays, Flag, TriangleAlert, Trash2,
+} from 'lucide-react';
 import projectsApi from '../services/projectsApi.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
@@ -18,12 +22,21 @@ import { useAuth } from '../hooks/useAuth.js';
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from '../components/preLoader.js';
+import useConfirmationModal from '../components/HandleConfirmationModal.js';
+import ConfirmationModal from '../components/ConfirmationModal.js';
+import { techProgressPct, NO_TECH_PROGRESS } from '../utils/projectProgress.js';
 import '../pages-css/OrderBook.css';
 import '../pages-css/Projects.css';
 
 // Status colour map — copied from Pages/ProjectDashboard.js getStatusColor.
+// The single source of status colour for BOTH views on this page: the table's
+// status badge and the grid card's top border / pill / technical bar all read it.
+// NOT_STARTED was slate #64748b, which reads as "no colour at all" — and it is one
+// of the most common statuses, so a large share of the grid looked untouched.
+// Teal gives it presence while staying clear of IN_PROGRESS blue, COMPLETED green,
+// PLANNING amber, ON_HOLD violet and CANCELLED red.
 const getStatusColor = (s) => ({
-  NOT_STARTED: '#64748b', PLANNING: '#f59e0b', IN_PROGRESS: '#3b82f6',
+  NOT_STARTED: '#14b8a6', PLANNING: '#f59e0b', IN_PROGRESS: '#3b82f6',
   COMPLETED: '#22c55e', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444',
 }[s] || '#94a3b8');
 
@@ -85,13 +98,33 @@ const collectedPct = (p) => {
 
 const MONEY_IN_COLOR  = '#16a34a';   // received — green
 const MONEY_OUT_COLOR = '#dc2626';   // spent    — red
-const balanceColor = (v) => (v < 0 ? MONEY_OUT_COLOR : v > 0 ? MONEY_IN_COLOR : '#64748b');
+// Returned as CSS values, not bare hex, so the same conditional colour survives
+// dark mode: light mode has none of these tokens defined and falls back to the
+// original hex (pixel-identical), dark mode gets theme.css's lighter remaps.
+const balanceColor = (v) => (
+  v < 0 ? 'var(--ct-dc2626, #dc2626)'
+        : v > 0 ? 'var(--ct-16a34a, #16a34a)'
+                : 'var(--ct-64748b, #64748b)'
+);
 const fmtDate = (d) => {
   if (!d) return '—';
   const dt = new Date(d);
   if (isNaN(dt)) return '—';
   return `${String(dt.getDate()).padStart(2, '0')}-${String(dt.getMonth() + 1).padStart(2, '0')}-${dt.getFullYear()}`;
 };
+
+// startDate / endDate are the EFFECTIVE timeline: the backend hands back the
+// Technical Scope's Work Breakdown & Schedule window when the project has one
+// (timelineSource === 'SCOPE'), else the project's own dates. Same rule drives
+// the overdue flag below, so a project is late against whichever it is planned
+// on. See DropdownFilterService.getAllActiveProjects.
+const timelineHint = (p) => (
+  p.timelineSource === 'SCOPE'
+    ? 'Planned window from the Work Breakdown & Schedule'
+    : (p.startDate || p.endDate)
+      ? 'Project start / end date — no schedule has been planned yet'
+      : 'No dates and no schedule on this project yet'
+);
 
 // A project is overdue when its end date has passed and it is neither
 // finished nor cancelled. Cancelled projects are not "late", they are closed.
@@ -113,14 +146,18 @@ const ROWS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
 
 const FIN_COLOR = '#8b5cf6'; // financial progress = purple (distinct from technical/status)
 
-// Two stacked mini-bars — Technical (status colour) + Financial (purple) — shown together.
+// Two stacked mini-bars — Technical (status colour) + Financial (purple) — shown
+// together. `tech` is null for a project with no scope: empty bar, "—", no number.
 const DualProgress = ({ tech, fin, techColor }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 120 }}>
     {[['Tech', tech, techColor], ['Fin', fin, FIN_COLOR]].map(([label, val, color]) => (
-      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        title={val == null ? 'No technical scope defined for this project' : undefined}>
         <span style={{ fontSize: 10, color: '#94a3b8', width: 24, flexShrink: 0 }}>{label}</span>
-        <div className="pl-progress" style={{ flex: 1 }}><div className="pl-progress-fill" style={{ width: `${val}%`, background: color }} /></div>
-        <span className="pl-progress-pct" style={{ minWidth: 34, textAlign: 'right' }}>{val}%</span>
+        <div className="pl-progress" style={{ flex: 1 }}><div className="pl-progress-fill" style={{ width: `${val ?? 0}%`, background: color }} /></div>
+        <span className="pl-progress-pct" style={{ minWidth: 34, textAlign: 'right' }}>
+          {val == null ? NO_TECH_PROGRESS : `${val}%`}
+        </span>
       </div>
     ))}
   </div>
@@ -143,12 +180,16 @@ const COLUMN_DEFS = [
   { key: 'balance',  label: 'Balance' },
   { key: 'progress', label: 'Progress' },
   { key: 'timeline', label: 'Timeline' },
+  { key: 'created',  label: 'Created' },
+  { key: 'actions',  label: 'Actions' },
 ];
 
 function ProjectsList() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { toasts, removeToast, showError } = useToast();
+  const { user, pagePermissions } = useAuth();
+  const canDelete = (pagePermissions?.PROJECTS || []).includes('DELETE');
+  const { confirmModal, showConfirmation } = useConfirmationModal();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
 
   // Shared group/category filter (same contract used by OrderBook, dashboards…)
   const { groupName, subGroupName, updateFilters, resetFilters } = useGroupProjectFilters();
@@ -175,6 +216,9 @@ function ProjectsList() {
     sno: true, projId: true, name: true, customer: false, group: true,
     subGroup: false, status: true, budget: true, billed: false, received: true,
     payable: false, spent: true, balance: true, progress: true, timeline: true,
+    // Created is opt-in: the list already arrives newest-first, so the column is
+    // only needed when you want to see or re-sort on the date itself.
+    created: false, actions: true,
   });
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const dragCol = useRef(null);
@@ -272,8 +316,9 @@ function ProjectsList() {
       payable:  payableAmt(o),
       spent:    moneyOut(o),
       balance:  balanceAmt(o),
-      progress: Number(o.physicalProgressPct != null ? o.physicalProgressPct : o.progressPercentage) || 0,
+      progress: techProgressPct(o) ?? -1,   // untracked sorts below a genuine 0%
       timeline: o.startDate || '',
+      created:  o.createdAt ? new Date(o.createdAt).getTime() : 0,
     }[key] ?? '');
     return [...projects].sort((a, b) => {
       const aVal = getVal(a, sortConfig.key), bVal = getVal(b, sortConfig.key);
@@ -290,6 +335,30 @@ function ProjectsList() {
   );
 
   const openProject = (p) => navigate(`/projects/${encodeURIComponent(p.projectUniqueId)}`);
+
+  // ── Delete ──────────────────────────────────────────────────────────────────
+  // The backend deletes in two stages: an active project is deactivated (and so
+  // drops out of this list, which only shows active ones), and deleting an
+  // already-inactive one removes it for good. The wording says which will happen
+  // so nobody expects "archive" and gets "gone".
+  const askDeleteProject = async (p) => {
+    const ok = await showConfirmation({
+      title: 'Delete project',
+      type: 'alert',        // 'alert' keeps the Cancel button; an unknown type hides it
+      message: `Delete "${p.projectName || p.projectUniqueId}"? It will be deactivated and removed `
+             + `from this list. Its order book, scope and BOM are not deleted.`,
+      confirmText: 'Yes, Delete',
+      cancelText: 'Cancel',
+    });
+    if (!ok) return;
+    try {
+      await projectsApi.deleteProject(p.projectUniqueId);
+      showSuccess(`Project ${p.projectUniqueId} deleted`);
+      fetchProjects();
+    } catch (err) {
+      showError(err.message || 'Failed to delete project');
+    }
+  };
 
   // ── Column render map + sort keys ───────────────────────────────────────────
   const columnMeta = {
@@ -340,11 +409,33 @@ function ProjectsList() {
       );
     } },
     progress: { label: 'Progress', sortKey: 'progress', render: (p) => {
-      const tech = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+      const tech = techProgressPct(p);   // null = no scope defined
       const fin  = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
       return <td key="progress"><DualProgress tech={tech} fin={fin} techColor={progressColor(p.status)} /></td>;
     } },
-    timeline: { label: 'Timeline', sortKey: 'timeline', render: (p) => <td key="timeline" className="pl-muted-sm">{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</td> },
+    timeline: { label: 'Timeline', sortKey: 'timeline', render: (p) => (
+      <td key="timeline" className="pl-muted-sm" title={timelineHint(p)}>
+        {fmtDate(p.startDate)} → {fmtDate(p.endDate)}
+      </td>
+    ) },
+    created:  { label: 'Created', sortKey: 'created', render: (p) => (
+      <td key="created" className="pl-muted-sm">{fmtDate(p.createdAt)}</td>
+    ) },
+    actions:  { label: 'Actions', sortKey: null, render: (p) => (
+      <td key="actions">
+        {/* Row click opens the project — keep it off the buttons. */}
+        <div className="orderbook-actions-inline" onClick={e => e.stopPropagation()}>
+          <button
+            className="orderbook-icon-btn ob-delete"
+            onClick={() => canDelete && askDeleteProject(p)}
+            title={canDelete ? 'Delete project' : 'No permission to delete'}
+            disabled={!canDelete}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </td>
+    ) },
   };
 
   const SortIcon = ({ colKey }) => {
@@ -358,6 +449,7 @@ function ProjectsList() {
     <div className="orderbook-page">
       {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmationModal {...confirmModal} />
 
       {/* Breadcrumb */}
       <div className="orderbook-breadcrumb">
@@ -584,14 +676,58 @@ const Pagination = ({ currentPage, totalPages, total, setCurrentPage, rowsPerPag
 // ─────────────────────────────────────────────────────────────────────────────
 //  GRID VIEW
 // ─────────────────────────────────────────────────────────────────────────────
+// One "icon · text" chip. Used by both the meta row and the footer, which are
+// the same thing at two weights — thin dividers come from the CSS sibling rule.
+const CardChip = ({ icon: Icon, text, title, className = '' }) => (
+  <span className={`pl-card-chip ${className}`.trim()} title={title || text}>
+    <Icon size={13} strokeWidth={2} className="pl-card-chip-icon" aria-hidden="true" />
+    <span className="pl-card-chip-text">{text}</span>
+  </span>
+);
+
+// One progress meter: leading icon + label + right-aligned percentage, then the
+// bar. `color` is a CSS value (a var() or a token), never a raw hex from JS.
+const CardMeter = ({ icon: Icon, label, pct, display, color, className = '', title }) => (
+  <div className={`pl-card-meter ${className}`.trim()} title={title}>
+    <div className="pl-card-meter-head">
+      <Icon size={13} strokeWidth={2} className="pl-card-meter-icon" aria-hidden="true" />
+      <span className="pl-card-meter-label">{label}</span>
+      <span className="pl-card-meter-pct">{display}</span>
+    </div>
+    <div className="pl-progress">
+      <div className="pl-progress-fill" style={{ width: `${pct}%`, background: color }} />
+    </div>
+  </div>
+);
+
+// One KPI tile: tinted mini-card with a caption line and the amount below.
+// The hue comes from the `tone` class (pl-kpi--budget / --received / --balance).
+const CardKpi = ({ icon: Icon, tone, label, value, valueColor, title }) => (
+  <div className={`pl-kpi pl-kpi--${tone}`} title={title}>
+    <span className="pl-kpi-head">
+      <Icon size={12} strokeWidth={2.2} className="pl-kpi-icon" aria-hidden="true" />
+      <span className="pl-kpi-label">{label}</span>
+    </span>
+    <span className="pl-kpi-value" style={valueColor ? { color: valueColor } : undefined}>{value}</span>
+  </div>
+);
+
 const ProjectsGrid = ({ rows, onOpen }) => (
   <div className="pl-grid">
     {rows.map((p) => {
-      const pct      = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+      const pct      = techProgressPct(p);   // null = no scope defined
       const finPct   = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
       const statusHx = getStatusColor(p.status);
       const bal      = balanceAmt(p);
       const late     = isOverdue(p);
+
+      // Group / sub-group / location — dropped individually when empty so a
+      // sparse project doesn't render dangling dividers.
+      const meta = [
+        p.groupName    && { key: 'g',  icon: Building2, text: p.groupName },
+        p.subGroupName && { key: 'sg', icon: Layers,    text: p.subGroupName },
+        p.location     && { key: 'l',  icon: MapPin,    text: p.location },
+      ].filter(Boolean);
 
       return (
         <div
@@ -599,70 +735,78 @@ const ProjectsGrid = ({ rows, onOpen }) => (
           className="pl-card"
           role="button"
           tabIndex={0}
+          // The status hex is handed to CSS once, here, and everything tinted by
+          // status (top border, pill, technical bar) derives from it at runtime —
+          // so both themes stay in step with getStatusColor. --pl-status-soft is
+          // the pre-alpha'd fallback for engines without color-mix().
+          style={{ '--pl-status': statusHx, '--pl-status-soft': `${statusHx}24` }}
           onClick={() => onOpen(p)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(p); } }}
         >
-          {/* Row 1 — identifier and status */}
+          {/* 1 — status top border is .pl-card::before, coloured by --pl-status */}
+
+          {/* 2 — identifier and status pill */}
           <div className="pl-card-head">
             <span className="pl-card-id">{p.projectUniqueId}</span>
-            <span className="pl-card-status">
-              <span className="pl-status-dot" style={{ background: statusHx }} />
-              {statusLabel(p.status)}
-            </span>
+            <span className="pl-card-status">{statusLabel(p.status)}</span>
           </div>
 
-          {/* Row 2 — the headline */}
-          <div>
-            <div className="pl-card-name">{p.projectName || '—'}</div>
-            <div className="pl-card-customer">
-              {p.customerName || '—'}
-              {p.groupName ? <span className="pl-card-sep">·</span> : null}
-              {p.groupName || ''}
+          {/* 3 — the headline */}
+          <div className="pl-card-title">
+            <div className="pl-card-name" title={p.projectName || undefined}>{p.projectName || '—'}</div>
+            <div className="pl-card-customer">{p.customerName || '—'}</div>
+          </div>
+
+          {/* 4 — group · sub-group · location */}
+          {meta.length > 0 && (
+            <div className="pl-card-meta">
+              {meta.map(m => <CardChip key={m.key} icon={m.icon} text={m.text} />)}
             </div>
-          </div>
+          )}
 
-          {/* Row 3 — progress: Technical + Financial */}
+          {/* 5 — progress: Technical (status colour) + Financial (its own hue) */}
           <div className="pl-card-progress">
-            <div className="pl-card-progress-head">
-              <span>Technical</span>
-              <span className="pl-card-progress-pct">{pct}%</span>
-            </div>
-            <div className="pl-progress">
-              <div className="pl-progress-fill" style={{ width: `${pct}%`, background: statusHx }} />
-            </div>
-            <div className="pl-card-progress-head" style={{ marginTop: 6 }}>
-              <span style={{ color: '#64748b' }}>Financial</span>
-              <span className="pl-card-progress-pct" style={{ color: FIN_COLOR }}>{finPct}%</span>
-            </div>
-            <div className="pl-progress">
-              <div className="pl-progress-fill" style={{ width: `${finPct}%`, background: FIN_COLOR }} />
-            </div>
+            <CardMeter
+              icon={Settings2}
+              label="Technical"
+              pct={pct ?? 0}
+              display={pct == null ? NO_TECH_PROGRESS : `${pct}%`}
+              color="var(--pl-status)"
+              title={pct == null ? 'No technical scope defined for this project' : undefined}
+            />
+            <CardMeter
+              icon={IndianRupee}
+              label="Financial"
+              pct={finPct}
+              display={`${finPct}%`}
+              color="var(--pl-fin)"
+              className="pl-card-meter--fin"
+            />
           </div>
 
-          {/* Row 4 — three numbers, hairline-separated, no nested box */}
-          <div className="pl-card-money">
-            <div className="pl-money-cell" title={`Budget: ${fmtMoney(p.budget)}`}>
-              <label>Budget</label>
-              <span>{fmtMoneyShort(p.budget)}</span>
-            </div>
-            <div className="pl-money-cell" title={`Received from customer: ${fmtMoney(moneyIn(p))}`}>
-              <label>Received</label>
-              <span>{fmtMoneyShort(moneyIn(p))}</span>
-            </div>
-            <div className="pl-money-cell" title={`Received ${fmtMoney(moneyIn(p))} − Spent ${fmtMoney(moneyOut(p))}`}>
-              <label>Balance</label>
-              <span style={{ color: balanceColor(bal) }}>{fmtMoneyShort(bal)}</span>
-            </div>
+          {/* 6 — Budget / Received / Balance as three tinted mini-cards */}
+          <div className="pl-card-kpis">
+            <CardKpi icon={Briefcase} tone="budget" label="Budget"
+              value={fmtMoneyShort(p.budget)} title={`Budget: ${fmtMoney(p.budget)}`} />
+            <CardKpi icon={ArrowDownToLine} tone="received" label="Received"
+              value={fmtMoneyShort(moneyIn(p))} title={`Received from customer: ${fmtMoney(moneyIn(p))}`} />
+            <CardKpi icon={Scale} tone="balance" label="Balance"
+              value={fmtMoneyShort(bal)} valueColor={balanceColor(bal)}
+              title={`Received ${fmtMoney(moneyIn(p))} − Spent ${fmtMoney(moneyOut(p))}`} />
           </div>
 
-          {/* Row 5 — schedule signal */}
+          {/* 7 — schedule signal; overdue replaces the start date, in red */}
           <div className="pl-card-foot">
             {late ? (
-              <span className="pl-card-late">⚠ {daysOverdue(p)} days overdue</span>
+              <CardChip icon={TriangleAlert} className="pl-card-late"
+                text={`${daysOverdue(p)} days overdue`}
+                title={`Ended ${fmtDate(p.endDate)}`} />
             ) : (
-              <span className="pl-muted-sm">{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</span>
+              <CardChip icon={CalendarDays} text={fmtDate(p.startDate)}
+                title={`Start ${fmtDate(p.startDate)} — ${timelineHint(p)}`} />
             )}
-            <span className="pl-muted-sm">{p.subGroupName || ''}</span>
+            <CardChip icon={Flag} text={fmtDate(p.endDate)}
+              title={`End ${fmtDate(p.endDate)} — ${timelineHint(p)}`} />
           </div>
         </div>
       );

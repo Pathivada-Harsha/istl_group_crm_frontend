@@ -12,7 +12,8 @@
 //    to the BOM tab, and money belongs to Budget Estimation.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from "react";
-import { Wand2, Plus, Save, Trash2, Download } from "lucide-react";
+import './LeadCardHead.css';
+import { Wand2, Plus, Save, Trash2, Download, ClipboardList, ListChecks } from "lucide-react";
 import api from "../../services/leadsapi.js";
 import ConfirmationModal from "../ConfirmationModal.js";
 import useConfirmationModal from "../HandleConfirmationModal.js";
@@ -290,7 +291,7 @@ export default function LeadTechnicalScopeTab({ lead, currentUser, permissions, 
       {/* ── Section A: Scope header ─────────────────────────────────────────── */}
       <div className="lts-card">
         <div className="lts-card-head">
-          <h4 className="lts-card-title">Scope Overview</h4>
+          <span className="lead-card-ico"><ClipboardList size={17} strokeWidth={2} /></span><h4 className="lts-card-title">Scope Overview</h4>
           {canEdit && (
             <button className="lts-btn-ghost" onClick={pullFromSiteVisit} disabled={pullingVisit}
               title="Fill location and capacity from this lead's site visit report">
@@ -344,7 +345,7 @@ export default function LeadTechnicalScopeTab({ lead, currentUser, permissions, 
       {/* ── Section B: Scope of work ────────────────────────────────────────── */}
       <div className="lts-card">
         <div className="lts-card-head">
-          <h4 className="lts-card-title">Scope of Work</h4>
+          <span className="lead-card-ico"><ListChecks size={17} strokeWidth={2} /></span><h4 className="lts-card-title">Scope of Work</h4>
           <span className="lts-count-pill">{rows.length}</span>
           {canEdit && (
             <div className="lts-head-actions">

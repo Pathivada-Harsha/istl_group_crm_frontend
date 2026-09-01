@@ -124,7 +124,7 @@
 /* Notes / outcome blocks */
 .lfu-notes   { background: var(--c-f9fafb, #F9FAFB); border-radius: 8px; padding: 10px 12px; border: 1px solid var(--c-f3f4f6, #F3F4F6); }
 .lfu-outcome { background: var(--c-f0fdf4, #F0FDF4); border-radius: 8px; padding: 10px 12px; border: 1px solid var(--c-bbf7d0, #BBF7D0); }
-.lfu-block-label { font-size: 11px; font-weight: 700; color: var(--ct-6b7280, #6B7280); margin-bottom: 4px; letter-spacing: .03em; }
+.lfu-block-label { font-size: 11px; font-weight: 700; color: var(--ct-374151, #374151); margin-bottom: 4px; letter-spacing: .04em; }
 .lfu-block-label--outcome { color: var(--ct-065f46, #065F46); }
 .lfu-block-text { font-size: 12px; color: var(--ct-374151, #374151); margin: 0; line-height: 1.6; white-space: pre-wrap; }
 .lfu-block-text--outcome { color: var(--ct-1c4532, #1C4532); }

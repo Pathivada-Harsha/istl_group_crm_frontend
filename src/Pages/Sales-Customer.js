@@ -22,6 +22,18 @@ import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
 import api from '../services/leadsapi.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
+import { LayoutDashboard, ClipboardList, Wallet, CalendarClock } from 'lucide-react';
+import ClientFinancialsTab, { ClientFinancialsStrip } from '../components/customers/ClientFinancialsTab.js';
+
+/* Detail-view tabs. Order matters — the chevron strip reads left to right, and
+   Financials sits next to Order Books because that is where the money the tab
+   totals up was agreed. Keep this list short: see the caveat on .custd-tabs. */
+const CUSTOMER_DETAIL_TABS = [
+  { k: 'overview',   l: 'Overview',    i: LayoutDashboard },
+  { k: 'orderbooks', l: 'Order Books', i: ClipboardList },
+  { k: 'financials', l: 'Financials',  i: Wallet },
+  { k: 'followups',  l: 'Follow-ups',  i: CalendarClock },
+];
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -191,46 +203,46 @@ const OrderBookSummary = ({ customer, currentUser, onGoToOrderBooks }) => {
   if (loading) return null;
 
   if (orders.length === 0) return (
-    <div className="ld-overview-proposals ld-overview-proposals-empty">
-      <div className="ld-ovp-icon">📦</div>
-      <div className="ld-ovp-text">
-        <span className="ld-ovp-label">Order Books</span>
-        <span className="ld-ovp-sub">No orders created yet for this customer</span>
+    <div className="custd-overview-proposals custd-overview-proposals-empty">
+      <div className="custd-ovp-icon">📦</div>
+      <div className="custd-ovp-text">
+        <span className="custd-ovp-label">Order Books</span>
+        <span className="custd-ovp-sub">No orders created yet for this customer</span>
       </div>
-      <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={onGoToOrderBooks}>Create Order Book</button>
+      <button className="custd-btn custd-btn-sec custd-btn-sm" onClick={onGoToOrderBooks}>Create Order Book</button>
     </div>
   );
 
   return (
-    <div className="ld-overview-proposals">
-      <div className="ld-ovp-header">
-        <h4 className="ld-card-title" style={{margin:0}}>Order Books Summary</h4>
-        <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={onGoToOrderBooks}>View All →</button>
+    <div className="custd-overview-proposals">
+      <div className="custd-ovp-header">
+        <h4 className="custd-card-title" style={{margin:0}}>Order Books Summary</h4>
+        <button className="custd-btn custd-btn-sec custd-btn-sm" onClick={onGoToOrderBooks}>View All →</button>
       </div>
-      <div className="ld-ovp-stats">
-        <div className="ld-ovp-stat">
-          <span className="ld-ovp-stat-val">{orders.length}</span>
-          <span className="ld-ovp-stat-label">Total Orders</span>
+      <div className="custd-ovp-stats">
+        <div className="custd-ovp-stat">
+          <span className="custd-ovp-stat-val">{orders.length}</span>
+          <span className="custd-ovp-stat-label">Total Orders</span>
         </div>
-        <div className="ld-ovp-stat ld-ovp-stat-money">
-          <span className="ld-ovp-stat-val">₹{totalAmount.toLocaleString('en-IN')}</span>
-          <span className="ld-ovp-stat-label">Total Value</span>
+        <div className="custd-ovp-stat custd-ovp-stat-money">
+          <span className="custd-ovp-stat-val">₹{totalAmount.toLocaleString('en-IN')}</span>
+          <span className="custd-ovp-stat-label">Total Value</span>
         </div>
-        <div className="ld-ovp-stat">
-          <span className="ld-ovp-stat-val">{completed}</span>
-          <span className="ld-ovp-stat-label">Completed</span>
+        <div className="custd-ovp-stat">
+          <span className="custd-ovp-stat-val">{completed}</span>
+          <span className="custd-ovp-stat-label">Completed</span>
         </div>
-        <div className="ld-ovp-stat" style={{color: totalBalance > 0 ? __stc('#dc2626') : __stc('#059669')}}>
-          <span className="ld-ovp-stat-val">₹{totalBalance.toLocaleString('en-IN')}</span>
-          <span className="ld-ovp-stat-label">Balance Due</span>
+        <div className="custd-ovp-stat" style={{color: totalBalance > 0 ? __stc('#dc2626') : __stc('#059669')}}>
+          <span className="custd-ovp-stat-val">₹{totalBalance.toLocaleString('en-IN')}</span>
+          <span className="custd-ovp-stat-label">Balance Due</span>
         </div>
       </div>
       {latestOrder && (
-        <div className="ld-ovp-latest">
-          <span className="ld-ovp-latest-label">Latest:</span>
-          <span className="ld-proposal-no" style={{fontSize:10}}>{latestOrder.orderBookNo}</span>
-          <span className="ld-ovp-latest-title">{latestOrder.orderTitle}</span>
-          <span className={`ld-proposal-status ${getStatusClass(latestOrder.status)}`} style={{fontSize:10, marginLeft:'auto'}}>{latestOrder.status}</span>
+        <div className="custd-ovp-latest">
+          <span className="custd-ovp-latest-label">Latest:</span>
+          <span className="custd-proposal-no" style={{fontSize:10}}>{latestOrder.orderBookNo}</span>
+          <span className="custd-ovp-latest-title">{latestOrder.orderTitle}</span>
+          <span className={`custd-proposal-status ${getStatusClass(latestOrder.status)}`} style={{fontSize:10, marginLeft:'auto'}}>{latestOrder.status}</span>
         </div>
       )}
     </div>
@@ -264,7 +276,11 @@ const OrderBookForm = ({ customer, currentUser, onSaved, onCancel, existingOrder
   const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
 
   useEffect(() => {
-    fetch(`${apiBase}/proposals/by-customer/${customer.id}`, { credentials: 'include', headers })
+    // Approved + CRM-generated proposals only (backend rule). includeId pins the
+    // one already on this order book so editing can't silently drop the link.
+    const keep = existingOrder?.proposalId;
+    const qs = keep ? `?includeId=${encodeURIComponent(keep)}` : '';
+    fetch(`${apiBase}/proposals/by-customer/${customer.id}${qs}`, { credentials: 'include', headers })
       .then(r => r.json())
       .then(data => { if (data.success) setProposals(Array.isArray(data.data) ? data.data : []); })
       .catch(() => {});
@@ -498,9 +514,9 @@ const OrderBookForm = ({ customer, currentUser, onSaved, onCancel, existingOrder
       </div>
 
       {/* Footer Actions */}
-      <div className="ld-pform-footer">
-        <button className="ld-btn ld-btn-sec" onClick={onCancel}>Cancel</button>
-        <button className="ld-btn ld-btn-pri" onClick={handleSave} disabled={loading}>{loading ? 'Saving...' : existingOrder ? 'Update Order Book' : 'Create Order Book'}</button>
+      <div className="custd-pform-footer">
+        <button className="custd-btn custd-btn-sec" onClick={onCancel}>Cancel</button>
+        <button className="custd-btn custd-btn-pri" onClick={handleSave} disabled={loading}>{loading ? 'Saving...' : existingOrder ? 'Update Order Book' : 'Create Order Book'}</button>
       </div>
 
       {/* Excel Upload Modal */}
@@ -1006,7 +1022,7 @@ function CustomerEditModal({ followup: f, users, currentUser, onSaved, onCancel 
 }
 
 // ── Customer Detail Page ──────────────────────────────────────────────────────
-const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions, showSuccess, showError }) => {
+const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions, showSuccess, showError, showWarning }) => {
   useThemeVersion();
   const [activeTab, setActiveTab]       = useState(() => localStorage.getItem('cust_detail_tab') || 'overview');
   const [orderBooks, setOrderBooks]     = useState([]);
@@ -1166,16 +1182,16 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
   };
 
   return (
-    <div className="ld-detail-page">
+    <div className="custd-detail-page">
       {/* Top bar */}
-      <div className="ld-detail-topbar">
-        <button className="ld-back-btn" onClick={onBack}>
+      <div className="custd-detail-topbar">
+        <button className="custd-back-btn" onClick={onBack}>
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
           </svg>
           Back to Customers
         </button>
-        <div className="ld-detail-breadcrumb">
+        <div className="custd-detail-breadcrumb">
           <span style={{cursor:'pointer',color:__stc('#6b7280')}} onClick={onBack}>Customers</span>
           <span style={{margin:'0 6px',color:__stc('#d1d5db')}}>/</span>
           <span style={{color:__stc('#111827'),fontWeight:500}}>{customer.customerCode}</span>
@@ -1189,20 +1205,20 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
       </div>
 
       {/* Hero card */}
-      <div className="ld-hero">
-        <div className="ld-hero-left">
-          <div className="ld-hero-avatar">{customer.name?.[0]?.toUpperCase() || '?'}</div>
+      <div className="custd-hero">
+        <div className="custd-hero-left">
+          <div className="custd-hero-avatar">{customer.name?.[0]?.toUpperCase() || '?'}</div>
           <div>
-            <h2 className="ld-hero-name">{customer.name}</h2>
+            <h2 className="custd-hero-name">{customer.name}</h2>
             {customer.companyName && <div style={{fontSize:13,color:__stc('#6b7280')}}>{customer.companyName}</div>}
-            <div className="ld-hero-code">{customer.customerCode}</div>
+            <div className="custd-hero-code">{customer.customerCode}</div>
           </div>
         </div>
-        <div className="ld-hero-badges">
+        <div className="custd-hero-badges">
           {customer.groupName && <span className={`cust-badge badge-${getGroupColor(customer.groupName)}`}>{customer.groupName}</span>}
           <span className={`cust-badge badge-${getStatusColor(customer.status)}`}>{customer.status}</span>
         </div>
-        <div className="ld-hero-actions">
+        <div className="custd-hero-actions">
           <button className="cust-btn cust-btn-secondary" onClick={() => { setActiveTab('orderbooks'); setShowOrderForm(true); setEditingOrder(null); localStorage.setItem('cust_detail_tab','orderbooks'); }}>
             <svg className="cust-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
             New Order Book
@@ -1211,20 +1227,39 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
       </div>
 
       {/* Tabs */}
-      <div className="ld-tabs">
-        {[{k:'overview',l:'Overview'},{k:'orderbooks',l:'Order Books'},{k:'followups',l:'Follow-ups'}].map(t => (
-          <button key={t.k} className={`ld-tab${activeTab===t.k?' active':''}`} onClick={() => { setActiveTab(t.k); setShowOrderForm(false); setShowOrderView(false); localStorage.setItem('cust_detail_tab', t.k); }}>{t.l}</button>
-        ))}
+      {/* Tab bar — one row of chevrons that nest into each other, so the selected
+          tab reads as an arrow. Same treatment as the lead and project detail
+          views; the styling lives under .custd-tab in Sales-Customer.css.
+          Behaviour is unchanged: same state, same localStorage persistence.
+          Sized for a small fixed set of tabs — if this ever grows past ~6,
+          revisit the chevrons rather than letting them cramp. */}
+      <div className="custd-tabs">
+        {CUSTOMER_DETAIL_TABS.map(t => {
+          const Ico = t.i;
+          return (
+            <button
+              key={t.k}
+              type="button"
+              className={`custd-tab${activeTab===t.k?' active':''}`}
+              aria-current={activeTab===t.k ? 'true' : undefined}
+              title={t.l}
+              onClick={() => { setActiveTab(t.k); setShowOrderForm(false); setShowOrderView(false); localStorage.setItem('cust_detail_tab', t.k); }}
+            >
+              <Ico className="custd-tab-ico" size={14} strokeWidth={2} aria-hidden="true" />
+              <span className="custd-tab-label">{t.l}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── OVERVIEW ── */}
       {activeTab === 'overview' && (
-        <div className="ld-tab-content">
+        <div className="custd-tab-content">
           {/* Contact + Business info cards - always visible */}
-          <div className="ld-info-grid">
-            <div className="ld-info-card">
-              <h4 className="ld-card-title">Contact Information</h4>
-              <div className="ld-field-list">
+          <div className="custd-info-grid">
+            <div className="custd-info-card">
+              <h4 className="custd-card-title">Contact Information</h4>
+              <div className="custd-field-list">
                 {[
                   ['Email',   customer.email || '-'],
                   ['Phone',   customer.phone || '-'],
@@ -1233,16 +1268,16 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                   ['Contact Person', customer.contactPerson || '-'],
                   ['Designation', customer.designation || '-'],
                 ].map(([l,v]) => (
-                  <div className="ld-field-row" key={l}>
-                    <span className="ld-field-label">{l}</span>
-                    <span className="ld-field-val">{v}</span>
+                  <div className="custd-field-row" key={l}>
+                    <span className="custd-field-label">{l}</span>
+                    <span className="custd-field-val">{v}</span>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="ld-info-card">
-              <h4 className="ld-card-title">Business Details</h4>
-              <div className="ld-field-list">
+            <div className="custd-info-card">
+              <h4 className="custd-card-title">Business Details</h4>
+              <div className="custd-field-list">
                 {[
                   ['GST Number', customer.gstNumber || '-'],
                   ['PAN', customer.pan || '-'],
@@ -1251,14 +1286,25 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                   ['Assigned To', customer.assignedToName || '-'],
                   ['Address', customer.address ? `${customer.address}, ${customer.city || ''}, ${customer.state || ''} ${customer.pincode ? '- '+customer.pincode : ''}` : '-'],
                 ].map(([l,v]) => (
-                  <div className="ld-field-row" key={l}>
-                    <span className="ld-field-label">{l}</span>
-                    <span className="ld-field-val">{v}</span>
+                  <div className="custd-field-row" key={l}>
+                    <span className="custd-field-label">{l}</span>
+                    <span className="custd-field-val">{v}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
+
+          {/* ── Client roll-up, three numbers ──
+              The headline of the Financials tab, surfaced here: outstanding
+              receivable, net cash, % collected. Rolled up from the client's
+              PROJECTS (invoices/receipts/bills/payments), which is a different
+              question from the order-and-invoice summary below it — click
+              through for the full picture and the per-project proof. */}
+          <ClientFinancialsStrip
+            customerId={customer.id}
+            onOpenFinancials={() => { setActiveTab('financials'); localStorage.setItem('cust_detail_tab','financials'); }}
+          />
 
           {/* ── Financial Overview Dashboard ── */}
           {loadingOverview ? (
@@ -1288,8 +1334,8 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
               {overviewData.orders.length > 0 && (
                 <div className="orderbook-card" style={{marginBottom:'1rem'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
-                    <h4 className="ld-card-title" style={{margin:0}}>📦 Order Books ({overviewData.orders.length})</h4>
-                    <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={() => { setActiveTab('orderbooks'); localStorage.setItem('cust_detail_tab','orderbooks'); }}>View All →</button>
+                    <h4 className="custd-card-title" style={{margin:0}}>📦 Order Books ({overviewData.orders.length})</h4>
+                    <button className="custd-btn custd-btn-sec custd-btn-sm" onClick={() => { setActiveTab('orderbooks'); localStorage.setItem('cust_detail_tab','orderbooks'); }}>View All →</button>
                   </div>
                   <div className="orderbook-table-wrapper">
                     <table className="orderbook-table" style={{fontSize:'12px'}}>
@@ -1320,7 +1366,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
               {overviewData.invoices.length > 0 && (
                 <div className="orderbook-card" style={{marginBottom:'1rem'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
-                    <h4 className="ld-card-title" style={{margin:0}}>🧾 Invoices ({overviewData.invoices.length})</h4>
+                    <h4 className="custd-card-title" style={{margin:0}}>🧾 Invoices ({overviewData.invoices.length})</h4>
                     <div style={{display:'flex',gap:'8px',fontSize:'12px'}}>
                       <span style={{background:__sbg('#d1fae5'),color:__stc('#065f46'),padding:'2px 8px',borderRadius:'9999px'}}>{overviewData.stats.paidInvoices} Paid</span>
                       <span style={{background:__sbg('#fee2e2'),color:__stc('#991b1b'),padding:'2px 8px',borderRadius:'9999px'}}>{overviewData.stats.pendingInvoices} Pending</span>
@@ -1362,7 +1408,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
               {overviewData.receipts.length > 0 && (
                 <div className="orderbook-card">
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
-                    <h4 className="ld-card-title" style={{margin:0}}>💰 Receipts / Payments Received ({overviewData.receipts.length})</h4>
+                    <h4 className="custd-card-title" style={{margin:0}}>💰 Receipts / Payments Received ({overviewData.receipts.length})</h4>
                     <span style={{fontSize:'14px',fontWeight:'700',color:__stc('#16a34a')}}>Total: ₹{(overviewData.stats.totalReceived||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
                   </div>
                   <div className="orderbook-table-wrapper">
@@ -1391,10 +1437,10 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
 
               {/* Empty state */}
               {overviewData.orders.length === 0 && overviewData.invoices.length === 0 && overviewData.receipts.length === 0 && (
-                <div className="ld-empty-state">
-                  <div className="ld-empty-icon">📊</div>
+                <div className="custd-empty-state">
+                  <div className="custd-empty-icon">📊</div>
                   <p>No financial activity recorded yet for this customer.</p>
-                  <button className="ld-btn ld-btn-pri" onClick={() => { setActiveTab('orderbooks'); setShowOrderForm(true); localStorage.setItem('cust_detail_tab','orderbooks'); }}>Create First Order Book</button>
+                  <button className="custd-btn custd-btn-pri" onClick={() => { setActiveTab('orderbooks'); setShowOrderForm(true); localStorage.setItem('cust_detail_tab','orderbooks'); }}>Create First Order Book</button>
                 </div>
               )}
             </div>
@@ -1404,11 +1450,11 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
 
       {/* ── ORDER BOOKS ── */}
       {activeTab === 'orderbooks' && (
-        <div className="ld-tab-content">
+        <div className="custd-tab-content">
           {showOrderView && selectedOrder ? (
             <div>
-              <div className="ld-section-hdr" style={{marginBottom:12}}>
-                <button className="ld-back-btn" onClick={() => setShowOrderView(false)}>← Back to Orders</button>
+              <div className="custd-section-hdr" style={{marginBottom:12}}>
+                <button className="custd-back-btn" onClick={() => setShowOrderView(false)}>← Back to Orders</button>
               </div>
               <div className="orderbook-card">
                 <div className="orderbook-card-header">
@@ -1455,42 +1501,49 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
             </div>
           ) : showOrderForm ? (
             <div>
-              <div className="ld-section-hdr" style={{marginBottom:12}}>
-                <h4 className="ld-card-title" style={{margin:0}}>{editingOrder ? 'Edit Order Book' : 'New Order Book'} — {customer.name}</h4>
-                <button className="ld-btn ld-btn-sec" onClick={() => { setShowOrderForm(false); setEditingOrder(null); }}>Cancel</button>
+              <div className="custd-section-hdr" style={{marginBottom:12}}>
+                <h4 className="custd-card-title" style={{margin:0}}>{editingOrder ? 'Edit Order Book' : 'New Order Book'} — {customer.name}</h4>
+                <button className="custd-btn custd-btn-sec" onClick={() => { setShowOrderForm(false); setEditingOrder(null); }}>Cancel</button>
               </div>
               <OrderBookForm
                 customer={customer}
                 currentUser={currentUser}
                 apiBase={API_BASE_URL}
                 existingOrder={editingOrder}
-                onSaved={() => { setShowOrderForm(false); setEditingOrder(null); showSuccess(editingOrder ? 'Order updated!' : 'Order created!'); fetchOrderBooks(); }}
+                onSaved={(saved) => {
+                  setShowOrderForm(false); setEditingOrder(null);
+                  showSuccess(editingOrder ? 'Order updated!' : 'Order created!');
+                  // Non-blocking notices from a save that already committed (e.g. the
+                  // order book total diverging from the linked proposal's value).
+                  (saved?.warnings || []).forEach(w => showWarning && showWarning(w));
+                  fetchOrderBooks();
+                }}
                 onCancel={() => { setShowOrderForm(false); setEditingOrder(null); }}
               />
             </div>
           ) : (
             <div>
-              <div className="ld-section-hdr">
-                <h4 className="ld-card-title" style={{margin:0}}>{orderBooks.length} Order Book{orderBooks.length !== 1 ? 's' : ''}</h4>
-                <button className="ld-btn ld-btn-pri" onClick={() => { setShowOrderForm(true); setEditingOrder(null); }}>+ New Order Book</button>
+              <div className="custd-section-hdr">
+                <h4 className="custd-card-title" style={{margin:0}}>{orderBooks.length} Order Book{orderBooks.length !== 1 ? 's' : ''}</h4>
+                <button className="custd-btn custd-btn-pri" onClick={() => { setShowOrderForm(true); setEditingOrder(null); }}>+ New Order Book</button>
               </div>
               {loadingOrders ? (
-                <div className="ld-loading-row">Loading orders…</div>
+                <div className="custd-loading-row">Loading orders…</div>
               ) : orderBooks.length === 0 ? (
-                <div className="ld-empty-state">
-                  <div className="ld-empty-icon">📦</div>
+                <div className="custd-empty-state">
+                  <div className="custd-empty-icon">📦</div>
                   <p>No order books yet for this customer.</p>
-                  <button className="ld-btn ld-btn-pri" onClick={() => setShowOrderForm(true)}>Create First Order Book</button>
+                  <button className="custd-btn custd-btn-pri" onClick={() => setShowOrderForm(true)}>Create First Order Book</button>
                 </div>
               ) : (
                 <div style={{ maxHeight: 'calc(100vh - 280px)', overflowY: 'auto', overflowX: 'hidden', paddingRight: 4 }}>
-                  <div className="ld-proposals-list">
+                  <div className="custd-proposals-list">
                   {orderBooks.map(order => (
-                    <div key={order.id} className="ld-proposal-card">
-                      <div className="ld-proposal-card-left">
-                        <div className="ld-proposal-no">{order.orderBookNo}</div>
-                        <div className="ld-proposal-title">{order.orderTitle}</div>
-                        <div className="ld-proposal-meta">
+                    <div key={order.id} className="custd-proposal-card">
+                      <div className="custd-proposal-card-left">
+                        <div className="custd-proposal-no">{order.orderBookNo}</div>
+                        <div className="custd-proposal-title">{order.orderTitle}</div>
+                        <div className="custd-proposal-meta">
                           <span>₹{parseFloat(order.totalAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
                           <span>·</span>
                           <span>Advance: ₹{parseFloat(order.advanceAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
@@ -1500,19 +1553,19 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                           <span>{fmtDate(order.orderDate)}</span>
                         </div>
                       </div>
-                      <div className="ld-proposal-card-right">
+                      <div className="custd-proposal-card-right">
                         <span className={`orderbook-status ${getStatusClass(order.status)}`}>{order.status}</span>
-                        <div className="ld-proposal-actions">
-                          <button className="ld-pact-btn" onClick={() => handleViewOrder(order)} title="View Details">
+                        <div className="custd-proposal-actions">
+                          <button className="custd-pact-btn" onClick={() => handleViewOrder(order)} title="View Details">
                             <FaEye size={13}/> View
                           </button>
-                          <button className="ld-pact-btn" onClick={() => { setPoUploadOrder(order); setPoUploadData({file:null, poNumber:order.poNumber||'', poDate:new Date().toISOString().split('T')[0]}); setShowPOUploadModal(true); }} title="Upload PO">
+                          <button className="custd-pact-btn" onClick={() => { setPoUploadOrder(order); setPoUploadData({file:null, poNumber:order.poNumber||'', poDate:new Date().toISOString().split('T')[0]}); setShowPOUploadModal(true); }} title="Upload PO">
                             <FaCloudUploadAlt size={13}/> PO
                           </button>
-                          <button className="ld-pact-btn ld-pact-edit" onClick={() => { setEditingOrder(order); setShowOrderForm(true); }} title="Edit">
+                          <button className="custd-pact-btn custd-pact-edit" onClick={() => { setEditingOrder(order); setShowOrderForm(true); }} title="Edit">
                             <FaEdit size={13}/> Edit
                           </button>
-                          <button className="ld-pact-btn" style={{color:__stc('#dc2626')}} onClick={() => { setDeleteOrderId(order.id); setShowDeleteOrderConfirm(true); }} title="Delete">
+                          <button className="custd-pact-btn" style={{color:__stc('#dc2626')}} onClick={() => { setDeleteOrderId(order.id); setShowDeleteOrderConfirm(true); }} title="Delete">
                             <RiDeleteBin6Line size={13}/> Del
                           </button>
                         </div>
@@ -1524,6 +1577,17 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── FINANCIALS ──
+          Money in / money out for this client across all their projects.
+          The component owns its own fetch and loading/empty states; it reads
+          GET /customers/{id}/financials, which aggregates the projects' OWN
+          live figures, so nothing here is a second way of computing them. */}
+      {activeTab === 'financials' && (
+        <div className="custd-tab-content">
+          <ClientFinancialsTab customer={customer} />
         </div>
       )}
 
@@ -1550,7 +1614,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
         });
 
         return (
-          <div className="ld-tab-content">
+          <div className="custd-tab-content">
             {/* Toast */}
             {followupToast && (
               <div style={{ padding: '8px 14px', borderRadius: 6, marginBottom: 10, fontSize: 13, fontWeight: 600,
@@ -1563,7 +1627,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h4 className="ld-card-title" style={{ margin: 0 }}>Follow-up Log</h4>
+                <h4 className="custd-card-title" style={{ margin: 0 }}>Follow-up Log</h4>
                 <span style={{ background: __sbg('#e5e7eb'), color: __stc('#374151'), borderRadius: 20, padding: '1px 10px', fontSize: 12, fontWeight: 700 }}>{followups.length}</span>
                 {fuCounts.Overdue > 0 && (
                   <span style={{ background: __sbg('#FEE2E2'), color: __stc('#991B1B'), borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>⚠ {fuCounts.Overdue} overdue</span>
@@ -1636,10 +1700,10 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
 
             {/* List */}
             {loadingFollowups ? (
-              <div className="ld-loading-row">Loading…</div>
+              <div className="custd-loading-row">Loading…</div>
             ) : fuSorted.length === 0 ? (
-              <div className="ld-empty-state">
-                <div className="ld-empty-icon">{followupFilter === 'Overdue' ? '✅' : '📞'}</div>
+              <div className="custd-empty-state">
+                <div className="custd-empty-icon">{followupFilter === 'Overdue' ? '✅' : '📞'}</div>
                 <p>{followupFilter === 'Overdue' ? 'No overdue follow-ups — you\'re on track!' :
                     followupFilter === 'Completed' ? 'No completed follow-ups yet.' :
                     followupFilter === 'Cancelled' ? 'No cancelled follow-ups.' :
@@ -2331,6 +2395,7 @@ useEffect(() => {
           onEdit={c => { setDetailCustomer(null); handleEdit(c); }}
           showSuccess={showSuccess}
           showError={showError}
+          showWarning={showWarning}
         />
         {isAddFormOpen && (
           <div className="cust-modal-overlay">

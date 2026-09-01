@@ -18,6 +18,9 @@ import CrmPreloader from "../components/preLoader.js";
 import ConfirmationModal from '../components/ConfirmationModal';
 import GeneratePoModal from './GeneratePoModal.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
+import BomItemPicker from '../components/procurement/BomItemPicker.js';
+import BomViolationDialog from '../components/procurement/BomViolationDialog.js';
+import BomMatchConfirmDialog from '../components/procurement/BomMatchConfirmDialog.js';
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -319,6 +322,20 @@ const PODatePicker = ({ value, onChange, placeholder='Select date', minDate }) =
 
 // ─── Vendor category / type options (shared across pages) ─────────────────────
 const VENDOR_CATEGORIES = ['Manufacturing', 'Supplier', 'Services', 'Electrical', 'Civil & Structural', 'Instrumentation', 'IoT Hardware', 'Logistics & Transport'];
+
+/**
+ * Item sources, in the order of prominence the spec asks for: quotation first when
+ * approved quotations exist, then the project BOM, then the order book — kept last
+ * because it describes what was SOLD, not what needs buying.
+ */
+const ITEM_SOURCES = [
+  { key: 'quotation', icon: '📋', label: 'From Quotation',
+    hint: (n) => `Select from ${n} approved quotation${n === 1 ? '' : 's'}` },
+  { key: 'bom',       icon: '🧾', label: 'From Project BOM',
+    hint: () => 'Pick what the project still needs to buy' },
+  { key: 'orderbook', icon: '📦', label: 'From Order Book',
+    hint: () => 'What was sold to the customer' },
+];
 const VENDOR_TYPES      = ['Manufacturer', 'Distributor', 'Service Provider', 'Contractor', 'System Integrator', 'Trader'];
 
 // ─── Column Definitions ───────────────────────────────────────────────────────
@@ -507,6 +524,19 @@ const PurchaseOrders = () => {
   // Once items are loaded (from order book OR manually), keep the form sections
   // visible even if the user removes all items — prevents collapsing back to step 1.
   const [itemsStepUnlocked, setItemsStepUnlocked] = useState(false);
+
+  // ── Project BOM sourcing ──────────────────────────────────────────────────
+  // Items no longer load the moment a project is picked; the user chooses a source
+  // first. Without that, BOM items and order book items accumulate in the same table
+  // and duplicate.
+  const [itemSource, setItemSource]       = useState(null);   // 'quotation' | 'bom' | 'orderbook'
+  const [showBomPicker, setShowBomPicker] = useState(false);
+  // Populated from a 409 BOM_LIMIT_EXCEEDED; the PO modal stays open behind the dialog.
+  const [bomViolations, setBomViolations] = useState(null);
+  // Lines the BOM guard could only INFER a match for, held while the buyer confirms or
+  // corrects them. { matches, bomLines, scopes, items } — items is the payload waiting
+  // to be posted once the matches are confirmed.
+  const [bomMatchReview, setBomMatchReview] = useState(null);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
   const [customVendorCategory, setCustomVendorCategory] = useState('');
   const [customVendorType,     setCustomVendorType]     = useState('');
@@ -988,6 +1018,69 @@ const PurchaseOrders = () => {
     setCreatePOFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
     showSuccess('Item removed');
   };
+  /** How many rows currently carry a project BOM link. */
+  const bomLoadedCount = (createPOFormData.items || []).filter(i => i.bomLineId).length;
+
+  /**
+   * Switch item source. Mixing sources in one table is what produced duplicate rows,
+   * so changing source once items exist asks first, then clears.
+   */
+  const handleSelectItemSource = async (key) => {
+    if (key === itemSource) {
+      if (key === 'bom') setShowBomPicker(true);
+      return;
+    }
+    const hasItems = (createPOFormData.items || []).length > 0;
+    if (hasItems) {
+      const ok = await showConfirmation({
+        title: 'Change item source?',
+        message: 'The items already added will be cleared so the two sources cannot duplicate each other.',
+        confirmText: 'Clear and switch',
+        type: 'confirm',
+      });
+      if (!ok) return;
+    }
+    setCreatePOFormData(prev => ({ ...prev, items: [], quotationId: '', quotation: null }));
+    setSelectedOrderBookId('');
+    setOrderBookItems([]);
+    setItemsStepUnlocked(false);
+    setItemSource(key);
+    if (key === 'bom') setShowBomPicker(true);
+  };
+
+  /**
+   * Add picked BOM lines to the item table. Additive by design — the picker can be
+   * reopened to add more without disturbing what is already there.
+   */
+  const handleAddBomItems = (rows) => {
+    setCreatePOFormData(prev => {
+      const existing = new Set((prev.items || []).map(i => String(i.bomLineId)));
+      const fresh = rows
+        .filter(r => !existing.has(String(r.bomLineId)))
+        .map((r, idx) => ({
+          id: `bom-${r.bomLineId}-${idx}`,
+          bomLineId: r.bomLineId,
+          bomItemId: r.bomItemId,
+          variantId: r.variantId,
+          itemName: r.itemName,
+          itemDescription: r.specification || '',
+          make: r.make || '',
+          unit: r.unit || 'Nos',
+          quantity: r.quantity,
+          // The BOM rate is a budget figure, not a vendor price — the buyer still
+          // enters what the vendor is charging.
+          unitPrice: 0,
+          gst: 18,
+          lineTotal: 0,
+          selected: true,
+          bomQty: r.bomQty,
+          remainingQty: r.remaining,
+        }));
+      return { ...prev, items: [...(prev.items || []), ...fresh] };
+    });
+    setItemsStepUnlocked(true);
+  };
+
   const handleAddManualItem = () => {
     if (!newItem.itemName?.trim()) { showWarning('Item name is required'); return; }
     if (newItem.quantity <= 0) { showWarning('Quantity must be > 0'); return; }
@@ -1188,7 +1281,14 @@ const PurchaseOrders = () => {
           hsnCode: item.hsnCode || '', unit: item.unit || 'Nos',
           quantity: qty, unitPrice: price || '', gst,
           lineTotal, selected: true,
-          quotedQuantity: item.quotedQuantity || quotedByName[(item.itemName || '').trim().toLowerCase()] || null
+          quotedQuantity: item.quotedQuantity || quotedByName[(item.itemName || '').trim().toLowerCase()] || null,
+          // Carry the stored BOM link back out on save. A row whose link is dropped here
+          // would be re-matched by name — or, if it predates BOM linking, would lose the
+          // NULL bom_match that keeps it editable.
+          bomLineId: item.bomLineId || null,
+          bomItemId: item.bomItemId || null,
+          variantId: item.variantId || null,
+          make: item.make || ''
         };
       });
       setCreatePOFormData({
@@ -1201,6 +1301,8 @@ const PurchaseOrders = () => {
         notes: poData.notes || '', poRefId: poData.poRefId || '', status: poData.status || 'Draft',
         documentType: poData.documentType || 'PURCHASE_ORDER', items
       });
+      // Reflect where this PO's items came from so the selector isn't blank on edit.
+      setItemSource(poData.quotationId ? 'quotation' : (items.some(i => i.bomLineId) ? 'bom' : 'orderbook'));
       setShowNewVendorForm(false); setShowCreatePOModal(true);
     } catch { showError('Failed to load purchase order details'); }
     finally { setLoading(false); }
@@ -1271,6 +1373,7 @@ const PurchaseOrders = () => {
     setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]);
     setCustomVendorCategory(''); setCustomVendorType('');
     setItemsStepUnlocked(false);
+    setItemSource(null); setShowBomPicker(false); setBomViolations(null);
     // Fetch groups + vendors (always needed)
     await fetchModalGroups();
     fetchVendors();
@@ -1304,6 +1407,7 @@ const PurchaseOrders = () => {
     if (poFileInputRef.current) poFileInputRef.current.value = '';
     setPendingProjectChange(null);
     setShowProjectChangeWarning(false);
+    setItemSource(null); setShowBomPicker(false); setBomViolations(null);
   };
 
   // ─── PO File Upload Helpers ────────────────────────────────────────────────
@@ -1396,11 +1500,109 @@ const PurchaseOrders = () => {
     if (!createPOFormData.expectedDelivery) { showWarning('Expected delivery date is required'); return; }
     setLoading(true);
     try {
-      const poItems = selectedItems.map(({ itemName, itemDescription, hsnCode, unit, quantity, unitPrice, gst }) => ({
+      // NOTE: bomLineId / bomItemId / variantId / make MUST be forwarded. This map is
+      // an explicit allow-list, so a field omitted here is silently dropped — and
+      // without the link every line would fall back to name matching, turning a
+      // renamed item into a hard block on a PO that used to save.
+      const poItems = selectedItems.map(({ itemName, itemDescription, hsnCode, unit, quantity, unitPrice, gst,
+                                           bomLineId, bomItemId, variantId, make }) => ({
         itemName, itemDescription, hsnCode: hsnCode || null, unit: unit || 'Nos',
         quantity: parseFloat(quantity), unitPrice: parseFloat(unitPrice) || 0,
-        gst: parseFloat(gst), discount: 0
+        gst: parseFloat(gst), discount: 0,
+        bomLineId: bomLineId || null, bomItemId: bomItemId || null,
+        variantId: variantId || null, make: make || null
       }));
+
+      // ── Pre-save BOM check ────────────────────────────────────────────────
+      // Runs before the write path so two things can be settled while the modal is
+      // still open: violations that would be refused anyway, and lines the guard could
+      // only tie to the BOM by INFERENCE. An inferred match that is wrong consumes the
+      // wrong BOM line's budget — worse than no match at all — so it is confirmed here
+      // rather than discovered later on the planned-vs-actual screen.
+      const gate = await precheckBom(poItems);
+      if (gate === 'STOP') { setLoading(false); return; }
+
+      await postPO(poItems);
+    } catch (error) { showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`); }
+    finally { setLoading(false); }
+  };
+
+  /**
+   * Ask the backend what the project BOM makes of these lines, without writing.
+   *
+   * @returns 'STOP'     the save must not proceed (violations shown, or the buyer is
+   *                     being asked to confirm inferred matches)
+   *          'PROCEED'  nothing to settle
+   */
+  const precheckBom = async (poItems) => {
+    if (!modalProjectId) return 'PROCEED';   // no project ⇒ nothing to enforce against
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/projects/${encodeURIComponent(modalProjectId)}/bom/po-precheck`,
+        {
+          credentials: 'include', method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ items: poItems, excludePoId: isEditMode ? editingPOId : null })
+        }
+      );
+      if (!res.ok) return 'PROCEED';          // never block a save on the advisory check
+      const body = await res.json();
+      const d = body?.data || {};
+      if ((d.violations || []).length > 0) {
+        setBomViolations({ violations: d.violations, projectId: modalProjectId });
+        return 'STOP';
+      }
+      if ((d.fallbackMatches || []).length > 0) {
+        setBomMatchReview({
+          matches: d.fallbackMatches,
+          bomLines: d.bomLines || [],
+          scopes: d.scopes || [],
+          items: poItems,
+        });
+        return 'STOP';
+      }
+      return 'PROCEED';
+    } catch {
+      // The check is advisory: the guard still runs inside the write path, so a network
+      // hiccup here must not stop a legitimate purchase order.
+      return 'PROCEED';
+    }
+  };
+
+  /** The buyer confirmed (or corrected) the inferred matches — apply them and post. */
+  const confirmBomMatches = async (chosen) => {
+    const review = bomMatchReview;
+    setBomMatchReview(null);
+    if (!review) return;
+    const byId = new Map((review.bomLines || []).map(l => [String(l.bomLineId), l]));
+    // lineNo is 1-based and equals the item's position in the payload — the same
+    // numbering the guard assigns, which is what makes the correction land on the
+    // right line.
+    const items = review.items.map((it, i) => {
+      const picked = chosen[i + 1];
+      if (!picked) return it;
+      const l = byId.get(String(picked));
+      return {
+        ...it,
+        bomLineId: picked,
+        // Carry the catalogue snapshot of the line actually chosen, so the stored
+        // link and the stored snapshot agree.
+        bomItemId: l?.bomItemId ?? it.bomItemId ?? null,
+        variantId: l?.variantId ?? it.variantId ?? null,
+      };
+    });
+    setLoading(true);
+    try {
+      await postPO(items);
+    } catch (error) { showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`); }
+    finally { setLoading(false); }
+  };
+
+  /**
+   * Write the purchase order. Extracted so the BOM match confirmation can resume the
+   * save with corrected links. Throws on failure — every caller already reports it.
+   */
+  const postPO = async (poItems) => {
       const poData = {
         quotationId: createPOFormData.quotationId || null,
         vendorId: createPOFormData.vendorId || null,
@@ -1430,7 +1632,18 @@ const PurchaseOrders = () => {
           body: JSON.stringify(poData)
         });
       }
-      if (!response.ok) { const err = await response.json(); throw new Error(err.message || 'Failed'); }
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        // The project BOM refused this PO. Show every offending line with its numbers
+        // and a route to amend the BOM; the modal stays open behind the dialog so
+        // nothing the user entered is lost.
+        if (response.status === 409 && err.error === 'BOM_LIMIT_EXCEEDED') {
+          setBomViolations({ violations: err.violations || [], projectId: err.projectId || modalProjectId });
+          setLoading(false);
+          return;
+        }
+        throw new Error(err.message || 'Failed');
+      }
       const result = await response.json();
       const savedId = result.id || result.data?.id;
       // Upload soft-copy file if one was selected
@@ -1446,8 +1659,6 @@ const PurchaseOrders = () => {
         openGenerateDoc({ id: savedId, poNo: result.poNo || result.data?.poNo, vendorId: createPOFormData.vendorId, vendorName: createPOFormData.vendorName, vendorContact: createPOFormData.vendorContact, documentType: createPOFormData.documentType || 'PURCHASE_ORDER' });
         if (v) setGenVendor(v);
       }
-    } catch (error) { showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`); }
-    finally { setLoading(false); }
   };
 
   const handleViewVendorPOs = async (vendorId) => {
@@ -2448,60 +2659,60 @@ const PurchaseOrders = () => {
               {/* Step 2: Quotation / Order Book */}
               {modalProjectId && (
                 <div className="po-form-section">
-                  {quotations.length > 0 && orderBooks.length > 0 && (
-                    <>
-                      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span>✅</span> Choose Your Option</h3>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-                        <div style={{ padding: '20px', background: __sbg('#f0fdf4'), border: `2px solid ${__sbg('#86efac')}`, borderRadius: '8px' }}>
-                          <h4 style={{ marginBottom: '8px', color: __stc('#166534'), fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📋</span> Option 1: Use Quotation</h4>
-                          <p style={{ fontSize: '13px', color: __stc('#059669'), marginBottom: '12px' }}>Select from {quotations.length} available quotation(s)</p>
-                          {!createPOFormData.quotationId && (
-                            <div className="po-form-group po-form-group--dropdown-up" style={{ marginTop: '12px' }}>
-                              <FilterSelect
-                                value={createPOFormData.quotationId}
-                                options={quotations.map(q => ({ value: q.id, label: `${q.quoteNo} — ${q.vendorName || q.vendorContact || 'Unknown Vendor'}${q.totalValue ? ` — ${formatCurrency(q.totalValue)}` : ''} [${q.status}]` }))}
-                                placeholder="Select Quotation"
-                                onChange={(v) => handleQuotationSelect(v)}
-                              />
-                            </div>
-                          )}
-                          {createPOFormData.quotationId && (
-                            <div style={{ marginTop: '12px', padding: '12px', background: __sbg('white'), borderRadius: '6px', border: `1px solid ${__sbg('#86efac')}` }}>
-                              <div style={{ fontSize: '13px', color: __stc('#166534'), marginBottom: '4px' }}>✓ {createPOFormData.quotation?.quoteNo}</div>
-                              <button onClick={() => handleQuotationSelect('')} style={{ fontSize: '12px', padding: '4px 8px', background: __sbg('#fee2e2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: '4px', cursor: 'pointer', color: __stc('#dc2626') }}>Clear</button>
-                            </div>
-                          )}
+                  {/* ── Item source ────────────────────────────────────────────
+                      All three sources are always offered, in order of prominence:
+                      Quotation first when approved quotations exist, then the project
+                      BOM, then the order book for older projects. A source with
+                      nothing to offer is disabled and says why, rather than the panel
+                      disappearing — the layout no longer changes shape underneath the
+                      user depending on what happens to exist. */}
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <span>📥</span> Where should the items come from?
+                  </h3>
+                  <div className="po-source-grid">
+                    {ITEM_SOURCES.map(src => {
+                      const disabledReason =
+                        src.key === 'quotation' && quotations.length === 0
+                          ? 'No approved quotations for this project'
+                          : src.key === 'orderbook' && orderBooks.length === 0
+                            ? 'No order books for this project'
+                            : null;
+                      const active = itemSource === src.key;
+                      return (
+                        <button
+                          type="button"
+                          key={src.key}
+                          className={`po-source-card${active ? ' po-source-card--active' : ''}`}
+                          disabled={!!disabledReason}
+                          onClick={() => handleSelectItemSource(src.key)}
+                        >
+                          <span className="po-source-card__title">{src.icon} {src.label}</span>
+                          <span className="po-source-card__hint">
+                            {disabledReason || src.hint(quotations.length)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* ── Quotation ─────────────────────────────────────────── */}
+                  {itemSource === 'quotation' && (
+                    <div className="po-source-panel">
+                      {!createPOFormData.quotationId ? (
+                        <div className="po-form-group po-form-group--dropdown-up">
+                          <FilterSelect
+                            value={createPOFormData.quotationId}
+                            options={quotations.map(q => ({ value: q.id, label: `${q.quoteNo} — ${q.vendorName || q.vendorContact || 'Unknown Vendor'}${q.totalValue ? ` — ${formatCurrency(q.totalValue)}` : ''} [${q.status}]` }))}
+                            placeholder="Select Quotation"
+                            onChange={(v) => handleQuotationSelect(v)}
+                          />
                         </div>
-                        <div style={{ padding: '20px', background: __sbg('#eff6ff'), border: `2px solid ${__sbg('#93c5fd')}`, borderRadius: '8px' }}>
-                          <h4 style={{ marginBottom: '8px', color: __stc('#1e40af'), fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> Option 2: Load from Order Book</h4>
-                          {createPOFormData.items.length > 0 && !createPOFormData.quotationId ? (
-                            <div style={{ marginTop: '8px', padding: '12px', background: __sbg('white'), borderRadius: '6px', border: `1px solid ${__sbg('#93c5fd')}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div style={{ fontSize: '13px', color: __stc('#1e40af'), fontWeight: 600 }}>✓ {createPOFormData.items.length} items loaded from order book</div>
-                              <button onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }} style={{ fontSize: '12px', padding: '4px 10px', background: __sbg('#fee2e2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: '4px', cursor: 'pointer', color: __stc('#dc2626'), fontWeight: 600 }}>Clear</button>
-                            </div>
-                          ) : (
-                            <div className="po-ob-dropdown-wrap" style={{ marginTop: '8px' }}>
-                              <div className="po-ob-filterselect-wrap">
-                                <FilterSelect
-                                  value={selectedOrderBookId}
-                                  options={orderBooks.map(ob => ({ value: ob.id, label: `${ob.poNumber || ob.orderBookNo} — ${ob.orderTitle || 'No Title'}` }))}
-                                  placeholder="— Select an Order Book —"
-                                  onChange={async (v) => { await handleOrderBookSelect({ target: { value: v } }); }}
-                                />
-                                {selectedOrderBookId && (
-                                  <button type="button" className="po-ob-clear-btn po-ob-clear-btn--fs" onClick={() => { setSelectedOrderBookId(''); setOrderBookItems([]); }} title="Clear selection">✕</button>
-                                )}
-                              </div>
-                              {loadingOrderItems && (
-                                <div style={{ fontSize: '12px', color: __stc('#1e40af'), marginTop: '6px', display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
-                              )}
-                              {selectedOrderBookId && !loadingOrderItems && orderBookItems.length === 0 && (
-                                <div style={{ fontSize: '12px', color: __stc('#64748b'), marginTop: '6px' }}>No items found in this order book.</div>
-                              )}
-                            </div>
-                          )}
+                      ) : (
+                        <div className="po-source-loaded">
+                          <span>✓ {createPOFormData.quotation?.quoteNo}</span>
+                          <button type="button" className="po-source-clear" onClick={() => handleQuotationSelect('')}>Clear</button>
                         </div>
-                      </div>
+                      )}
                       {createPOFormData.quotation && (
                         <div style={{ padding: '16px', backgroundColor: __sbg('#f0fdf4'), borderRadius: '8px', border: `2px solid ${__sbg('#86efac')}`, marginTop: '16px' }}>
                           <h4 style={{ marginBottom: '12px', fontSize: '15px', fontWeight: '600', color: __stc('#166534') }}>Selected Quotation Details</h4>
@@ -2511,44 +2722,41 @@ const PurchaseOrders = () => {
                             <div><strong>Valid Until:</strong> {formatDate(createPOFormData.quotation.validTill)}</div>
                             <div><strong>Total:</strong> {formatCurrency(createPOFormData.quotation.totalValue)}</div>
                           </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {quotations.length > 0 && orderBooks.length === 0 && (
-                    <>
-                      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span>✅</span> Quotations Available ({quotations.length})</h3>
-                      <div className="po-form-group po-form-group--dropdown-up">
-                        <FilterSelect
-                          value={createPOFormData.quotationId}
-                          options={quotations.map(q => ({ value: q.id, label: `${q.quoteNo} — ${q.vendorName || q.vendorContact || 'Unknown Vendor'}${q.totalValue ? ` — ${formatCurrency(q.totalValue)}` : ''} [${q.status}]` }))}
-                          placeholder="Select Quotation"
-                          onChange={(v) => handleQuotationSelect(v)}
-                        />
-                      </div>
-                      {createPOFormData.quotation && (
-                        <div style={{ marginTop: '16px', padding: '16px', backgroundColor: __sbg('#f0fdf4'), borderRadius: '8px', border: `2px solid ${__sbg('#86efac')}` }}>
-                          <h4 style={{ marginBottom: '12px', fontSize: '15px', fontWeight: '600', color: __stc('#166534') }}>Quotation Details</h4>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '14px' }}>
-                            <div><strong>Vendor:</strong> {createPOFormData.quotation.vendorContact || 'N/A'}</div>
-                            <div><strong>Category:</strong> {createPOFormData.quotation.category}</div>
-                            <div><strong>Valid:</strong> {formatDate(createPOFormData.quotation.validTill)}</div>
+                          <div style={{ marginTop: '12px', fontSize: '12.5px', color: __stc('#92400e') }}>
+                            💡 Quantities are still checked against the project BOM when the PO is saved — a vendor
+                            rounding up to a supply lot will be flagged.
                           </div>
                         </div>
                       )}
-                    </>
+                    </div>
                   )}
-                  {!loadingOrderItems && quotations.length === 0 && orderBooks.length > 0 && (
-                    <div style={{ padding: '20px', background: __sbg('#fef3c7'), border: `2px solid ${__sbg('#fbbf24')}`, borderRadius: '8px' }}>
-                      <h4 style={{ marginBottom: '10px', color: __stc('#92400e'), fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> No Approved Quotations — Select Order Book</h4>
-                      {createPOFormData.items.length > 0 ? (
-                        <div style={{ marginTop: '12px', padding: '12px', background: __sbg('white'), borderRadius: '6px', border: `1px solid ${__sbg('#fbbf24')}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ fontSize: '13px', color: __stc('#92400e'), fontWeight: 600 }}>✓ {createPOFormData.items.length} items loaded from order book</div>
-                          <button onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }} style={{ fontSize: '12px', padding: '4px 10px', background: __sbg('#fee2e2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: '4px', cursor: 'pointer', color: __stc('#dc2626'), fontWeight: 600 }}>Clear</button>
+
+                  {/* ── Project BOM ───────────────────────────────────────── */}
+                  {itemSource === 'bom' && (
+                    <div className="po-source-panel">
+                      <div className="po-source-loaded">
+                        <span>
+                          {bomLoadedCount > 0
+                            ? `✓ ${bomLoadedCount} line${bomLoadedCount === 1 ? '' : 's'} loaded from the project BOM`
+                            : 'Pick the BOM lines you need. Quantities default to what is still un-ordered.'}
+                        </span>
+                        <button type="button" className="po-source-pick" onClick={() => setShowBomPicker(true)}>
+                          {bomLoadedCount > 0 ? 'Add more lines' : 'Choose BOM items'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Order Book ────────────────────────────────────────── */}
+                  {itemSource === 'orderbook' && (
+                    <div className="po-source-panel">
+                      {createPOFormData.items.length > 0 && !createPOFormData.quotationId ? (
+                        <div className="po-source-loaded">
+                          <span>✓ {createPOFormData.items.length} items loaded from order book</span>
+                          <button type="button" className="po-source-clear" onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }}>Clear</button>
                         </div>
                       ) : (
-                        <div className="po-ob-dropdown-wrap" style={{ marginTop: '12px' }}>
-                          <label style={{ fontSize: '13px', color: __stc('#92400e'), marginBottom: '6px', display: 'block', fontWeight: 600 }}>Select Order Book</label>
+                        <div className="po-ob-dropdown-wrap">
                           <div className="po-ob-filterselect-wrap">
                             <FilterSelect
                               value={selectedOrderBookId}
@@ -2561,26 +2769,20 @@ const PurchaseOrders = () => {
                             )}
                           </div>
                           {loadingOrderItems && (
-                            <div style={{ marginTop: '8px', fontSize: '13px', color: __stc('#92400e'), display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
+                            <div style={{ fontSize: '12px', color: __stc('#1e40af'), marginTop: '6px', display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
                           )}
                           {selectedOrderBookId && !loadingOrderItems && orderBookItems.length === 0 && (
-                            <div style={{ marginTop: '8px', fontSize: '13px', color: __stc('#92400e') }}>No items found in this order book.</div>
+                            <div style={{ fontSize: '12px', color: __stc('#64748b'), marginTop: '6px' }}>No items found in this order book.</div>
                           )}
                         </div>
                       )}
-                    </div>
-                  )}
-                  {!loadingOrderItems && quotations.length === 0 && orderBooks.length === 0 && (
-                    <div style={{ padding: '20px', background: __sbg('#fee2e2'), border: `2px solid ${__sbg('#fecaca')}`, borderRadius: '8px', textAlign: 'center' }}>
-                      <h4 style={{ marginBottom: '10px', color: __stc('#991b1b'), fontSize: '16px' }}>❌ No Data Available</h4>
-                      <p style={{ fontSize: '14px', color: __stc('#991b1b') }}>No quotations or order book items found.</p>
                     </div>
                   )}
                 </div>
               )}
 
               {/* Step 3: Vendor */}
-              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked) && (
+              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked || itemSource === 'bom') && (
                 <div className="po-form-section">
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><span>🏢</span> Vendor Information</h3>
                   {createPOFormData.quotation ? (
@@ -2734,7 +2936,7 @@ const PurchaseOrders = () => {
               )}
 
               {/* Step 4: PO Details */}
-              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked) && (
+              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked || itemSource === 'bom') && (
                 <div className="po-form-section">
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><span>📝</span> Purchase Order Details</h3>
                   <div className="po-form-row">
@@ -2837,7 +3039,7 @@ const PurchaseOrders = () => {
               )}
 
               {/* Step 5: Items */}
-              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked) && (
+              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked || itemSource === 'bom') && (
                 <div className="po-form-section">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <div>
@@ -3049,6 +3251,36 @@ const PurchaseOrders = () => {
         onGenerated={() => { fetchPurchaseOrders(); }}
         showSuccess={showSuccess}
         showError={showError}
+      />
+
+      <BomItemPicker
+        open={showBomPicker}
+        projectUniqueId={modalProjectId}
+        // Editing a PO: its own quantities must not count as "already ordered"
+        // against itself, or every line would look like it breached the BOM.
+        excludePoId={isEditMode ? editingPOId : null}
+        alreadyLoadedIds={(createPOFormData.items || []).map(i => i.bomLineId).filter(Boolean)}
+        onAdd={handleAddBomItems}
+        onClose={() => setShowBomPicker(false)}
+        showError={showError}
+      />
+
+      {/* Inferred BOM matches, confirmed before anything is written. */}
+      <BomMatchConfirmDialog
+        open={!!bomMatchReview}
+        matches={bomMatchReview?.matches || []}
+        bomLines={bomMatchReview?.bomLines || []}
+        scopes={bomMatchReview?.scopes || []}
+        onConfirm={confirmBomMatches}
+        onCancel={() => setBomMatchReview(null)}
+      />
+
+      <BomViolationDialog
+        open={!!bomViolations}
+        violations={bomViolations?.violations || []}
+        blocking
+        projectUniqueId={bomViolations?.projectId}
+        onClose={() => setBomViolations(null)}
       />
     </div>
   );

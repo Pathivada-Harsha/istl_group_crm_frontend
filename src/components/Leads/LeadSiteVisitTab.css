@@ -1,76 +1,91 @@
-/* LeadSiteVisitTab — structured site visit report UI */
+/* LeadSiteVisitTab — structured site visit report UI
+   ---------------------------------------------------------------------------
+   Colours follow the project convention (see src/theme.css): surfaces/borders
+   use var(--c-<hex>, #hex), text/icons use var(--ct-<hex>, #hex). Dark mode is
+   handled entirely by those tokens remapping, so this file needs NO
+   [data-theme="dark"] block — it previously did only because it referenced
+   --text-primary / --bg-secondary / --border-color etc., which are not defined
+   anywhere and always fell through to their light-mode fallbacks.            */
 .lsv { position: relative; }
 
 /* Header */
 .lsv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .lsv-head-left { display: flex; align-items: center; gap: 8px; }
-.lsv-heading { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary, #1e293b); }
-.lsv-count-pill { background: var(--bg-secondary, #eef2f7); color: var(--text-secondary, #475569); border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
-.lsv-recorded { font-size: 12px; color: var(--text-tertiary, #94a3b8); }
+/* HEADING SCALE — LEVEL 1: card/panel title. Matches .ld-card-title,
+   .lts-card-title, .lbm-card-title, .lbe-card-title and .lfu-heading. */
+.lsv-heading { margin: 0; font-size: 15px; font-weight: 700; color: var(--ct-111827, #111827); }
+.lsv-count-pill { background: var(--c-eef2f7, #eef2f7); color: var(--ct-475569, #475569); border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
+.lsv-recorded { font-size: 12px; color: var(--ct-94a3b8, #94a3b8); }
 .lsv-head-actions { display: flex; gap: 8px; }
 
 /* Buttons */
 .lsv-btn-primary {
-  background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: 8px 14px;
+  background: var(--c-2563eb, #2563eb); color: var(--ct-white, #fff); border: none; border-radius: 8px; padding: 8px 14px;
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.lsv-btn-primary:hover { background: #1d4ed8; }
+.lsv-btn-primary:hover { background: var(--c-1d4ed8, #1d4ed8); }
 .lsv-btn-primary:disabled { opacity: .6; cursor: not-allowed; }
 .lsv-btn-sec {
-  background: var(--bg-secondary, #f1f5f9); color: var(--text-secondary, #475569);
-  border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; padding: 8px 14px;
+  background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-475569, #475569);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 8px; padding: 8px 14px;
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.lsv-btn-sec:hover { background: var(--bg-hover, #e2e8f0); }
+.lsv-btn-sec:hover { background: var(--c-e2e8f0, #e2e8f0); }
 
 /* Visited-by strip */
 .lsv-visited { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-.lsv-visited-label { font-size: 12px; font-weight: 700; color: var(--text-tertiary, #94a3b8); text-transform: uppercase; letter-spacing: .5px; }
+.lsv-visited-label { font-size: 11px; font-weight: 700; color: var(--ct-374151, #374151); text-transform: uppercase; letter-spacing: .04em; }
 .lsv-visited-chip {
-  display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; color: #1d4ed8;
-  border: 1px solid #bfdbfe; border-radius: 20px; padding: 3px 12px; font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--c-eff6ff, #eff6ff); color: var(--ct-1d4ed8, #1d4ed8);
+  border: 1px solid var(--c-bfdbfe, #bfdbfe); border-radius: 20px; padding: 3px 12px; font-size: 12px; font-weight: 600;
 }
 
 /* Form */
 .lsv-form { display: flex; flex-direction: column; gap: 18px; }
 .lsv-section {
-  border: 1px solid var(--border-color, #e2e8f0); border-radius: 12px; padding: 16px;
-  background: var(--bg-card, #fff);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 12px; padding: 16px;
+  background: var(--c-fff, #fff);
 }
-.lsv-section-title { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: #2563eb; }
-.lsv-section-hint { font-weight: 500; font-size: 11px; color: var(--text-tertiary, #94a3b8); text-transform: none; letter-spacing: 0; }
-.lsv-section--recorded { background: var(--bg-secondary, #f8fafc); }
-[data-theme="dark"] .lsv-section--recorded { background: #171d29; }
+/* HEADING SCALE — LEVEL 2: subsection inside a card. */
+.lsv-section-title {
+  margin: 0 0 12px; font-size: 12px; font-weight: 700; color: var(--ct-2563eb, #2563eb);
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.lsv-section-hint { font-weight: 500; font-size: 11px; color: var(--ct-94a3b8, #94a3b8); text-transform: none; letter-spacing: 0; }
+.lsv-section--recorded { background: var(--c-f8fafc, #f8fafc); }
 .lsv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 
 .lsv-field { display: flex; flex-direction: column; gap: 5px; }
 .lsv-field--full { grid-column: 1 / -1; }
-.lsv-field > span { font-size: 12px; font-weight: 600; color: var(--text-secondary, #475569); }
+/* Form field label — same 12px/600 on --ct-374151 as .lts-field > span and
+   .lfu-form-group label. One label colour across the whole detail view. */
+.lsv-field > span { font-size: 12px; font-weight: 600; color: var(--ct-374151, #374151); }
 .lsv-field input, .lsv-field select, .lsv-field textarea {
-  border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 8px 11px;
-  font-size: 13px; background: var(--bg-input, #fff); color: var(--text-primary, #1e293b); width: 100%;
+  border: 1px solid var(--c-cbd5e1, #cbd5e1); border-radius: 8px; padding: 8px 11px;
+  font-size: 13px; background: var(--c-fff, #fff); color: var(--ct-111827, #111827); width: 100%;
 }
-.lsv-field input:focus, .lsv-field select:focus, .lsv-field textarea:focus { outline: none; border-color: #2563eb; }
+.lsv-field input:focus, .lsv-field select:focus, .lsv-field textarea:focus { outline: none; border-color: var(--c-2563eb, #2563eb); }
 /* Number + unit rendered as ONE combined input: a single outer border with the
    value on the left and the unit selector seamlessly attached on the right. */
 .lsv-capacity {
   display: flex; align-items: stretch;
-  border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px;
-  background: var(--bg-input, #fff);
+  border: 1px solid var(--c-cbd5e1, #cbd5e1); border-radius: 8px;
+  background: var(--c-fff, #fff);
 }
-.lsv-capacity:focus-within { border-color: #2563eb; }
+.lsv-capacity:focus-within { border-color: var(--c-2563eb, #2563eb); }
 .lsv-capacity > input {
   flex: 1 1 auto; min-width: 0;
   border: none; background: transparent; border-radius: 8px 0 0 8px;
-  padding: 8px 11px; font-size: 13px; color: var(--text-primary, #1e293b);
+  padding: 8px 11px; font-size: 13px; color: var(--ct-111827, #111827);
 }
 .lsv-capacity > input:focus { outline: none; }
 /* Unit selector sits flush against the value input, divided by a hairline. */
-.lsv-unit-select, .lsv-unit-custom { flex: 0 0 116px; border-left: 1px solid var(--border-color, #e2e8f0); }
+.lsv-unit-select, .lsv-unit-custom { flex: 0 0 116px; border-left: 1px solid var(--c-e2e8f0, #e2e8f0); }
 .lsv-unit-custom { display: flex; align-items: center; gap: 2px; padding-right: 4px; }
 .lsv-unit-custom input {
   flex: 1; min-width: 0; border: none; background: transparent;
-  padding: 8px; font-size: 13px; color: var(--text-primary, #1e293b);
+  padding: 8px; font-size: 13px; color: var(--ct-111827, #111827);
 }
 .lsv-unit-custom input:focus { outline: none; }
 /* The FilterSelect trigger becomes borderless/transparent inside the group. */
@@ -81,53 +96,52 @@
   padding: 0 26px 0 10px !important;
 }
 .lsv-unit-back {
-  flex: 0 0 26px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px;
-  background: var(--bg-secondary, #f1f5f9); color: var(--text-secondary, #475569); cursor: pointer; font-size: 13px;
+  flex: 0 0 26px; border: 1px solid var(--c-cbd5e1, #cbd5e1); border-radius: 6px;
+  background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-475569, #475569); cursor: pointer; font-size: 13px;
 }
-[data-theme="dark"] .lsv-unit-back { background: #232b3b; border-color: #2b3445; color: #c2cbd8; }
 
 /* Read-only cell */
 .lsv-ro { display: flex; flex-direction: column; gap: 3px; }
-.lsv-ro > span { font-size: 11px; font-weight: 700; color: var(--text-tertiary, #94a3b8); text-transform: uppercase; letter-spacing: .4px; }
-.lsv-ro > b { font-size: 13px; font-weight: 600; color: var(--text-primary, #1e293b); word-break: break-word; }
+.lsv-ro > span { font-size: 11px; font-weight: 700; color: var(--ct-374151, #374151); text-transform: uppercase; letter-spacing: .04em; }
+.lsv-ro > b { font-size: 13px; font-weight: 600; color: var(--ct-111827, #111827); word-break: break-word; }
 
 /* Shadow radios */
 .lsv-radios { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .lsv-radio {
-  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-color, #cbd5e1);
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--c-cbd5e1, #cbd5e1);
   border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
-  color: var(--text-secondary, #475569);
+  color: var(--ct-475569, #475569);
 }
-.lsv-radio.active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+.lsv-radio.active { border-color: var(--c-2563eb, #2563eb); background: var(--c-eff6ff, #eff6ff); color: var(--ct-1d4ed8, #1d4ed8); }
 
 .lsv-error {
   padding: 10px 12px; border-radius: 8px; font-size: 12px;
-  background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+  background: var(--c-fef2f2, #fef2f2); color: var(--ct-b91c1c, #b91c1c); border: 1px solid var(--c-fecaca, #fecaca);
 }
 .lsv-form-footer { display: flex; justify-content: flex-end; gap: 10px; }
 
 /* Details (read-only under a card) */
-.lsv-details { padding: 14px 16px; border-top: 1px solid var(--border-color, #e2e8f0); }
+.lsv-details { padding: 14px 16px; border-top: 1px solid var(--c-e2e8f0, #e2e8f0); }
 
 /* Empty state */
-.lsv-empty { text-align: center; padding: 40px 20px; color: var(--text-tertiary, #94a3b8); }
+.lsv-empty { text-align: center; padding: 40px 20px; color: var(--ct-94a3b8, #94a3b8); }
 .lsv-empty-icon { font-size: 40px; margin-bottom: 8px; }
 .lsv-empty p { margin: 4px 0; font-size: 14px; }
 .lsv-empty-sub { font-size: 12px; }
 
 /* List of visit cards */
 .lsv-list { display: flex; flex-direction: column; gap: 10px; }
-.lsv-card { border: 1px solid var(--border-color, #e2e8f0); border-radius: 12px; overflow: hidden; background: var(--bg-card, #fff); }
+.lsv-card { border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 12px; overflow: hidden; background: var(--c-fff, #fff); }
 .lsv-card-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; }
-.lsv-card-head:hover { background: var(--bg-hover, #f8fafc); }
+.lsv-card-head:hover { background: var(--c-f1f5f9, #f1f5f9); }
 .lsv-card-head-main { display: flex; align-items: center; gap: 12px; }
 .lsv-card-icon { font-size: 20px; }
-.lsv-card-title { font-size: 14px; font-weight: 700; color: var(--text-primary, #1e293b); }
-.lsv-card-sub { font-size: 12px; color: var(--text-tertiary, #94a3b8); }
+.lsv-card-title { font-size: 15px; font-weight: 700; color: var(--ct-111827, #111827); }
+.lsv-card-sub { font-size: 12px; color: var(--ct-94a3b8, #94a3b8); }
 .lsv-card-head-actions { display: flex; align-items: center; gap: 12px; }
-.lsv-link { background: none; border: none; color: #2563eb; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+.lsv-link { background: none; border: none; color: var(--ct-2563eb, #2563eb); font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
 .lsv-link:hover { text-decoration: underline; }
-.lsv-chevron { font-size: 10px; color: var(--text-tertiary, #94a3b8); }
+.lsv-chevron { font-size: 10px; color: var(--ct-94a3b8, #94a3b8); }
 
 /* Assign modal */
 /* Overlay sits BELOW the FilterSelect portal (z-index 99999) so the "Assign To"
@@ -137,37 +151,11 @@
   display: flex; align-items: center; justify-content: center; padding: 20px;
 }
 .lsv-modal {
-  width: 100%; max-width: 480px; background: var(--bg-card, #fff); border-radius: 14px;
+  width: 100%; max-width: 480px; background: var(--c-fff, #fff); border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0,0,0,.3); max-height: 90vh; overflow: auto;
 }
-.lsv-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border-color, #e2e8f0); }
-.lsv-modal-head h5 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary, #1e293b); }
-.lsv-icon-close { background: none; border: none; font-size: 16px; cursor: pointer; color: var(--text-tertiary, #94a3b8); }
+.lsv-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0); }
+.lsv-modal-head h5 { margin: 0; font-size: 15px; font-weight: 700; color: var(--ct-111827, #111827); }
+.lsv-icon-close { background: none; border: none; font-size: 16px; cursor: pointer; color: var(--ct-94a3b8, #94a3b8); }
 .lsv-modal-body { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
-.lsv-modal-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary, #64748b); background: var(--bg-secondary, #f8fafc); border-radius: 8px; padding: 10px 12px; }
-
-/* Dark mode */
-[data-theme="dark"] .lsv-heading,
-[data-theme="dark"] .lsv-ro > b,
-[data-theme="dark"] .lsv-card-title,
-[data-theme="dark"] .lsv-modal-head h5 { color: #e7ecf3; }
-[data-theme="dark"] .lsv-section,
-[data-theme="dark"] .lsv-card,
-[data-theme="dark"] .lsv-modal { background: #1b2130; border-color: #2b3445; }
-[data-theme="dark"] .lsv-field input,
-[data-theme="dark"] .lsv-field select,
-[data-theme="dark"] .lsv-field textarea { background: #0f172a; border-color: #334155; color: #e2e8f0; }
-/* Combined value+unit input in dark mode: one outer border, seamless inner parts. */
-[data-theme="dark"] .lsv-capacity { background: #0f172a; border-color: #334155; }
-[data-theme="dark"] .lsv-capacity > input,
-[data-theme="dark"] .lsv-unit-custom input { background: transparent; border: none; }
-[data-theme="dark"] .lsv-unit-select,
-[data-theme="dark"] .lsv-unit-custom { border-left-color: #2b3445; }
-[data-theme="dark"] .lsv-btn-sec { background: #232b3b; border-color: #2b3445; color: #c2cbd8; }
-[data-theme="dark"] .lsv-count-pill { background: #232b3b; color: #c2cbd8; }
-[data-theme="dark"] .lsv-visited-chip { background: #15243d; color: #5b9bf0; border-color: #244b7a; }
-[data-theme="dark"] .lsv-radio { border-color: #334155; color: #c2cbd8; }
-[data-theme="dark"] .lsv-radio.active { background: #15243d; color: #5b9bf0; border-color: #244b7a; }
-[data-theme="dark"] .lsv-modal-hint { background: #0f172a; color: #94a1b3; }
-[data-theme="dark"] .lsv-card-head:hover { background: #232b3b; }
-[data-theme="dark"] .lsv-error { background: #2a1719; color: #f08a8a; border-color: #3a1f22; }
+.lsv-modal-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ct-64748b, #64748b); background: var(--c-f8fafc, #f8fafc); border-radius: 8px; padding: 10px 12px; }

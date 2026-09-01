@@ -172,7 +172,7 @@
 /* ── Grid ─────────────────────────────────────────────────────────────── */
 .pl-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 14px;
 }
 /* auto-fill + minmax replaces the old fixed repeat(3, 1fr), which stretched
@@ -181,20 +181,51 @@
    half of the 680px rule are gone; the .pl-stats part is kept. */
 @media (max-width: 680px) { .pl-stats { grid-template-columns: repeat(2, 1fr); } }
 
+/* ── Grid card ────────────────────────────────────────────────────────────
+   Two custom properties are fed in from ProjectsList.js at render time:
+
+     --pl-status        the project's status hex, straight from getStatusColor()
+     --pl-status-soft   that same hex at ~14% alpha
+
+   Everything status-tinted (top border, pill, technical bar) derives from
+   --pl-status here rather than being written as a light-mode pastel, so the
+   card follows the status map in BOTH themes. --pl-status-soft is only the
+   fallback for engines without color-mix(): each tinted rule declares the
+   plain value first and the color-mix second, so old engines keep the first.
+
+   The remaining hues (financial bar, KPI tiles) are tokens on .pl-card and are
+   re-pointed under [data-theme="dark"] at the end of this file.  */
 .pl-card {
+  --pl-status: var(--c-94a3b8, #94a3b8);
+  --pl-status-soft: rgba(148, 163, 184, .14);
+  --pl-fin: #8b5cf6;                          /* financial progress hue */
+  --pl-fin-soft: rgba(139, 92, 246, .10);
+  --pl-wash: 14%;                             /* status pill tint strength */
+  --pl-kpi-wash: 9%;                          /* KPI tile tint strength */
+
+  position: relative;
+  overflow: hidden;                           /* clips the top bar to the radius */
   background: var(--c-white, #fff);
   border: 1px solid var(--c-e2e8f0, #e2e8f0);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  padding: 18px 16px 14px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 3px rgba(15, 23, 42, .04);
   transition: box-shadow .15s, transform .15s, border-color .15s;
 }
+/* 1 — status top border, flush across the card's top edge */
+.pl-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--pl-status);
+}
 .pl-card:hover {
-  box-shadow: 0 6px 20px rgba(15, 23, 42, .10);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .12);
   transform: translateY(-2px);
   border-color: var(--c-cbd5e1, #cbd5e1);
 }
@@ -203,6 +234,7 @@
   outline-offset: 2px;
 }
 
+/* 2 — identifier + status pill */
 .pl-card-head {
   display: flex;
   align-items: center;
@@ -212,77 +244,136 @@
 .pl-card-id {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
+  letter-spacing: .2px;
   color: var(--ct-94a3b8, #94a3b8);
-}
-.pl-card-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--ct-64748b, #64748b);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pl-status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+.pl-card-status {
   flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--pl-status);
+  background: var(--pl-status-soft);
+  background: color-mix(in srgb, var(--pl-status) var(--pl-wash), transparent);
 }
 
+/* 3 — headline: the project name is the loudest thing on the card */
+.pl-card-title { min-width: 0; }
 .pl-card-name {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.2px;
   color: var(--ct-0f172a, #0f172a);
-  line-height: 1.35;
+  line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .pl-card-customer {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--ct-64748b, #64748b);
   margin-top: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pl-card-sep { margin: 0 5px; color: var(--ct-cbd5e1, #cbd5e1); }
 
-.pl-card-progress-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
+/* 4 + 7 — meta row and footer: "icon · text" chips split by thin dividers */
+.pl-card-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11.5px;
   color: var(--ct-64748b, #64748b);
-  margin-bottom: 5px;
 }
-.pl-card-progress-pct { color: var(--ct-0f172a, #0f172a); font-weight: 600; }
-/* Scoped 5px override — the base .pl-progress stays 6px because the table view
-   and ProjectDetailPage both render it at that height. */
-.pl-card-progress .pl-progress { height: 5px; }
+.pl-card-chip-icon { flex-shrink: 0; color: var(--ct-94a3b8, #94a3b8); }
+.pl-card-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-card-chip + .pl-card-chip {
+  border-left: 1px solid var(--c-e2e8f0, #e2e8f0);
+  padding-left: 9px;
+}
+.pl-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin-top: -2px;
+}
 
-/* Money strip: hairline separator only, no nested border or background */
-.pl-card-money {
+/* 5 — progress meters */
+.pl-card-progress { display: flex; flex-direction: column; gap: 10px; }
+.pl-card-meter-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ct-64748b, #64748b);
+  margin-bottom: 6px;
+}
+.pl-card-meter-icon { flex-shrink: 0; color: var(--pl-status); }
+.pl-card-meter--fin .pl-card-meter-icon { color: var(--pl-fin); }
+.pl-card-meter-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl-card-meter-pct {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ct-0f172a, #0f172a);
+}
+/* Scoped override — the base .pl-progress stays 6px because the table view and
+   ProjectDetailPage both render it at that height; the card wants a thicker bar
+   with a track you can actually see behind the fill. */
+.pl-card-progress .pl-progress {
+  height: 8px;
+  background: var(--c-e2e8f0, #e2e8f0);
+}
+
+/* 6 — Budget / Received / Balance as three tinted mini-cards */
+.pl-card-kpis {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  padding: 10px 0 0;
-  border: 0;
-  border-top: 1px solid var(--c-f1f5f9, #f1f5f9);
-  background: none;
 }
-.pl-money-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.pl-money-cell label {
-  font-size: 11px;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--ct-94a3b8, #94a3b8);
+.pl-kpi {
+  --pl-kpi: var(--c-64748b, #64748b);
+  --pl-kpi-soft: rgba(100, 116, 139, .08);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px 9px;
+  border-radius: 10px;
+  background: var(--pl-kpi-soft);
+  background: color-mix(in srgb, var(--pl-kpi) var(--pl-kpi-wash), transparent);
 }
-.pl-money-cell span {
-  font-size: 13px;
-  font-weight: 600;
+.pl-kpi--budget   { --pl-kpi: #2563eb; --pl-kpi-soft: rgba(37, 99, 235, .08); }
+.pl-kpi--received { --pl-kpi: #16a34a; --pl-kpi-soft: rgba(22, 163, 74, .08); }
+.pl-kpi--balance  { --pl-kpi: #7c3aed; --pl-kpi-soft: rgba(124, 58, 237, .08); }
+.pl-kpi-head { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.pl-kpi-icon { flex-shrink: 0; color: var(--pl-kpi); }
+.pl-kpi-label {
+  font-size: 10.5px;
+  color: var(--ct-64748b, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl-kpi-value {
+  font-size: 13.5px;
+  font-weight: 700;
   color: var(--ct-0f172a, #0f172a);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -290,19 +381,21 @@
   text-overflow: ellipsis;
 }
 
+/* 7 — footer */
 .pl-card-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 9px;
+  min-width: 0;
   margin-top: auto;
+  padding-top: 11px;
+  border-top: 1px solid var(--c-f1f5f9, #f1f5f9);
 }
 .pl-card-late {
-  font-size: 11px;
   font-weight: 600;
   color: var(--ct-dc2626, #dc2626);
-  white-space: nowrap;
 }
+.pl-card-late .pl-card-chip-icon { color: var(--ct-dc2626, #dc2626); }
 
 /* ── Pagination ───────────────────────────────────────────────────────── */
 .pl-pagination {
@@ -339,6 +432,177 @@
   font-size: 13px;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROJECT DETAIL — tab strip
+   The lead detail view's chevron strip (.ld-pipe in Leads-Enquire.css),
+   rebuilt here under pd-*. Deliberately a copy and not an import: the leads
+   stylesheet is another page's, and cross-importing it is the coupling that
+   made .ld-* collide with .custd-* once already. Same shape, same weights —
+   keep the two in step if either is retuned.
+
+   Everything below is scoped to .pd-page (set on the detail page root next to
+   .obd-page), so the Order Book detail view — which shares OrderBookDetail.css
+   and every obd-* class — is untouched.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.pd-tabnav {
+  background: var(--c-fafafa, #fafafa);
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 18px;
+}
+
+/* ── Tab strip pins under the fixed 64px navbar ────────────────────────────────
+   The project header card is worth ~230px of a ~950px laptop viewport, which left
+   the tab content itself a narrow slot to scroll in. Rather than shrink the header
+   permanently — it carries id, budget, timeline and both progress bars, all wanted
+   on arrival — let it scroll away and keep only the tab strip. The content block
+   then gets the full height below the navbar.
+
+   Scoped to .pd-page so the Order Book detail view, which shares .obd-* and
+   .pd-tabnav, is untouched. Requires .app to clip rather than hide its overflow —
+   see the note in App.css, without which this rule does nothing at all. */
+.pd-page .pd-tabnav {
+  position: sticky;
+  top: 64px;                 /* navbar height */
+  z-index: 20;               /* over page content, under the navbar (40) and modals */
+  margin-bottom: 12px;
+  /* Opaque background is not optional: content scrolls beneath this. */
+  box-shadow: 0 8px 14px -10px rgba(15, 23, 42, 0.35);
+}
+
+/* Reclaim the easy vertical space too — same information, less air. */
+.pd-page .obd-header-card { padding: 14px 18px; margin-bottom: 12px; }
+.pd-page .pd-metric-strip { gap: 22px; padding-top: 10px; margin-top: 10px; }
+
+/* Each segment is clipped to a chevron: a notch cut into the left edge, a point
+   on the right. Segments are pulled together by --pd-pipe-notch less a hairline
+   so the shapes interlock while the seam stays readable. */
+.pd-pipe {
+  --pd-pipe-notch: 13px;
+  display: flex;
+  align-items: stretch;
+}
+.pd-pipe-step {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: calc(var(--pd-pipe-notch) * -1 + 2px);   /* 2px seam */
+  padding: 9px 8px 9px calc(var(--pd-pipe-notch) + 8px);
+  border: none;
+  background: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-475569, #475569);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background .18s, color .18s;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--pd-pipe-notch)) 0,
+    100% 50%,
+    calc(100% - var(--pd-pipe-notch)) 100%,
+    0 100%,
+    var(--pd-pipe-notch) 50%
+  );
+}
+/* Flat left edge on the first segment, flat right edge on the last. */
+.pd-pipe-step:first-child {
+  margin-left: 0;
+  padding-left: 14px;
+  border-radius: 7px 0 0 7px;
+  clip-path: polygon(0 0, calc(100% - var(--pd-pipe-notch)) 0, 100% 50%, calc(100% - var(--pd-pipe-notch)) 100%, 0 100%);
+}
+.pd-pipe-step:last-child {
+  padding-right: 14px;
+  border-radius: 0 7px 7px 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--pd-pipe-notch) 50%);
+}
+.pd-pipe-step:first-child:last-child { clip-path: none; border-radius: 7px; }
+
+/* The icon keeps its size; only the label gives way when the strip is narrow. */
+.pd-pipe-ico { flex: 0 0 auto; }
+.pd-pipe-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Selected — the ONLY tab that differs. No done/pending/upcoming states. */
+.pd-pipe-step.active {
+  flex-grow: 1.15;
+  background: var(--c-2563eb, #2563eb);
+  color: #fff;
+  font-weight: 600;
+}
+.pd-pipe-step:not(.active):hover {
+  background: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-1d4ed8, #1d4ed8);
+}
+/* clip-path clips outlines, so the focus ring has to be drawn inside the box. */
+.pd-pipe-step:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--c-1d4ed8, #1d4ed8); }
+
+/* Narrow viewports: scroll the strip rather than squeezing labels to ellipses. */
+@media (max-width: 1100px) {
+  .pd-pipe { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .pd-pipe-step { flex: 0 0 auto; min-width: 132px; }
+  .pd-pipe-step.active { flex-grow: 0; }
+}
+
+/* ── Detail: card header — tinted icon badge + title ─────────────────────── */
+.pd-section-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 16px;
+}
+.pd-section-head .pd-section-title { margin: 0; flex: 1 1 auto; min-width: 0; }
+.pd-section-actions { flex: 0 0 auto; display: flex; gap: 8px; }
+.pd-card-ico {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-2563eb, #2563eb);
+}
+
+/* ── Detail: content uplift, scoped so Order Book keeps its own look ─────── */
+.pd-page .obd-card,
+.pd-page .obd-header-card {
+  border-radius: 14px;
+  border-color: var(--c-e2e8f0, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+.pd-page .obd-card { padding: 20px 22px; }
+.pd-page .obd-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ct-111827, #111827);
+}
+/* Label / value pairs: labels one step lighter than values, never the same. */
+.pd-page .obd-kv-grid { gap: 14px 24px; }
+.pd-page .obd-kv-grid label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ct-64748b, #64748b);
+}
+.pd-page .obd-kv-grid span { font-size: 13px; color: var(--ct-111827, #111827); }
+.pd-page .obd-table th {
+  font-weight: 700;
+  color: var(--ct-64748b, #64748b);
+  background: var(--c-f8fafc, #f8fafc);
+}
+.pd-page .obd-table th:first-child { border-radius: 8px 0 0 8px; }
+.pd-page .obd-table th:last-child  { border-radius: 0 8px 8px 0; }
+.pd-page .obd-table tbody tr:hover { background: var(--c-f8fafc, #f8fafc); }
+
 /* ── Detail: metric strip + secondary link (reuses obd-* elsewhere) ─────── */
 .pd-secondary-link {
   background: none;
@@ -360,7 +624,9 @@
   border-top: 1px solid var(--c-e2e8f0, #e2e8f0);
 }
 .pd-metric label {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -368,13 +634,35 @@
   color: var(--ct-64748b, #64748b);
   margin-bottom: 3px;
 }
-.pd-metric span { font-size: 14px; font-weight: 600; color: var(--ct-0f172a, #0f172a); }
+.pd-metric label svg { flex: 0 0 auto; color: var(--ct-94a3b8, #94a3b8); }
+.pd-metric span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ct-0f172a, #0f172a);
+}
+.pd-metric-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .2px; }
 .pd-metric--progress { min-width: 180px; }
+/* "Scheduled" — this timeline came from the Work Breakdown & Schedule, not from
+   the project's own start/end dates. */
+.pd-metric-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  text-transform: uppercase;
+  color: var(--ct-2563eb, #2563eb);
+  background: var(--c-eff6ff, #eff6ff);
+  white-space: nowrap;
+}
 
 /* ── Detail: Overview tab ──────────────────────────────────────────────── */
 .pd-overview { display: flex; flex-direction: column; gap: 16px; }
 .pd-ov-card {
-  background: #fff;
+  background: var(--c-white, #fff);
   border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 10px;
   padding: 18px 20px;
@@ -413,3 +701,133 @@
 }
 @media (max-width: 1024px) { .pd-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px)  { .pd-ov-grid { grid-template-columns: 1fr; } }
+
+/* ── Dark theme ───────────────────────────────────────────────────────────
+   Surfaces, borders and text already follow through theme.css's var(--c-*) /
+   var(--ct-*) tokens. Only three things can't: shadows (theirs are near-black,
+   which is invisible on a dark surface), the strength of the runtime-derived
+   tints (a 14% wash of a vivid hue reads as nothing over #1b2130), and the
+   status/KPI hues themselves, which need lifting toward white to stay legible
+   as text on the dark card. Nothing here hardcodes a light-mode pastel. */
+[data-theme="dark"] .pl-card {
+  --pl-wash: 24%;
+  --pl-kpi-wash: 14%;
+  --pl-fin: #a78bfa;
+  --pl-fin-soft: rgba(167, 139, 250, .18);
+  --pl-status-soft: rgba(148, 163, 184, .26);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .35);
+}
+[data-theme="dark"] .pl-card:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .55);
+  border-color: var(--c-cbd5e1, #3a4456);
+}
+/* Vivid hues carry on a light card but sit at ~3:1 as small bold text on a dark
+   one — mix them toward white for the pill and the KPI captions/icons only. The
+   4px top border and the bar fills keep the raw hue: they are shapes, not text. */
+[data-theme="dark"] .pl-card-status {
+  color: color-mix(in srgb, var(--pl-status) 68%, #fff);
+}
+[data-theme="dark"] .pl-card-meter-icon { color: color-mix(in srgb, var(--pl-status) 72%, #fff); }
+[data-theme="dark"] .pl-card-meter--fin .pl-card-meter-icon { color: var(--pl-fin); }
+[data-theme="dark"] .pl-kpi-icon { color: color-mix(in srgb, var(--pl-kpi) 60%, #fff); }
+[data-theme="dark"] .pl-kpi--budget   { --pl-kpi-soft: rgba(37, 99, 235, .16); }
+[data-theme="dark"] .pl-kpi--received { --pl-kpi-soft: rgba(22, 163, 74, .16); }
+[data-theme="dark"] .pl-kpi--balance  { --pl-kpi-soft: rgba(124, 58, 237, .18); }
+/* The stat cards and the table sit on the same page — give them the matching
+   elevation so the grid doesn't look like the only lit surface. */
+[data-theme="dark"] .pl-stat-card,
+[data-theme="dark"] .pl-table-wrap { box-shadow: 0 1px 2px rgba(0, 0, 0, .40); }
+
+/* ── Dark theme — project DETAIL ──────────────────────────────────────────
+   OrderBookDetail.css carries its own dark block on a different palette
+   (#1e293b surfaces / #334155 borders) than theme.css (#1b2130 / #2b3445).
+   Inside .pd-page only, the obd surfaces are pulled onto the theme.css palette
+   so the detail page matches the list, the cards and the rest of the app.
+   Order Book keeps its own look — none of this leaves .pd-page. */
+[data-theme="dark"] .pd-page .obd-card,
+[data-theme="dark"] .pd-page .obd-header-card {
+  background: var(--c-white, #1b2130);
+  border-color: var(--c-e2e8f0, #2b3445);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+}
+[data-theme="dark"] .pd-page .obd-table th { background: var(--c-f8fafc, #0f1420); }
+[data-theme="dark"] .pd-page .obd-table tbody tr:hover { background: var(--c-f1f5f9, #232b3b); }
+
+/* Tab strip */
+[data-theme="dark"] .pd-tabnav {
+  background: var(--c-f8fafc, #0f1420);
+  border-color: var(--c-e5e7eb, #2b3445);
+}
+[data-theme="dark"] .pd-pipe-step {
+  background: var(--c-f1f5f9, #232b3b);
+  color: var(--ct-475569, #aab4c2);
+}
+[data-theme="dark"] .pd-pipe-step.active { background: var(--c-2563eb, #2f6fe0); color: #fff; }
+[data-theme="dark"] .pd-pipe-step:not(.active):hover {
+  background: var(--c-eff6ff, #15243d);
+  color: var(--ct-60a5fa, #7fb6fb);
+}
+
+/* Icon badge + "Scheduled" tag — tinted surfaces, so they follow the tokens. */
+[data-theme="dark"] .pd-card-ico,
+[data-theme="dark"] .pd-metric-tag {
+  background: var(--c-eff6ff, #15243d);
+  color: var(--ct-60a5fa, #7fb6fb);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DETAIL PAGE — pinned chrome, scrolling content
+   ---------------------------------------------------------------------------
+   The page itself becomes the scroll container: back button, header card and
+   the tab strip stay put while only the tab content scrolls under them. Same
+   shape as the lead detail view (.ld-detail-page in Leads-Enquire.css) — keep
+   the two in step if either is retuned.
+
+   Scoped to .pd-page so the Order Book detail view, which shares .obd-page and
+   every obd-* class, keeps its ordinary whole-page scrolling.
+
+   Offset = 64px fixed app header (.main-content padding-top in App.css).
+   .obd-page's own 16px/40px padding sits INSIDE that height, which is why
+   box-sizing has to be spelled out — this app has no global border-box reset.
+   If the app header height changes, this is the one value to retune.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.pd-page {
+  --pd-shell-offset: 64px;
+  box-sizing: border-box;
+  height: calc(100vh - var(--pd-shell-offset));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Chrome above the content pane never scrolls away. */
+.pd-page > * { flex: 0 0 auto; }
+
+/* The back button is a bare <button> — as a flex child it would stretch to the
+   full row and centre its own label. Keep it hugging the left edge. */
+.pd-page > button { align-self: flex-start; }
+
+/* The one scrolling pane. min-height:0 is required: without it a flex child
+   refuses to shrink below its content and the page grows instead of scrolling. */
+.pd-page > .obd-tab-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Restore the bottom breathing room .obd-page's padding used to provide —
+     inside the scroller, so the last card clears the viewport edge. */
+  padding-bottom: 24px;
+}
+
+/* Short or narrow viewports: a fixed-height page would squeeze the content pane
+   to a sliver under the header card, so hand scrolling back to the window. */
+@media (max-width: 768px), (max-height: 620px) {
+  .pd-page {
+    height: auto;
+    overflow: visible;
+  }
+  .pd-page > .obd-tab-body {
+    overflow-y: visible;
+    padding-bottom: 0;
+  }
+}

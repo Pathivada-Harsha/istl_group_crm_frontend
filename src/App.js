@@ -4,6 +4,7 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
+  Navigate,
   useLocation
 } from 'react-router-dom';
 
@@ -34,7 +35,6 @@ import SalesOrder from "./Pages/Sales-Order";
 import PurchaseOrders from './Pages/PurchaseOrders';
 import BillsRecieved from "./Pages/BillsRecieptsPage.js";
 import Reports from "./Pages/ProjectReports.js";
-import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
 import Addropdownitems from "./Pages/AddNewDropdownItems";
 import LeadTemplatesAdmin from "./Pages/LeadTemplatesAdmin";
@@ -45,6 +45,7 @@ import OrderBook from "./Pages/OrderBook.js";
 import ProjectsList from "./Pages/ProjectsList.js";
 import ProjectDetailPage from "./components/projects/ProjectDetailPage.js";
 import Tenders from "./Pages/Tenders.js";
+import OrdersInLine from "./Pages/OrdersInLine.js"; // PROVISIONAL — temporary register, see file header
 import BorrowerRegistry from "./Pages/BorrowerRegistry.js";
 import BorrowerDetail from "./components/borrowers/BorrowerDetail.js";
 import GroupDetail from "./components/borrowers/GroupDetail.js";
@@ -135,6 +136,7 @@ function AppWrapper() {
   if (!hideShell) {
     const knownPaths = [
       '/dashboard', '/sales', '/procurement', '/documents',
+      // '/solarprofile' stays listed so its redirect route can fire instead of NotFound.
       '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
       '/project-cost-expense', '/taskmanagement', '/projectaccess', '/inventory-management', '/notifications',
@@ -238,6 +240,11 @@ function AppShell({ hideShell }) {
               </ProtectedRoute>
             }
           />
+
+          {/* PROVISIONAL — temporary Orders in Line register, see the page file header */}
+          <Route path="/sales/orders-in-line" element={
+            <ProtectedRoute><OrdersInLine /></ProtectedRoute>
+          } />
 
           <Route path="/sales/clients" element={
             <ProtectedRoute><Customer_dashboard /></ProtectedRoute>
@@ -343,9 +350,11 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><Profile /></ProtectedRoute>
           } />
 
-          <Route path="/solarprofile" element={
-            <ProtectedRoute><SolarProfile /></ProtectedRoute>
-          } />
+          {/* /solarprofile (the browser-side solar proposal editor) is retired.
+              Solar proposals are generated from the lead detail view — see
+              components/Leads/GenerateProposalModal.js. Old links land on the
+              leads list rather than a dead route. */}
+          <Route path="/solarprofile" element={<Navigate to="/sales/leads" replace />} />
 
           <Route path="/users" element={
             <ProtectedRoute><Users /></ProtectedRoute>

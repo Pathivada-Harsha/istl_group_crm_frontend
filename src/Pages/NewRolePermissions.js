@@ -123,6 +123,14 @@ export default function NewRolePermissions() {
   const { toasts, addToast, removeToast } = useToast();
   const { user } = useAuth();
 
+  // Only SUPERADMIN may change the role hierarchy — the server enforces that from the
+  // session role. This page used to send a hardcoded "User-Role: SUPERADMIN" header on
+  // every save and delete, so anyone who could open it could rewrite the entire
+  // permission model. That header is gone; this flag keeps the UI honest, so a non-admin
+  // sees the hierarchy read-only rather than buttons that 403 on click.
+  const isSuperAdmin =
+    String(user?.role || "").toUpperCase().replace(/[\s-]+/g, "_") === "SUPERADMIN";
+
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
@@ -247,7 +255,7 @@ export default function NewRolePermissions() {
       const url = isUpdate ? `${API}/role-hierarchy/${encodeURIComponent(editingHier)}` : `${API}/role-hierarchy/save`;
       const res = await fetch(url, {
         method: isUpdate ? "PUT" : "POST", credentials: "include",
-        headers: { "Content-Type": "application/json", "User-Role": "SUPERADMIN" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const data = res.headers.get("content-type")?.includes("json") ? await res.json() : { message: await res.text() };
@@ -266,7 +274,7 @@ export default function NewRolePermissions() {
     setDeleteHierConfirm(null);
     try {
       const res = await fetch(`${API}/role-hierarchy/${roleName}`, {
-        method: "DELETE", credentials: "include", headers: { "User-Role": "SUPERADMIN" },
+        method: "DELETE", credentials: "include",
       });
       if (res.ok) { addToast("Deleted", "success"); loadHierarchy(); }
       else addToast("Delete failed", "error");
@@ -584,7 +592,7 @@ export default function NewRolePermissions() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: __stc('#0f172a') }}>{entry.roleName}</div>
                   {entry.description && <div style={{ fontSize: 11, color: __stc('#6b7280'), marginTop: 3 }}>{entry.description}</div>}
                   {manages.length > 0 && <div style={{ marginTop: 8, fontSize: 10, color: c, fontWeight: 600 }}>Creates: {manages.join(' - ')}</div>}
-                  <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
+                  {isSuperAdmin && <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
                     <button title="Edit" style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${__sbg('#e2e8f0')}`, background: __sbg('#f8fafc'), color: __stc('#6366f1'), cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       onClick={() => startEditHierarchy(entry)}>
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -593,7 +601,7 @@ export default function NewRolePermissions() {
                       onClick={() => deleteHierarchyEntry(entry.roleName)}>
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </button>
-                  </div>
+                  </div>}
                 </div>
                 {!isLast && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: __stc('#cbd5e1') }}>
@@ -1140,8 +1148,13 @@ export default function NewRolePermissions() {
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'min(340px, 100%) 1fr', gap: 20, marginBottom: 24 }} className="rp-hier-grid">
-                <HierarchyForm />
+              {!isSuperAdmin && (
+                <div className="rp-readonly-banner" style={{ padding: '10px 14px', marginBottom: 16, borderRadius: 8, fontSize: 13, fontWeight: 600, background: __sbg('#fffbeb'), border: `1px solid ${__sbg('#fde68a')}`, color: __stc('#92400e') }}>
+                  Read-only — only SUPERADMIN can change the role hierarchy.
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: isSuperAdmin ? 'min(340px, 100%) 1fr' : '1fr', gap: 20, marginBottom: 24 }} className="rp-hier-grid">
+                {isSuperAdmin && <HierarchyForm />}
                 <HierarchyChart />
               </div>
             </div>

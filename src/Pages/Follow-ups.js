@@ -328,6 +328,22 @@ export default function ClientDashboardFollowUps() {
     return () => { cancelled = true; };
   }, [siteVisitFollowup]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Open the Site Visit Report for a Visit follow-up.
+   *
+   * The effect above owns the rest: setting siteVisitFollowup is what triggers the
+   * fetch, raises the loading flag and clears the previously shown report. So both
+   * entry points — the row action and the View Details footer — need only this.
+   */
+  const openSiteVisit = (f) => setSiteVisitFollowup(f);
+
+  /**
+   * Whether a follow-up has a site visit report to file. ONE rule, used by every
+   * entry point: a row that offered the report under different conditions than the
+   * modal did would just be a new way to lose it.
+   */
+  const hasSiteVisitReport = (f) => f?.followupType === 'Visit' && !!f?.leadId;
+
   // Re-fetch when group/subgroup filter changes
   useEffect(() => {
     if (!didGroupMount.current) { didGroupMount.current = true; return; }
@@ -1574,6 +1590,20 @@ export default function ClientDashboardFollowUps() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                           </svg>
                         </button>
+                        {/* A site visit is assigned by giving someone a Visit follow-up,
+                            and this page is the only place they can file the report —
+                            they get no access to the lead itself. So the report has to
+                            be offered on the row: hidden inside View Details it reads
+                            as missing, or as something only admins get. */}
+                        {hasSiteVisitReport(followup) && (
+                          <button
+                            className="followup-action-btn action-sitevisit"
+                            onClick={e => { e.stopPropagation(); openSiteVisit(followup); }}
+                            title="Site visit report"
+                          >
+                            <FiHome size={14} />
+                          </button>
+                        )}
                         <button
                           className="followup-action-btn action-edit"
                           onClick={e => { e.stopPropagation(); handleEdit(followup); }}
@@ -2263,10 +2293,10 @@ export default function ClientDashboardFollowUps() {
                 {/* Footer */}
                 <div style={{ display:'flex', gap:10, justifyContent:'flex-end', paddingTop:6, flexWrap:'wrap' }}>
                   <button className="followups-btn followups-btn-secondary" onClick={closeFn}>Close</button>
-                  {f.followupType === 'Visit' && f.leadId && (
+                  {hasSiteVisitReport(f) && (
                     <button className="followups-btn followups-btn-primary"
                       style={{ background:'#D97706' }}
-                      onClick={() => { setShowViewModal(false); setSiteVisitLoading(true); setSiteVisitReport(null); setSiteVisitFollowup(f); }}>
+                      onClick={() => { setShowViewModal(false); setSiteVisitLoading(true); setSiteVisitReport(null); openSiteVisit(f); }}>
                       <FiHome size={13} style={{ marginRight:4 }}/> Fill Site Visit Report
                     </button>
                   )}

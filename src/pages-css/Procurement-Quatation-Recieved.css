@@ -1643,3 +1643,84 @@
   font-weight: 400;
   font-style: italic;
 }
+/* ── Item source selector + BOM warnings ─────────────────────────────────────
+   Items no longer auto-load when a project is chosen; the user picks a source
+   first, so BOM and order book items cannot accumulate in the same table. */
+.qr-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.qr-source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 12px 14px;
+  border: 2px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 9px;
+  background: var(--c-ffffff, #ffffff);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.qr-source-card:hover { border-color: var(--c-93c5fd, #93c5fd); }
+
+.qr-source-card--active {
+  border-color: var(--c-3b82f6, #3b82f6);
+  background: var(--c-eff6ff, #eff6ff);
+}
+
+.qr-source-card__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--c-1f2937, #1f2937);
+}
+.qr-source-card__hint {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--c-6b7280, #6b7280);
+}
+
+.qr-source-panel {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 9px;
+  background: var(--c-f9fafb, #f9fafb);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--c-374151, #374151);
+}
+
+.qr-source-pick {
+  padding: 6px 13px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--c-3b82f6, #3b82f6);
+  color: #ffffff;
+  white-space: nowrap;
+}
+.qr-source-pick:hover { background: var(--c-2563eb, #2563eb); }
+
+/* Per-row BOM warning. Flagged only — saving is never prevented on this page. */
+.qr-bom-warn {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--c-b45309, #b45309);
+  font-weight: 600;
+}
+.qr-bom-warn--muted {
+  color: var(--c-6b7280, #6b7280);
+  font-weight: 500;
+}
+.qr-bom-warn a { color: var(--c-3b82f6, #3b82f6); }

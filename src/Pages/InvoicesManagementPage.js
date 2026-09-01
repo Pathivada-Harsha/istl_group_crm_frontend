@@ -358,13 +358,18 @@ const InvoicesManagementPage = () => {
       );
       if (!obRes.ok) throw new Error();
       const obData = await obRes.json();
-      // Filter client-side by projectId to handle old backend that ignores the param
-      const all = (obData.data || obData.content || []).filter(ob => ob.projectId === pId);
+      // Filter client-side by projectId to handle an old backend that ignores the param.
+      // Compare loosely (trim + case) — a strict === dropped every row whenever the
+      // project id differed only in case or padding, which read as "No Order Book Found".
+      const rows = obData.data || obData.content || [];
+      const key = String(pId).trim().toLowerCase();
+      const all = rows.filter(ob => String(ob.projectId ?? '').trim().toLowerCase() === key);
       setOrderBooks(all);
       setSelectedOrderBookId('');
       setOrderBookItems([]);
-      // If exactly one order book, auto-select and load items
-      if (all.length === 1) {
+      // Auto-select the first order book so its items are available straight away;
+      // with more than one the user can still switch from the dropdown.
+      if (all.length > 0) {
         setSelectedOrderBookId(String(all[0].id));
         await fetchOrderBookItemsById(all[0].id);
       }
@@ -889,7 +894,13 @@ const fetchStats = async () => {
       fetchModalSubGroups(seedGroup);
       if (seedSubGroup) {
         fetchModalProjects(seedGroup, seedSubGroup);
-        if (seedProject) fetchCustomerByProject(seedProject);
+        if (seedProject) {
+          fetchCustomerByProject(seedProject);
+          // Order books were only ever loaded from the project dropdown onChange, so a
+          // modal opened with the project already seeded from the page filters showed
+          // "No Order Book Found" until the user re-picked the same project.
+          fetchProjectOrderBookItems(seedProject, seedGroup, seedSubGroup);
+        }
       }
     }
     setShowCreateModal(true);
@@ -914,6 +925,8 @@ const fetchStats = async () => {
     setEditMode(true);
     setInvoicePendingProject(null);
     setShowInvoiceProjectWarning(false);
+    setCustomerData(null);
+    setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
 
     // Pre-load all three dropdown levels for instant pre-population
     await fetchModalGroups();
@@ -925,6 +938,14 @@ const fetchStats = async () => {
         await fetchModalProjects(invoice.groupId, invoice.subGroupId);
         setModalProjectId(invoice.projectId || '');
       }
+    }
+
+    // Edit never loaded the project's order books, so the item picker and the
+    // remaining-qty hints were empty on every edit. Load them the same way the
+    // project dropdown does.
+    if (invoice.projectId) {
+      fetchCustomerByProject(invoice.projectId);
+      fetchProjectOrderBookItems(invoice.projectId, invoice.groupId, invoice.subGroupId);
     }
 
     setShowCreateModal(true);

@@ -1059,7 +1059,7 @@ font-size: 14px;        /* was 15px */
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 99999; /* INCREASED - Higher than everything */
+  z-index: 1000000; /* Above every modal overlay — see ToastNotification.css, same value. */
   display: flex;
   flex-direction: column;
   gap: 12px;

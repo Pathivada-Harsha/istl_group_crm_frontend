@@ -1,0 +1,194 @@
+/* BomViolationDialog.css — project-BOM breach report.
+   Class prefix `bvd-` is owned exclusively by this component. */
+
+.bvd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;          /* above BomItemPicker and the create/edit modals */
+  padding: 24px;
+  backdrop-filter: blur(2px);
+}
+
+.bvd-modal {
+  background: var(--c-ffffff, #ffffff);
+  color: var(--c-1f2937, #1f2937);
+  border-radius: 14px;
+  box-shadow: 0 24px 48px -8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  max-width: 640px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  animation: bvd-pop 0.18s ease;
+}
+
+@keyframes bvd-pop {
+  from { transform: scale(0.97); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.bvd-blocking { border-top: 4px solid var(--c-ef4444, #ef4444); }
+.bvd-warning  { border-top: 4px solid var(--c-f59e0b, #f59e0b); }
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.bvd-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 12px;
+}
+
+.bvd-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.bvd-blocking .bvd-title { color: var(--c-b91c1c, #b91c1c); }
+.bvd-warning  .bvd-title { color: var(--c-92400e, #92400e); }
+
+.bvd-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--c-6b7280, #6b7280);
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  flex-shrink: 0;
+}
+.bvd-close:hover { background: var(--c-f3f4f6, #f3f4f6); }
+
+/* ── Body ─────────────────────────────────────────────────────────────────── */
+.bvd-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0 20px 4px;
+}
+
+.bvd-lede {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-4b5563, #4b5563);
+}
+
+.bvd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bvd-item {
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px;
+  padding: 11px 13px;
+  background: var(--c-f9fafb, #f9fafb);
+}
+
+.bvd-item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bvd-item-name {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.bvd-code {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--c-fee2e2, #fee2e2);
+  color: var(--c-b91c1c, #b91c1c);
+  white-space: nowrap;
+}
+.bvd-warning .bvd-code {
+  background: var(--c-fef3c7, #fef3c7);
+  color: var(--c-92400e, #92400e);
+}
+
+.bvd-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin-top: 9px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.bvd-figures span { display: flex; flex-direction: column; gap: 1px; }
+.bvd-figures label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--c-6b7280, #6b7280);
+  font-weight: 600;
+}
+.bvd-excess { color: var(--c-b91c1c, #b91c1c); font-weight: 700; }
+
+.bvd-lines {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--c-6b7280, #6b7280);
+}
+
+.bvd-message {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--c-4b5563, #4b5563);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.bvd-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
+  flex-wrap: wrap;
+}
+
+.bvd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.bvd-btn-link {
+  background: var(--c-ffffff, #ffffff);
+  border-color: var(--c-d1d5db, #d1d5db);
+  color: var(--c-374151, #374151);
+}
+.bvd-btn-link:hover { background: var(--c-f9fafb, #f9fafb); }
+
+.bvd-btn-primary {
+  background: var(--c-3b82f6, #3b82f6);
+  color: #ffffff;
+  margin-left: auto;
+}
+.bvd-btn-primary:hover { background: var(--c-2563eb, #2563eb); }

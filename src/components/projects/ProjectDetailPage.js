@@ -10,8 +10,11 @@
 // project-shaped shim ({ id: projectUniqueId, subGroupName, orderTitle, ... }).
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  ArrowLeft, Save, LayoutDashboard, ClipboardList, Package, Wallet, SquareChartGantt,
+  Info, ListOrdered, MapPin, CalendarRange, IndianRupee, Hash, Gauge,
+} from 'lucide-react';
 import { FaFileDownload, FaFilePdf, FaFileImage, FaFileAlt, FaExternalLinkAlt } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth.js';
 import useToast from '../../hooks/useToast';
@@ -21,6 +24,7 @@ import LocationPicker from '../LocationPicker.js';
 import projectsApi from '../../services/projectsApi.js';
 import { TechnicalTab, CommercialTab, ProgressTab } from './orderBookTabsPorted.js';
 import ProjectBomTab from './ProjectBomTab.js';
+import { techProgressPct, NO_TECH_PROGRESS } from '../../utils/projectProgress.js';
 import '../../pages-css/OrderBookDetail.css';
 import '../../pages-css/Projects.css';
 
@@ -49,13 +53,42 @@ const fmtDate = (d) => {
 
 // Scope before BOM: technical scope is decided first, then BOM is allocated under
 // each scope line (mirrors the Leads-Enquire flow). Financials/Progress unchanged.
+// Icons mirror the lead detail view's tab strip — same idea, same weights.
 const TABS = [
-  { k: 'overview',   l: 'Overview' },
-  { k: 'scope',      l: 'Scope / SOW' },
-  { k: 'bom',        l: 'BOM / BOQ' },
-  { k: 'financials', l: 'Financials' },
-  { k: 'progress',   l: 'Progress & Timeline' },
+  { k: 'overview',   l: 'Overview',            i: LayoutDashboard },
+  { k: 'scope',      l: 'Scope / SOW',         i: ClipboardList },
+  { k: 'bom',        l: 'BOM / BOQ',           i: Package },
+  { k: 'financials', l: 'Financials',          i: Wallet },
+  { k: 'progress',   l: 'Progress & Timeline', i: SquareChartGantt },
 ];
+
+// Card header: tinted icon badge + title. Same treatment as the lead detail
+// view's CardHead, under this page's own pd-* namespace (Projects.css) so the
+// two pages can't silently restyle each other.
+const SectionHead = ({ icon: Icon, children, actions }) => (
+  <div className="pd-section-head">
+    <span className="pd-card-ico"><Icon size={17} strokeWidth={2} aria-hidden="true" /></span>
+    <h4 className="obd-card-title pd-section-title">{children}</h4>
+    {actions ? <div className="pd-section-actions">{actions}</div> : null}
+  </div>
+);
+
+// The effective timeline. Once the Technical Scope's Work Breakdown & Schedule
+// is scheduled it OWNS the dates — that window is what the project is actually
+// planned against, while the project's own start/end are set once at creation
+// and then left behind. Mirrors the same rule applied server-side to the list
+// (DropdownFilterService.getAllActiveProjects).
+const effectiveTimeline = (project, scope) => {
+  const ps = scope?.plannedStartDate, pe = scope?.plannedEndDate;
+  if (ps && pe && new Date(pe) > new Date(ps)) {
+    return { start: ps, end: pe, source: 'SCOPE' };
+  }
+  return { start: project?.startDate || null, end: project?.endDate || null, source: 'PROJECT' };
+};
+const TIMELINE_HINT = {
+  SCOPE:   'From the Work Breakdown & Schedule (Scope / SOW tab)',
+  PROJECT: 'Project start / end date — no schedule has been planned yet',
+};
 
 const ProjectDetailPage = () => {
   const { projectUniqueId } = useParams();
@@ -65,9 +98,18 @@ const ProjectDetailPage = () => {
 
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  // ?tab=bom deep-links straight to a tab. Procurement's BOM-breach dialog opens
+  // "/projects/{id}?tab=bom" in a new tab so a part-completed PO is never disturbed;
+  // without this the link would land on Overview.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    TABS.some(t => t.k === requestedTab) ? requestedTab : 'overview'
+  );
   const [linkedOrderBookId, setLinkedOrderBookId] = useState(null);
   const [linkedOrderBook, setLinkedOrderBook] = useState(null);
+  // Scope header only — the planned schedule window that drives the timeline.
+  const [scope, setScope] = useState(null);
 
   const authHeaders = useMemo(
     () => ({ 'User-Id': String(user?.id || ''), 'User-Role': String(user?.role || '') }),
@@ -93,10 +135,26 @@ const ProjectDetailPage = () => {
   useEffect(() => { loadProject(); }, [loadProject]);
   useEffect(() => { setActiveTab('overview'); }, [projectUniqueId]);
 
+  // ── Planned schedule window (Scope / SOW → Work Breakdown & Schedule) ────────
+  // Fetched here rather than in a tab because the header timeline needs it too.
+  // Silent on failure: a project with no scope simply keeps its own dates.
+  useEffect(() => {
+    if (!projectUniqueId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await projectsApi.getScope(projectUniqueId);
+        if (!cancelled) setScope(data?.data?.scope || data?.scope || null);
+      } catch { if (!cancelled) setScope(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [projectUniqueId]);
+
   // ── Resolve the linked order book (for the "View Order Book →" link) ─────────
-  // The Order Book list rows carry `projectId`; find the one matching this
-  // project and deep-link to /order-book?view=<id> (OrderBook.js opens detail
-  // via ?view=). Degrades silently — the link only renders when one is found.
+  // The Order Book list rows carry `projectId`; find the one matching this project.
+  // The order book detail view no longer exists — everything it showed beyond the
+  // Overview lives on this page — so the link goes to the Order Book list.
+  // Degrades silently: it only renders when a linked order book is found.
   useEffect(() => {
     if (!projectUniqueId || !user?.id) return;
     let cancelled = false;
@@ -160,22 +218,20 @@ const ProjectDetailPage = () => {
     );
   }
 
-  // Progress = TECHNICAL (physical), matching the Project Dashboard. Falls back to the
-  // stored progress_percentage (override / financial) only when there's no scope yet.
-  const techPct = project.physicalProgressPct != null
-    ? Number(project.physicalProgressPct)
-    : Number(project.progressPercentage || 0);
-  const pct = Math.min(100, Math.max(0, techPct));
+  // Progress = TECHNICAL (physical), matching the Project Dashboard. null when the
+  // project has no scope — shown as "—", never substituted with the financial score.
+  const pct = techProgressPct(project);
   const finPct = Math.min(100, Math.max(0, Number(project.financialProgressPct || 0)));
+  const timeline = effectiveTimeline(project, scope);
 
   return (
-    <div className="obd-page">
+    <div className="obd-page pd-page">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* Back button — plain text, no border */}
       <button
         onClick={() => navigate('/projects')}
-        style={{ background: 'none', border: 'none', color: '#3b82f6', fontWeight: 600, cursor: 'pointer', padding: '8px 0', display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+        style={{ background: 'none', border: 'none', color: '#3b82f6', fontWeight: 600, cursor: 'pointer', padding: '2px 0 6px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
       >
         <ArrowLeft size={16} /> Back to Projects
       </button>
@@ -200,7 +256,7 @@ const ProjectDetailPage = () => {
         {linkedOrderBookId && (
           <button
             className="pd-secondary-link"
-            onClick={() => navigate(`/order-book?view=${linkedOrderBookId}`)}
+            onClick={() => navigate('/order-book')}
           >
             View Order Book →
           </button>
@@ -208,16 +264,29 @@ const ProjectDetailPage = () => {
 
         {/* Metric strip */}
         <div className="pd-metric-strip" style={{ flexBasis: '100%' }}>
-          <div className="pd-metric"><label>Project ID</label><span>{project.projectUniqueId}</span></div>
-          <div className="pd-metric"><label>Budget</label><span>{fmtMoney(project.budget)}</span></div>
-          <div className="pd-metric"><label>Timeline</label><span>{fmtDate(project.startDate)} → {fmtDate(project.endDate)}</span></div>
+          <div className="pd-metric">
+            <label><Hash size={12} strokeWidth={2.2} aria-hidden="true" />Project ID</label>
+            <span className="pd-metric-mono">{project.projectUniqueId}</span>
+          </div>
+          <div className="pd-metric">
+            <label><IndianRupee size={12} strokeWidth={2.2} aria-hidden="true" />Budget</label>
+            <span>{fmtMoney(project.budget)}</span>
+          </div>
+          <div className="pd-metric" title={TIMELINE_HINT[timeline.source]}>
+            <label><CalendarRange size={12} strokeWidth={2.2} aria-hidden="true" />Timeline</label>
+            <span>
+              {fmtDate(timeline.start)} → {fmtDate(timeline.end)}
+              {timeline.source === 'SCOPE' && <span className="pd-metric-tag">Scheduled</span>}
+            </span>
+          </div>
           <div className="pd-metric pd-metric--progress">
-            <label>Progress</label>
+            <label><Gauge size={12} strokeWidth={2.2} aria-hidden="true" />Progress</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                title={pct == null ? 'No technical scope defined for this project' : undefined}>
                 <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Tech</span>
-                <div className="pl-progress" style={{ flex: 1, minWidth: 90 }}><div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(project.status) }} /></div>
-                <span className="pl-progress-pct">{pct}%</span>
+                <div className="pl-progress" style={{ flex: 1, minWidth: 90 }}><div className="pl-progress-fill" style={{ width: `${pct ?? 0}%`, background: progressColor(project.status) }} /></div>
+                <span className="pl-progress-pct">{pct == null ? NO_TECH_PROGRESS : `${pct}%`}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Fin</span>
@@ -229,21 +298,36 @@ const ProjectDetailPage = () => {
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div className="obd-tabbar">
-        {TABS.map(t => (
-          <button
-            key={t.k}
-            className={`obd-tab${activeTab === t.k ? ' active' : ''}`}
-            onClick={() => setActiveTab(t.k)}
-          >{t.l}</button>
-        ))}
+      {/* Tab bar — one row of chevrons that nest into each other, so the selected
+          tab reads as an arrow. Same pattern as the lead detail view (.ld-pipe),
+          rebuilt under pd-* in Projects.css rather than imported from the leads
+          stylesheet. Appearance depends only on which tab is selected. */}
+      <div className="pd-tabnav">
+        <div className="pd-pipe">
+          {TABS.map(t => {
+            const Ico = t.i;
+            return (
+              <button
+                key={t.k}
+                type="button"
+                className={`pd-pipe-step${activeTab === t.k ? ' active' : ''}`}
+                aria-current={activeTab === t.k ? 'true' : undefined}
+                title={t.l}
+                onClick={() => setActiveTab(t.k)}
+              >
+                <Ico className="pd-pipe-ico" size={14} strokeWidth={2} aria-hidden="true" />
+                <span className="pd-pipe-label">{t.l}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="obd-tab-body">
         {activeTab === 'overview'   && (
           <ProjectOverviewTab
             project={project}
+            scope={scope}
             projectUniqueId={project.projectUniqueId || projectUniqueId}
             linkedOrderBookId={linkedOrderBookId}
             linkedOrderBook={linkedOrderBook}
@@ -265,11 +349,12 @@ const ProjectDetailPage = () => {
 //    layout: Project Details card + Line Items + Site Location map). Reads from
 //    the project endpoints, falling back to the linked order book for data that
 //    still lives there today (line items / site location / PO file). ───────────
-const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linkedOrderBook, authHeaders, showSuccess, showError }) => {
+const ProjectOverviewTab = ({ project, scope, projectUniqueId, linkedOrderBookId, linkedOrderBook, authHeaders, showSuccess, showError }) => {
   const p = project || {};
+  const timeline = effectiveTimeline(p, scope);
   const groupName = p.groupName || p.subGroup?.group?.groupName || p.group_id || p.groupId || '';
   const customer  = p.customerName || p.customerCode || p.customerId || p.customer_id || '';
-  const pct = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+  const pct = techProgressPct(p);   // null = no scope defined
   const finPct = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
   const capacity = p.capacityValue != null && p.capacityValue !== ''
     ? `${p.capacityValue}${p.capacityUnit ? ' ' + p.capacityUnit : ''}` : '';
@@ -431,7 +516,7 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
     <div className="obd-grid">
       {/* Project Details */}
       <div className="obd-card">
-        <h4 className="obd-card-title">Project Details</h4>
+        <SectionHead icon={Info}>Project Details</SectionHead>
         <div className="obd-kv-grid">
           <div><label>Project ID</label><span style={{ fontFamily: 'monospace' }}>{p.projectUniqueId || '-'}</span></div>
           <div><label>Status</label><span>
@@ -443,16 +528,24 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
           <div><label>Location</label><span>{p.location || '-'}</span></div>
           <div><label>Budget</label><span>{fmtMoney(p.budget)}</span></div>
           <div><label>Capacity</label><span>{capacity || '-'}</span></div>
-          <div><label>Start Date</label><span>{fmtDate(p.startDate)}</span></div>
-          <div><label>End Date</label><span>{fmtDate(p.endDate)}</span></div>
+          {/* Scheduled window wins over the project's own dates — see effectiveTimeline. */}
+          <div title={TIMELINE_HINT[timeline.source]}>
+            <label>Start Date</label>
+            <span>{fmtDate(timeline.start)}{timeline.source === 'SCOPE' && <span className="pd-metric-tag">Scheduled</span>}</span>
+          </div>
+          <div title={TIMELINE_HINT[timeline.source]}>
+            <label>End Date</label>
+            <span>{fmtDate(timeline.end)}{timeline.source === 'SCOPE' && <span className="pd-metric-tag">Scheduled</span>}</span>
+          </div>
           <div><label>Assigned To</label><span>{p.assignedTo || '-'}</span></div>
           <div>
             <label>Progress</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                title={pct == null ? 'No technical scope defined for this project' : undefined}>
                 <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Tech</span>
-                <div className="pl-progress" style={{ flex: 1, maxWidth: 120 }}><div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(p.status) }} /></div>
-                <span className="pl-progress-pct">{pct}%</span>
+                <div className="pl-progress" style={{ flex: 1, maxWidth: 120 }}><div className="pl-progress-fill" style={{ width: `${pct ?? 0}%`, background: progressColor(p.status) }} /></div>
+                <span className="pl-progress-pct">{pct == null ? NO_TECH_PROGRESS : `${pct}%`}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Fin</span>
@@ -472,7 +565,7 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
 
       {/* Line Items */}
       <div className="obd-card obd-card--wide">
-        <h4 className="obd-card-title">Line Items</h4>
+        <SectionHead icon={ListOrdered}>Line Items</SectionHead>
         {itemsLoading ? <div className="obd-empty">Loading items…</div> : (
           sortedItems.length === 0 ? <div className="obd-empty">No items on this project.</div> : (
             <div className="obd-table-wrap">
@@ -498,12 +591,11 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
 
       {/* Site Location */}
       <div className="obd-card obd-card--wide">
-        <div className="obd-card-head">
-          <h4 className="obd-card-title">Site Location</h4>
+        <SectionHead icon={MapPin} actions={
           <button className="obd-btn obd-btn--primary" onClick={saveLocation} disabled={savingLoc}>
             <Save size={14} /> {savingLoc ? 'Saving…' : 'Save Location'}
           </button>
-        </div>
+        }>Site Location</SectionHead>
         <LocationPicker
           className="obd-field obd-field--full"
           address={siteLocation}

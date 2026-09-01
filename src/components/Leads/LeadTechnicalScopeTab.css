@@ -50,7 +50,7 @@
   display: flex; flex-direction: column; gap: 4px; background: var(--c-f9fafb, #F9FAFB);
   border: 1px solid var(--c-f3f4f6, #F3F4F6); border-radius: 8px; padding: 8px 11px;
 }
-.lts-ro span { font-size: 11px; font-weight: 600; color: var(--ct-9ca3af, #9CA3AF); text-transform: uppercase; letter-spacing: .03em; }
+.lts-ro span { font-size: 11px; font-weight: 700; color: var(--ct-374151, #374151); text-transform: uppercase; letter-spacing: .04em; }
 .lts-ro b { font-size: 13px; color: var(--ct-111827, #111827); font-weight: 600; }
 
 /* Card footer */
@@ -82,9 +82,11 @@
 /* Table */
 .lts-table-wrap { overflow-x: auto; }
 .lts-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+/* Column heads share the detail view's one label treatment — 11px bold
+   uppercase on --ct-374151. Identical in LeadBomTab and LeadBudgetTab. */
 .lts-table thead th {
-  text-align: left; font-size: 11px; font-weight: 700; color: var(--ct-6b7280, #6B7280);
-  text-transform: uppercase; letter-spacing: .03em; padding: 8px 8px; border-bottom: 1.5px solid var(--c-e5e7eb, #E5E7EB);
+  text-align: left; font-size: 11px; font-weight: 700; color: var(--ct-374151, #374151);
+  text-transform: uppercase; letter-spacing: .04em; padding: 8px 8px; border-bottom: 1.5px solid var(--c-e5e7eb, #E5E7EB);
   white-space: nowrap;
 }
 .lts-table tbody td { padding: 6px 8px; border-bottom: 1px solid var(--c-f3f4f6, #F3F4F6); vertical-align: middle; }

@@ -1,6 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import api from "./../services/leadsapi.js";
 import "../pages-css/TelecallerLeadsPage.css";
+// The lead-detail shell (.ld-detail-page / .ld-hero / .ld-pipe / .ld-info-card)
+// lives in the leads stylesheet. A telecaller lead detail is the same kind of
+// screen as a BD one, so it reuses that namespace rather than cloning it.
+import "../pages-css/Leads-Enquire.css";
+import "../components/Leads/LeadCardHead.css";
+import { LayoutDashboard, FileText, User, MapPin, Phone, Users, Repeat } from "lucide-react";
+// The site-visit form, without the tab's "Assign Site Visit" button — that
+// button creates a follow-up assigned to any user in the org, which is more
+// reach than a telecaller screen should offer. Same component the BD detail
+// and the Follow-ups page use, so one report per lead stays one report.
+import { SiteVisitForm } from "../components/Leads/LeadSiteVisitTab.js";
+import "../components/Leads/LeadSiteVisitTab.css";
+import LeadFollowupsTab from "../components/Leads/LeadFollowupsTab.js";
+import LeadsExcelPanel from "../components/Leads/LeadsExcelPanel.js";
 import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import GroupCategoryFilter from "../components/Dropdowns/groupCategoryFilter.js";
 import useGroupProjectFilters from "../components/Dropdowns/useGroupProjectFilters.js";
@@ -11,6 +25,17 @@ import { isStatusLocked, lockedStatusHint } from "../constants/leadStatus.js";
 const toINR = v => { const n = String(v).replace(/[^0-9]/g,''); if (!n) return ''; return parseInt(n,10).toLocaleString('en-IN'); };
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+// The follow-up log reads and writes through /telecaller/**, which checks the
+// lead is the caller's. The generic /followups endpoints it defaults to have no
+// ownership check at all, and the assignee list is a fixed whitelist here
+// (self / marketing / BD) rather than the org-wide rule.
+const TC_FOLLOWUP_ENDPOINTS = {
+  list:      lead      => `/telecaller/lead/${lead.id}/followups`,
+  assignees: ()        => `/telecaller/followup-assignees`,
+  create:    lead      => `/telecaller/lead/${lead.id}/followup`,
+  update:    (id,lead) => `/telecaller/lead/${lead.id}/followup/${id}`,
+};
 
 const STATUS_CONFIG = {
   NEW:            { label: "New",            color: "#6366f1", bg: "#eef2ff" },
@@ -52,6 +77,26 @@ const kivDueSort = (a, b) => {
 const PRIORITY_COLOR = { High: "#ef4444", Medium: "#f59e0b", Low: "#10b981" };
 const SOURCES   = ["Website","Referral","Walk-in","Phone","Email","Social Media","Digital Marketing","Campaign","Others"];
 const PRIORITIES = ["High","Medium","Low"];
+
+// A telecaller's lead detail has two tabs. The scope-driven ones the BD detail
+// carries (Technical scope / BOM / Budget / Site visit) are deliberately absent:
+// a telecaller has neither the data nor the permission behind them.
+const DETAIL_TABS = [
+  { k: "overview",   l: "Overview",    i: LayoutDashboard },
+  { k: "sitereport", l: "Site Report", i: MapPin },
+  { k: "followups",  l: "Follow-ups",  i: Repeat },
+  { k: "proposals",  l: "Proposals",   i: FileText },
+];
+
+// What a telecaller can capture from a phone call. No assignee, no status, and
+// no scope/BOM/budget — those are set by the server or belong to the BD stage.
+const BLANK_CREATE_FORM = {
+  name:"", phone:"", email:"", source:"Phone", priority:"Medium",
+  groupName:"", subGroupName:"",
+  state:"", district:"", city:"", pincode:"",
+  capacity:"", capacityUnit:"kW", enquiry:"",
+  referralName:"", referralPhone:"",
+};
 
 function parseBackendDate(str) {
   if (!str) return null;
@@ -308,7 +353,18 @@ export default function TelecallerLeadsPage() {
 
   // ── Modals ─────────────────────────────────────────────────────────────────
   const [selected,    setSelected]    = useState(null);
-  const [modalOpen,   setModalOpen]   = useState(false);
+  // The logged-in user, read from the same localStorage key AuthContext writes.
+  // SiteVisitForm stamps the report with whoever recorded it.
+  const storedUser = React.useMemo(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("bd_portal_user") || "{}");
+      return raw?.user || raw || {};
+    } catch { return {}; }
+  }, []);
+
+  // Detail is a full-page view swapped in over the board/list, not an overlay.
+  const [detailView,  setDetailView]  = useState(false);
+  const [detailTab,   setDetailTab]   = useState(() => localStorage.getItem("tc_detail_tab") || "overview");
   const [statusModal, setStatusModal] = useState(false);
   const [editModal,   setEditModal]   = useState(false);
   const [newStatus,   setNewStatus]   = useState("");
@@ -365,6 +421,146 @@ export default function TelecallerLeadsPage() {
   const [intBillFile, setIntBillFile] = useState(null);
   const [intBillUploading, setIntBillUploading] = useState(false);
   const [billPreview, setBillPreview] = useState(null);
+
+  // ── Create Lead (telecaller records a lead straight off a call) ────────────
+  // The server owns assignment: /telecaller/lead forces the lead onto the
+  // caller, so there is deliberately no assignee or status field here.
+  const [createModal,     setCreateModal]     = useState(false);
+  const [createSaving,    setCreateSaving]    = useState(false);
+  const [createSubGroups, setCreateSubGroups] = useState([]);
+  const [createForm,      setCreateForm]      = useState(BLANK_CREATE_FORM);
+
+  const openCreateModal = () => {
+    setCreateForm(BLANK_CREATE_FORM);
+    setCreateSubGroups([]);
+    if (editGroups.length === 0) fetchEditGroups();
+    setCreateModal(true);
+  };
+
+  const fetchCreateSubGroups = async (group) => {
+    if (!group) { setCreateSubGroups([]); return; }
+    try {
+      const data = await api.get(`/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`);
+      setCreateSubGroups(toStringArray(data));
+    } catch { setCreateSubGroups([]); }
+  };
+
+  const submitCreate = async () => {
+    const f = createForm;
+    if (!f.name.trim())                        return showToast("Client name is required", "error");
+    if (!f.groupName || !f.subGroupName)       return showToast("Group and category are required", "error");
+    if (f.phone && f.phone.length !== 10)      return showToast("Phone must be 10 digits", "error");
+    setCreateSaving(true);
+    try {
+      const payload = {
+        name: f.name.trim(),
+        phone: f.phone || null,
+        email: f.email.trim() || null,
+        source: f.source || null,
+        priority: f.priority || null,
+        groupName: f.groupName,
+        subGroupName: f.subGroupName,
+        state: f.state.trim() || null,
+        district: f.district.trim() || null,
+        city: f.city.trim() || null,
+        pincode: f.pincode.trim() || null,
+        capacity: f.capacity || null,
+        capacityUnit: f.capacity ? f.capacityUnit : null,
+        enquiry: f.enquiry.trim() || null,
+        referralName: f.source === "Referral" ? (f.referralName.trim() || null) : null,
+        referralPhone: f.source === "Referral" ? (f.referralPhone || null) : null,
+      };
+      const res = await api.post("/telecaller/lead", payload);
+      if (res?.success === false) throw new Error(res.message || "Create failed");
+      showToast("Lead created — it's yours.", "success");
+      setCreateModal(false);
+      // The new lead lands in NEW and is owned by this telecaller.
+      if (viewMode === "board") { fetchBoardColumn("NEW", 0, false); fetchStats(); }
+      else                      { fetchLeads(0, filterRef.current, pageSizeRef.current, searchRef.current); fetchStats(); }
+    } catch (e) {
+      if (e.message !== "SESSION_EXPIRED") showToast(e.message || "Create failed", "error");
+    } finally { setCreateSaving(false); }
+  };
+
+  // ── Offline proposal PDFs on the open lead ────────────────────────────────
+  // Reuses the existing /proposals endpoints — nothing telecaller-specific.
+  // Generated (priced) proposals need the scope/BOM/budget tabs a telecaller
+  // does not have, so this is the offline-PDF path only.
+  const [proposals,         setProposals]         = useState([]);
+  const [proposalsLoading,  setProposalsLoading]  = useState(false);
+  const [proposalBusy,      setProposalBusy]      = useState(false);
+
+  // ── Site visit report on the open lead ────────────────────────────────────
+  const [siteVisit,        setSiteVisit]        = useState(null);
+  const [siteVisitLoading, setSiteVisitLoading] = useState(false);
+
+  const fetchSiteVisit = async (leadId) => {
+    setSiteVisitLoading(true);
+    try {
+      const res = await api.get(`/site-visits/lead/${leadId}`);
+      setSiteVisit((res?.data && res.data[0]) || null);
+    } catch (e) {
+      if (e.message !== "SESSION_EXPIRED") setSiteVisit(null);
+    } finally { setSiteVisitLoading(false); }
+  };
+
+  const fetchProposals = async (leadId) => {
+    setProposalsLoading(true);
+    try {
+      const res = await api.get(`/proposals/by-lead/${leadId}`);
+      setProposals((res?.data || []).filter(p => p.offlinePdfName));
+    } catch (e) {
+      if (e.message !== "SESSION_EXPIRED") setProposals([]);
+    } finally { setProposalsLoading(false); }
+  };
+
+  const uploadProposalPdf = async (leadId, file, existingId) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".pdf")) return showToast("Only PDF files are allowed", "error");
+    if (file.size > 10 * 1024 * 1024)              return showToast("File size exceeds 10 MB limit", "error");
+    setProposalBusy(true);
+    let proposalId = existingId;
+    try {
+      // New document: create the proposal record, then attach the PDF to it.
+      if (!proposalId) {
+        const created = await api.post("/proposals/create", {
+          leadId,
+          title: file.name.replace(/\.pdf$/i, ""),
+          status: "Draft",
+        });
+        proposalId = created?.data?.id ?? created?.id;
+        if (!proposalId) throw new Error("Could not create the proposal record");
+      }
+      const form = new FormData();
+      form.append("file", file);
+      const resp = await fetch(`${API_BASE_URL}/proposals/${proposalId}/upload-offline`, {
+        method: "POST",
+        body: form,
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        // Roll the empty record back so a failed upload leaves nothing behind.
+        if (!existingId) await api.delete(`/proposals/delete/${proposalId}`).catch(() => {});
+        throw new Error(err.error || err.message || `Upload failed (${resp.status})`);
+      }
+      showToast(existingId ? "Proposal replaced." : "Proposal uploaded.", "success");
+      await fetchProposals(leadId);
+    } catch (e) {
+      if (e.message !== "SESSION_EXPIRED") showToast(e.message || "Upload failed", "error");
+    } finally { setProposalBusy(false); }
+  };
+
+  const deleteProposal = async (leadId, proposalId) => {
+    if (!window.confirm("Delete this proposal document?")) return;
+    setProposalBusy(true);
+    try {
+      await api.delete(`/proposals/delete/${proposalId}`);
+      showToast("Proposal deleted.", "success");
+      await fetchProposals(leadId);
+    } catch (e) {
+      if (e.message !== "SESSION_EXPIRED") showToast(e.message || "Delete failed", "error");
+    } finally { setProposalBusy(false); }
+  };
 
   // ── Build common filter params for all API calls ───────────────────────────
   const buildFilterParams = () => {
@@ -675,7 +871,7 @@ export default function TelecallerLeadsPage() {
         await api.post(`/telecaller/lead/${selected.id}/followup`,{scheduledAt:`${followupDate} ${followupTime}:00`,followupType:"Call",notes:reason.trim()||null,priority:"Medium"});
         showToast("Keep in View saved — follow-up scheduled for "+new Date(followupDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})+"!","success");
         setStatusModal(false); setDragFromCol(null);
-        if (modalOpen) { try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){} }
+        if (detailView) { try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){} }
         if (viewMode==="board") resetBoard(); else fetchLeads(pageRef.current,filterRef.current,pageSizeRef.current);
         fetchStats();
         return;
@@ -694,7 +890,7 @@ export default function TelecallerLeadsPage() {
       });
       showToast("Status updated!","success");
       setStatusModal(false); setDragFromCol(null);
-      if (modalOpen) {
+      if (detailView) {
         try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){}
       }
     } catch(e) { if(e.message!=="SESSION_EXPIRED") showToast(e.message||"Update failed","error"); }
@@ -757,7 +953,7 @@ export default function TelecallerLeadsPage() {
         showToast(billFailed ? "Lead updated, but bill upload failed — please re-upload." : "Lead updated!", billFailed ? "warning" : "success");
         setEditModal(false);
         // Re-fetch so the detail view reflects the new details + bill immediately
-        if (modalOpen) { try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){} }
+        if (detailView) { try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){} }
         if (viewMode==="board") resetBoard(); else fetchLeads(pageRef.current,filterRef.current,pageSizeRef.current);
       }
     } catch(e) { if(e.message!=="SESSION_EXPIRED") showToast(e.message||"Update failed","error"); }
@@ -767,8 +963,27 @@ export default function TelecallerLeadsPage() {
   const openDetail = async (lead) => {
     try {
       const data = await api.get(`/telecaller/lead/${lead.id}`);
-      if (data.success) { setSelected(data.data); setModalOpen(true); }
+      if (data.success) {
+        setSelected(data.data);
+        setDetailView(true);
+        window.scrollTo(0, 0);
+        setProposals([]);
+        setSiteVisit(null);
+        fetchProposals(lead.id);
+        fetchSiteVisit(lead.id);
+        // Follow-ups load themselves — LeadFollowupsTab fetches on mount.
+      }
     } catch(e) { if(e.message!=="SESSION_EXPIRED") showToast("Could not load details","error"); }
+  };
+
+  // Leaving the detail view refreshes whichever view the user came from, so a
+  // status or edit made on the detail page is reflected on the board.
+  const closeDetail = () => {
+    setDetailView(false);
+    setSelected(null);
+    setProposals([]);
+    if (viewMode === "board") { resetBoard(); fetchStats(); }
+    else                      { fetchLeads(pageRef.current, filterRef.current, pageSizeRef.current, searchRef.current); fetchStats(); }
   };
 
   const showToast = (msg, type = "success") => {
@@ -806,10 +1021,32 @@ export default function TelecallerLeadsPage() {
     <div className="tc-page">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
+      {/* The board/list and the lead detail are two views of one page — the
+          same swap the BD leads page does — so every modal below stays mounted
+          and usable from either view. */}
+      {!detailView && (<>
+
       {/* ── Block 1: Page header (title only) ── */}
       <div className="tc-header">
         <div>
           <h1 className="tc-title">My Leads</h1>
+        </div>
+        <div className="tc-header-actions">
+          {/* Same import panel the BD leads page uses, narrowed to the
+              telecaller template and pointed at the self-owning bulk endpoint. */}
+          <LeadsExcelPanel
+            currentUser={storedUser}
+            templateIds={["telecaller", "pm_suryagarh"]}
+            allowAssigneeColumn={false}
+            importUrl="/telecaller/leads/bulk"
+            onImportDone={() => {
+              if (viewMode === "board") { resetBoard(); fetchStats(); }
+              else { fetchLeads(0, filterRef.current, pageSizeRef.current, searchRef.current); fetchStats(); }
+            }}
+          />
+          <button className="tc-btn-primary tc-create-lead-btn" onClick={openCreateModal}>
+            ＋ Create Lead
+          </button>
         </div>
       </div>
 
@@ -1065,99 +1302,310 @@ export default function TelecallerLeadsPage() {
         </>
       )}
 
-      {/* ── Detail Modal ── */}
-      {modalOpen && selected && (
-        <div className="tc-modal-overlay">
-          <div className="tc-modal tc-modal--wide tc-modal--fixed-layout" onClick={e=>e.stopPropagation()}>
-            <div className="tc-modal-header tc-modal-header--fixed">
-              <div><h2>{selected.name}</h2><span className="tc-lead-code">{selected.leadCode}</span></div>
-              <button className="tc-modal-close" onClick={()=>setModalOpen(false)}>✕</button>
+      </>)}
+
+      {/* ── Lead Detail (full-page view) ── */}
+      {detailView && selected && (
+        <div className="ld-detail-page">
+          <div className="ld-detail-topbar">
+            <button className="ld-back-btn" onClick={closeDetail}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Leads
+            </button>
+            <div className="ld-detail-breadcrumb">
+              <span style={{cursor:'pointer'}} onClick={closeDetail}>My Leads</span>
+              <span style={{margin:'0 6px'}}>/</span>
+              <span style={{fontWeight:500}}>{selected.leadCode}</span>
             </div>
-            {selected.handedOffToBD && (
-              <div className="tc-handed-off-banner">🤝 Handed off to BD Team{selected.bdAssignedToName&&<span> → <strong>{selected.bdAssignedToName}</strong></span>}{selected.bdAssignedAt&&<span className="tc-handoff-date"> on {selected.bdAssignedAt}</span>}</div>
-            )}
-            <div className="tc-modal-body tc-modal-body--scrollable tc-modal-body--grid">
+          </div>
+
+          {selected.handedOffToBD && (
+            <div className="tc-handed-off-banner">🤝 Handed off to BD Team{selected.bdAssignedToName&&<span> → <strong>{selected.bdAssignedToName}</strong></span>}{selected.bdAssignedAt&&<span className="tc-handoff-date"> on {selected.bdAssignedAt}</span>}</div>
+          )}
+
+          <div className="ld-hero">
+            <div className="ld-hero-left">
+              <div className="ld-hero-avatar">{selected.name?.[0]?.toUpperCase() || '?'}</div>
               <div>
-                <div className="tc-section-title">Contact</div>
-                <DetailRow label="Email"    value={selected.email}/>
-                <DetailRow label="Phone"    value={selected.phone}/>
-                <DetailRow label="Source"   value={selected.source}/>
-                <DetailRow label="Priority" value={selected.priority} style={{color:PRIORITY_COLOR[selected.priority]||"#374151",fontWeight:600}}/>
-                <div className="tc-section-title">Address</div>
-                <DetailRow label="State"    value={selected.state||"—"}/>
-                <DetailRow label="District" value={selected.district||"—"}/>
-                <DetailRow label="City"     value={selected.city||"—"}/>
-                <DetailRow label="Pincode"  value={selected.pincode||"—"}/>
+                <h2 className="ld-hero-name">{selected.name}</h2>
+                <div className="ld-hero-code">{selected.leadCode}</div>
               </div>
-              <div>
-                <div className="tc-section-title">Lead Info</div>
-                <DetailRow label="Group"       value={selected.groupName}/>
-                <DetailRow label="Category"    value={selected.subGroupName}/>
-                <DetailRow label="TC Status"   value={<StatusBadge status={selected.telecallerStatus} leadStatus={selected.leadStatus}/>}/>
-                {selected.capacity && <DetailRow label="Capacity" value={`${selected.capacity} ${selected.capacityUnit||"kW"}`}/>}
-                {selected.telecallerReason && <DetailRow label={selected.telecallerStatus==="KEEP_IN_VIEW"?"Conversation Note":"Reason"} value={selected.telecallerReason}/>}
-                {selected.telecallerStatus==="KEEP_IN_VIEW" && selected.kivReminderDate && (
-                  <DetailRow label="Callback Date" value={
+            </div>
+            <div className="ld-hero-badges">
+              {selected.priority && (
+                <span className="tc-hero-priority" style={{color:PRIORITY_COLOR[selected.priority]||"#374151"}}>
+                  ● {selected.priority}
+                </span>
+              )}
+              <StatusBadge status={selected.telecallerStatus} leadStatus={selected.leadStatus}/>
+            </div>
+            <div className="ld-hero-actions">
+              {selected.leadStatus==="Closed Won"
+                ? <span style={{fontSize:13,color:"#059669",fontWeight:600}}>🔒 Closed Won</span>
+                : <button className="tc-btn-primary" onClick={()=>openStatusModal(selected)}>Update Status</button>
+              }
+              <button className="tc-btn-edit" onClick={()=>openEditModal(selected)}>✏️ Edit Details</button>
+            </div>
+          </div>
+
+          <div className="ld-tabnav">
+            <div className="ld-pipe">
+              {DETAIL_TABS.map(t=>{
+                const Ico=t.i;
+                return (
+                  <button key={t.k} className={`ld-pipe-step${detailTab===t.k?' active':''}`} onClick={()=>{setDetailTab(t.k);localStorage.setItem("tc_detail_tab",t.k);}}>
+                    <Ico className="ld-pipe-ico" size={14}/><span className="ld-pipe-label">{t.l}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {detailTab==='overview' && (
+            <div className="ld-tab-content">
+              <div className="ld-info-grid">
+                <InfoCard icon={User} title="Contact Information" rows={[
+                  ["Email",    selected.email || "—"],
+                  ["Phone",    selected.phone || "—"],
+                  ["Source",   selected.source || "—"],
+                  ...(selected.source==="Referral" ? [
+                    ["Referred By",    selected.referralName  || "—"],
+                    ["Referrer Phone", selected.referralPhone || "—"],
+                  ] : []),
+                ]}/>
+
+                <InfoCard icon={MapPin} title="Address" rows={[
+                  ["State",    selected.state    || "—"],
+                  ["District", selected.district || "—"],
+                  ["City",     selected.city     || "—"],
+                  ["Pincode",  selected.pincode  || "—"],
+                ]}/>
+
+                <InfoCard icon={Phone} title="Lead Info" rows={[
+                  ["Group",    selected.groupName    || "—"],
+                  ["Category", selected.subGroupName || "—"],
+                  ...(selected.capacity ? [["Capacity", `${selected.capacity} ${selected.capacityUnit||"kW"}`]] : []),
+                  ...(selected.solarScheme ? [["Solar Scheme", selected.solarScheme.replace(/_/g,' ')]] : []),
+                  ...(selected.subsidyRequired ? [["Subsidy Required", selected.subsidyRequired]] : []),
+                  ...(selected.telecallerReason ? [[selected.telecallerStatus==="KEEP_IN_VIEW"?"Conversation Note":"Reason", selected.telecallerReason]] : []),
+                  ...(selected.telecallerStatus==="KEEP_IN_VIEW" && selected.kivReminderDate ? [["Callback Date",
                     <span style={{color:"#7c3aed",fontWeight:600}}>
                       📅 {new Date(selected.kivReminderDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})}
-                    </span>
-                  }/>
+                    </span>]] : []),
+                  ["Assigned On",  formatDateTime(selected.createdAt)],
+                  ["Last Updated", selected.telecallerStatusUpdatedAt || "—"],
+                ]}/>
+
+                {(selected.tcMonthlyBill||selected.tcExistingContractLoad||selected.tcRequiredContractLoad||selected.tcBillFileName||selected.tcQuotedPrice||selected.tcPropertyType||selected.tcSiteVisitDate||selected.tcLocation||selected.tcAddons) && (
+                  <InfoCard icon={LayoutDashboard} title="Interested Details" rows={[
+                    ...(selected.tcPropertyType          ? [["Property Type", selected.tcPropertyType]] : []),
+                    ...(selected.tcLocation              ? [["Location",      selected.tcLocation]] : []),
+                    ...(selected.tcSiteVisitDate         ? [["Site Visit",    selected.tcSiteVisitDate]] : []),
+                    ...(selected.tcQuotedPrice           ? [["Quoted Price",  `₹${selected.tcQuotedPrice}`]] : []),
+                    ...(selected.tcMonthlyBill           ? [["Monthly Bill",  `₹${selected.tcMonthlyBill}`]] : []),
+                    ...(selected.tcExistingContractLoad  ? [["Existing Load", selected.tcExistingContractLoad]] : []),
+                    ...(selected.tcRequiredContractLoad  ? [["Required Load", selected.tcRequiredContractLoad]] : []),
+                    ...(selected.tcAddons                ? [["Add-ons",       selected.tcAddons]] : []),
+                    ...(selected.tcBillFileName ? [["Electricity Bill",
+                      selected.tcHasBillFile ? (
+                        <button className="tc-bill-view-btn" onClick={() => setBillPreview({
+                          url: `${API_BASE_URL}/telecaller/lead/${selected.id}/bill`,
+                          name: selected.tcBillFileName,
+                          type: selected.tcBillFileType || 'application/octet-stream',
+                        })}>📄 {selected.tcBillFileName}</button>
+                      ) : (
+                        <span style={{color:"#9ca3af",fontSize:12}}>{selected.tcBillFileName} (not available)</span>
+                      )]] : []),
+                  ]}/>
                 )}
-                <DetailRow label="Assigned On"  value={formatDateTime(selected.createdAt)}/>
-                <DetailRow label="Last Updated" value={selected.telecallerStatusUpdatedAt||"—"}/>
-                {(selected.tcMonthlyBill||selected.tcExistingContractLoad||selected.tcRequiredContractLoad||selected.tcBillFileName||selected.tcQuotedPrice||selected.tcPropertyType||selected.tcSiteVisitDate||selected.tcLocation) && <>
-                  <div className="tc-section-title">Interested Details</div>
-                  {selected.tcPropertyType && <DetailRow label="Property Type" value={selected.tcPropertyType}/>}
-                  {selected.tcLocation && <DetailRow label="Location" value={selected.tcLocation}/>}
-                  {selected.tcSiteVisitDate && <DetailRow label="Site Visit" value={selected.tcSiteVisitDate}/>}
-                  {selected.tcQuotedPrice && <DetailRow label="Quoted Price" value={`₹${selected.tcQuotedPrice}`}/>}
-                  {selected.tcMonthlyBill && <DetailRow label="Monthly Bill" value={`₹${selected.tcMonthlyBill}`}/>}
-                  {selected.tcExistingContractLoad && <DetailRow label="Existing Load" value={selected.tcExistingContractLoad}/>}
-                  {selected.tcRequiredContractLoad && <DetailRow label="Required Load" value={selected.tcRequiredContractLoad}/>}
-                  {selected.tcAddons && <DetailRow label="Add-ons" value={selected.tcAddons}/>}
-                  {selected.tcBillFileName && (
-                    <div className="tc-detail-row">
-                      <span className="tc-detail-label">Electricity Bill</span>
-                      <span className="tc-detail-value">
-                        {selected.tcHasBillFile ? (
-                          <button
-                            className="tc-bill-view-btn"
-                            onClick={() => setBillPreview({
-                              url: `${API_BASE_URL}/telecaller/lead/${selected.id}/bill`,
-                              name: selected.tcBillFileName,
-                              type: selected.tcBillFileType || 'application/octet-stream',
-                            })}
-                          >
-                            📄 {selected.tcBillFileName}
-                          </button>
-                        ) : (
-                          <span style={{color:"#9ca3af",fontSize:12}}>{selected.tcBillFileName} (not available)</span>
-                        )}
-                      </span>
-                    </div>
-                  )}
-                </>}
-                <div className="tc-section-title">Team</div>
-                <div className="tc-team-panel">
-                  <TeamMember role="Telecaller" name={selected.telecallerName||"You"} icon="📞"/>
-                  {selected.bdAssignedToName&&<TeamMember role="BD Executive" name={selected.bdAssignedToName} icon="💼" since={selected.bdAssignedAt}/>}
+
+                <InfoCard icon={Users} title="Team" rows={[
+                  ["Telecaller", selected.telecallerName || "You"],
+                  ...(selected.bdAssignedToName ? [["BD Executive", selected.bdAssignedToName]] : []),
+                  ...(selected.bdAssignedAt     ? [["Handed Off On", selected.bdAssignedAt]] : []),
+                ]}/>
+
+                {(selected.enquiry || selected.tcDiscussionNote) && (
+                  <div className="ld-info-card">
+                    <CardHead icon={FileText}>Notes</CardHead>
+                    {selected.enquiry && (
+                      <div className="tc-detail-enquiry"><span className="tc-detail-label">Enquiry</span><p>{selected.enquiry}</p></div>
+                    )}
+                    {selected.tcDiscussionNote && (
+                      <div className="tc-detail-enquiry tc-discussion-note"><span className="tc-detail-label">Discussion Note</span><p>{selected.tcDiscussionNote}</p></div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {detailTab==='sitereport' && (
+            <div className="ld-tab-content ld-tab-content--full">
+              {siteVisitLoading ? (
+                <div className="tc-proposals-empty"><div className="tc-spinner"/>Loading…</div>
+              ) : (
+                <SiteVisitForm
+                  key={siteVisit?.id ?? 'new'}
+                  lead={selected}
+                  visit={siteVisit}
+                  currentUser={storedUser}
+                  hideCancel
+                  onSaved={() => {
+                    const wasEdit = !!siteVisit;
+                    fetchSiteVisit(selected.id);
+                    // The form writes capacity / tc* fields back onto the lead,
+                    // so re-read the lead or the Overview tab goes stale.
+                    api.get(`/telecaller/lead/${selected.id}`)
+                       .then(f => { if (f?.success) setSelected(f.data); })
+                       .catch(() => {});
+                    showToast(wasEdit ? "Site visit report updated" : "Site visit report saved", "success");
+                  }}
+                />
+              )}
+            </div>
+          )}
+
+          {detailTab==='followups' && (
+            <div className="ld-tab-content ld-tab-content--full">
+              {/* The same follow-up log the BD lead detail renders — filters,
+                  Record Interaction, outcome capture — pointed at the guarded
+                  /telecaller endpoints instead of the open /followups ones. */}
+              <LeadFollowupsTab
+                lead={selected}
+                currentUser={storedUser}
+                endpoints={TC_FOLLOWUP_ENDPOINTS}
+                showSuccess={m=>showToast(m,"success")}
+                showError={m=>showToast(m,"error")}
+                onRefreshLead={()=>{
+                  api.get(`/telecaller/lead/${selected.id}`)
+                     .then(f=>{ if(f?.success) setSelected(f.data); })
+                     .catch(()=>{});
+                }}
+              />
+            </div>
+          )}
+
+          {detailTab==='proposals' && (
+            <div className="ld-tab-content ld-tab-content--full">
+              <div className="ld-info-card ld-info-card--full">
+                <div>
+                  <CardHead icon={FileText}>Proposal Documents</CardHead>
+                  <p className="tc-proposal-intro">
+                    Upload a proposal PDF you received or prepared offline. Priced proposals
+                    generated from the technical scope are handled by the BD team.
+                  </p>
+                  <div className="tc-proposals">
+                    {proposalsLoading ? (
+                      <div className="tc-proposals-empty"><div className="tc-spinner"/>Loading…</div>
+                    ) : proposals.length === 0 ? (
+                      <div className="tc-proposals-empty">No proposal documents yet.</div>
+                    ) : proposals.map(p => (
+                      <div className="tc-proposal-row" key={p.id}>
+                        <button
+                          className="tc-bill-view-btn"
+                          title={p.offlinePdfName}
+                          onClick={() => setBillPreview({
+                            url: `${API_BASE_URL}/proposals/${p.id}/view-offline`,
+                            name: p.offlinePdfName,
+                            type: "application/pdf",
+                          })}
+                        >
+                          📄 {p.offlinePdfName}
+                        </button>
+                        <div className="tc-proposal-actions">
+                          <label className="tc-proposal-link" title="Replace this PDF">
+                            Replace
+                            <input type="file" accept="application/pdf,.pdf" hidden disabled={proposalBusy}
+                              onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; uploadProposalPdf(selected.id, f, p.id); }}/>
+                          </label>
+                          <button className="tc-proposal-link tc-proposal-link--danger" disabled={proposalBusy}
+                            onClick={() => deleteProposal(selected.id, p.id)}>Delete</button>
+                        </div>
+                      </div>
+                    ))}
+                    <label className={`tc-proposal-upload ${proposalBusy ? "is-busy" : ""}`}>
+                      {proposalBusy ? "Working…" : "⬆ Upload proposal PDF"}
+                      <input type="file" accept="application/pdf,.pdf" hidden disabled={proposalBusy}
+                        onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; uploadProposalPdf(selected.id, f, null); }}/>
+                    </label>
+                    <span className="tc-proposal-hint">PDF only, up to 10 MB.</span>
+                  </div>
                 </div>
               </div>
             </div>
-            {selected.enquiry && <div className="tc-detail-enquiry" style={{margin:"0 20px 8px"}}><span className="tc-detail-label">Enquiry</span><p>{selected.enquiry}</p></div>}
-            {selected.tcDiscussionNote && <div className="tc-detail-enquiry tc-discussion-note" style={{margin:"0 20px 8px"}}><span className="tc-detail-label">Discussion Note</span><p>{selected.tcDiscussionNote}</p></div>}
+          )}
+        </div>
+      )}
+
+      {/* ── Create Lead Modal ── */}
+      {createModal && (
+        <div className="tc-modal-overlay">
+          <div className="tc-modal tc-modal--wide tc-modal--edit tc-modal--fixed-layout" onClick={e=>e.stopPropagation()}>
+            <div className="tc-modal-header tc-modal-header--fixed">
+              <h2>＋ Create Lead</h2>
+              <button className="tc-modal-close" onClick={()=>setCreateModal(false)}>✕</button>
+            </div>
+            <div className="tc-modal-body tc-modal-body--scrollable">
+              <p className="tc-lead-name-hint">This lead will be created under your name and appear in your New column.</p>
+              <div className="tc-edit-grid">
+                <div className="tc-edit-field"><label>Client Name *</label>
+                  <input value={createForm.name} autoFocus onChange={e=>setCreateForm(f=>({...f,name:e.target.value}))}/>
+                </div>
+                <div className="tc-edit-field"><label>Phone</label>
+                  <input value={createForm.phone} onChange={e=>setCreateForm(f=>({...f,phone:e.target.value.replace(/\D/g,"").slice(0,10)}))}/>
+                </div>
+                <div className="tc-edit-field"><label>Email</label>
+                  <input type="email" value={createForm.email} onChange={e=>setCreateForm(f=>({...f,email:e.target.value}))}/>
+                </div>
+                <div className="tc-edit-field"><label>Source</label>
+                  <FilterSelect value={createForm.source} options={SOURCES.map(s=>({value:s,label:s}))} placeholder="Select…" onChange={v=>setCreateForm(f=>({...f,source:v}))} />
+                </div>
+                {createForm.source==="Referral"&&<>
+                  <div className="tc-edit-field"><label>Referrer Name</label><input value={createForm.referralName} onChange={e=>setCreateForm(f=>({...f,referralName:e.target.value}))}/></div>
+                  <div className="tc-edit-field"><label>Referrer Phone</label><input value={createForm.referralPhone} onChange={e=>setCreateForm(f=>({...f,referralPhone:e.target.value.replace(/\D/g,"").slice(0,10)}))}/></div>
+                </>}
+                <div className="tc-edit-field"><label>Priority</label>
+                  <FilterSelect value={createForm.priority} options={PRIORITIES.map(p=>({value:p,label:p}))} placeholder="Select…" onChange={v=>setCreateForm(f=>({...f,priority:v}))} />
+                </div>
+                {[["State","state"],["District","district"],["City","city"],["Pincode","pincode"]].map(([lbl,k])=>(
+                  <div className="tc-edit-field" key={k}><label>{lbl}</label>
+                    <input value={createForm[k]} onChange={e=>setCreateForm(f=>({...f,[k]:e.target.value}))}/></div>
+                ))}
+                <div className="tc-edit-field"><label>Capacity</label>
+                  <div style={{display:"flex",gap:6}}>
+                    <input type="number" min="0" step="any" value={createForm.capacity} onChange={e=>setCreateForm(f=>({...f,capacity:e.target.value}))} style={{flex:1}}/>
+                    <select value={createForm.capacityUnit} onChange={e=>setCreateForm(f=>({...f,capacityUnit:e.target.value}))} style={{width:72}}>
+                      {["kW","MW","kVA","HP"].map(u=><option key={u}>{u}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="tc-edit-section-divider">📂 Group &amp; Category</div>
+              <div className="tc-edit-field">
+                <label>Group *</label>
+                <FilterSelect value={createForm.groupName} options={editGroups.map(g=>({value:g,label:g}))}
+                  placeholder={loadingGroups?'Loading…':'— Select Group —'} disabled={loadingGroups}
+                  onChange={v=>{setCreateForm(f=>({...f,groupName:v,subGroupName:''}));fetchCreateSubGroups(v);}} />
+              </div>
+              {createSubGroups.length > 0 && (
+                <div className="tc-edit-field">
+                  <label>Category *</label>
+                  <FilterSelect value={createForm.subGroupName} options={createSubGroups.map(sg=>({value:sg,label:sg.replace(/_/g,' ')}))}
+                    placeholder="— Select Category —" onChange={v=>setCreateForm(f=>({...f,subGroupName:v}))} />
+                </div>
+              )}
+              <div className="tc-edit-field tc-edit-field--full"><label>Enquiry / Notes</label>
+                <textarea rows={4} value={createForm.enquiry} onChange={e=>setCreateForm(f=>({...f,enquiry:e.target.value}))} placeholder="What did the caller ask for?"/>
+              </div>
+            </div>
             <div className="tc-modal-footer tc-modal-footer--fixed">
-              {selected.leadStatus==="Closed Won"
-                ? <>
-                    <span style={{fontSize:13,color:"#059669",fontWeight:600}}>🔒 Closed Won</span>
-                    <button className="tc-btn-edit" onClick={()=>{setModalOpen(false);openEditModal(selected);}}>✏️ Edit Details</button>
-                  </>
-                : <>
-                    <button className="tc-btn-primary" onClick={()=>{setModalOpen(false);openStatusModal(selected);}}>Update Status</button>
-                    <button className="tc-btn-edit"    onClick={()=>{setModalOpen(false);openEditModal(selected);}}>✏️ Edit Details</button>
-                  </>
-              }
-              <button className="tc-btn-secondary" onClick={()=>setModalOpen(false)}>Close</button>
+              <button className="tc-btn-primary" disabled={createSaving} onClick={submitCreate}>
+                {createSaving ? "Creating…" : "Create Lead"}
+              </button>
+              <button className="tc-btn-secondary" onClick={()=>setCreateModal(false)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -1620,6 +2068,34 @@ function TcBillPreviewModal({ url, name, type, onClose }) {
   );
 }
 
+// Same badge treatment the BD lead detail uses for its info cards.
+function CardHead({ icon: Icon, children }) {
+  return (
+    <div className="ld-card-head">
+      <span className="lead-card-ico"><Icon size={17} strokeWidth={2} /></span>
+      <h4 className="ld-card-title">{children}</h4>
+    </div>
+  );
+}
+
+// One info card: a titled list of label/value rows. Rows whose value is empty
+// are dropped by the caller, so a card never renders a column of dashes.
+function InfoCard({ icon, title, rows }) {
+  return (
+    <div className="ld-info-card">
+      <CardHead icon={icon}>{title}</CardHead>
+      <div className="ld-field-list">
+        {rows.map(([label, value]) => (
+          <div className="ld-field-row" key={label}>
+            <span className="ld-field-label">{label}</span>
+            <span className="ld-field-val">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ status, leadStatus }) {
   const s = status||"NEW";
   const c = STATUS_CONFIG[s]||STATUS_CONFIG.NEW;
@@ -1636,24 +2112,3 @@ function StatCard({ label, value, color, onClick, urgent, active }) {
   );
 }
 
-function DetailRow({ label, value, style }) {
-  return (
-    <div className="tc-detail-row">
-      <span className="tc-detail-label">{label}</span>
-      <span className="tc-detail-value" style={style}>{value||"—"}</span>
-    </div>
-  );
-}
-
-function TeamMember({ role, name, icon, since }) {
-  return (
-    <div className="tc-team-member">
-      <span className="tc-team-icon">{icon}</span>
-      <div>
-        <div className="tc-team-role">{role}</div>
-        <div className="tc-team-name">{name}</div>
-        {since&&<div className="tc-team-since">Since {since}</div>}
-      </div>
-    </div>
-  );
-}

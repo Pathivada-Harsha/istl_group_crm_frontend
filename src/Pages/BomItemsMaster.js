@@ -13,7 +13,10 @@
 //  schema + makes) between servers instead of re-typing it. See BomCatalogExcel.js.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Plus, Pencil, Trash2, Search, Save, X, Layers, GripVertical, Download, Upload } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, Search, Save, X, Layers, GripVertical, Download, Upload,
+  ChevronDown, FileSpreadsheet, FileDown, FileUp, Columns3, Package, LayoutGrid, Rows3,
+} from "lucide-react";
 import api from "../services/leadsapi.js";
 import filterApi from "../services/filterApi.js";
 import useToast from "../hooks/useToast";
@@ -83,12 +86,18 @@ const pageNumbers = (current, totalP) => {
   return out;
 };
 
+// Small uppercase label with a hairline running to the right edge of the modal.
+const FormSection = ({ children }) => <div className="bim-section"><span>{children}</span></div>;
+// Persistent (never conditional) helper line under a field.
+const Hint = ({ children }) => <div className="bim-hint">{children}</div>;
+
 export default function BomItemsMaster() {
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { confirmModal, showConfirmation } = useConfirmationModal();
 
   const [items, setItems] = useState([]);
-  const [categories, setCategories] = useState([]);
+  // Size of the whole catalog (last unfiltered load) — the "of 412" in the count.
+  const [catalogTotal, setCatalogTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   // Category is chosen via Group → Subgroup inside the add/edit form.
@@ -99,10 +108,22 @@ export default function BomItemsMaster() {
   // Toolbar taxonomy FILTER (narrows the catalog only — it never pulls template/
   // past-project BOM lines). The Subgroup select writes into `category`, which is
   // already the server-side filter param, so the two stay in sync automatically.
+  // Group + Subgroup are the ONLY category filter — there is no second control
+  // bound to `category`, so picking a subgroup can't clobber another filter.
   const [filterGroup, setFilterGroup] = useState("");
+
+  // Which makes are missing a number an active template's auto-sizing basis reads
+  // off them. A module make with no wattage recorded is indistinguishable from a
+  // complete one here, yet it silently blanks the module count on every lead that
+  // picks it — so the gap is named in the screen where it can be filled.
+  const [health, setHealth] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(null);
+  const [formTab, setFormTab] = useState("details"); // "details" | "makes"
+  // The item as last SAVED — what the embedded Makes tab hangs its rows off.
+  // Kept separate from `form` so unsaved schema edits don't reach the makes grid.
+  const [formSaved, setFormSaved] = useState(null);
   const [saving, setSaving] = useState(false);
   const [attrErrors, setAttrErrors] = useState({});
   const [makesItem, setMakesItem] = useState(null);
@@ -112,12 +133,22 @@ export default function BomItemsMaster() {
   const [exporting, setExporting] = useState(false);
   const [imp, setImp] = useState(null); // { stage:"preview"|"running"|"done", … }
 
+  // Action-bar popovers
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [colsMenuOpen, setColsMenuOpen] = useState(false);
+  const fileMenuRef = useRef(null);
+  const colsMenuRef = useRef(null);
+
+  // Table / grid view — both render the same filtered, sorted, paged rows.
+  const [view, setView] = useState("table"); // "table" | "grid"
+
   // Table sort / paging / column order
   const [sortCol, setSortCol] = useState("");
   const [sortDir, setSortDir] = useState("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [colOrder, setColOrder] = useState(CATALOG_COLS.map((c) => c.key));
+  const [hiddenCols, setHiddenCols] = useState(() => new Set()); // column-visibility picker
   const dragCol = useRef(null);
   const [dragOverCol, setDragOverCol] = useState(null);
   // Builder field drag
@@ -131,7 +162,11 @@ export default function BomItemsMaster() {
       if (search.trim()) params.search = search.trim();
       if (category) params.category = category;
       const res = await api.get("/bom-items-master/admin", { params });
-      setItems(res?.success ? (res.data || []) : []);
+      const list = res?.success ? (res.data || []) : [];
+      setItems(list);
+      // With no server-side filter this response IS the whole catalog, so it
+      // doubles as the denominator for "Showing X of Y items".
+      if (!params.search && !params.category) setCatalogTotal(list.length);
     } catch (e) {
       if (e.message !== "SESSION_EXPIRED") showError("Failed to load items");
     } finally { setLoading(false); }
@@ -139,12 +174,25 @@ export default function BomItemsMaster() {
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
 
+  const loadHealth = useCallback(async () => {
+    try {
+      const res = await api.get("/bom-items-master/attribute-health");
+      setHealth(res?.success ? (res.data || null) : null);
+    } catch { /* non-fatal — the catalog is still usable without the check */ }
+  }, []);
+
+  useEffect(() => { loadHealth(); }, [loadHealth]);
+
+  /** This item's auto-sizing health, or null when no template basis reads from it. */
+  const healthOf = (it) => health?.items?.[String(it?.id)] || null;
+  // The health column only earns its place when some template actually sizes off
+  // the catalog; on an install with no driver bases it would be dead space.
+  const showHealthCol = Object.keys(health?.items || {}).length > 0;
+  const attrNames = (h) => (h.requiredAttributes || []).map((a) => a.label).join(", ");
+  const itemsNeedingAttention = Object.values(health?.items || {}).filter((h) => (h.incompleteMakes || []).length > 0);
+
   useEffect(() => {
     (async () => {
-      try {
-        const res = await api.get("/bom-items-master/categories");
-        setCategories(res?.success ? (res.data || []) : []);
-      } catch { /* non-fatal */ }
       try {
         const g = await filterApi.getAllGroups();
         const groupsArr = Array.isArray(g) ? g : [];
@@ -174,11 +222,50 @@ export default function BomItemsMaster() {
   // Toolbar filter: switching group clears the chosen subgroup (= category).
   const onFilterGroupChange = (val) => { setFilterGroup(val); setCategory(""); setPage(1); };
 
-  const openCreate = () => { setFormGroup(""); setAttrErrors({}); setForm(emptyForm()); };
+  // ── Active-filter chips ─────────────────────────────────────────────────────
+  const labelOfGroup = (v) => groups.find((g) => g.value === v)?.label || v;
+  const labelOfSub = (v) => {
+    for (const list of Object.values(sgByGroup)) {
+      const hit = list.find((s) => s.value === v);
+      if (hit) return hit.label || hit.value;
+    }
+    return v;
+  };
+  const activeFilters = [];
+  if (search.trim()) activeFilters.push({ key: "search", label: "Search", value: `“${search.trim()}”`, clear: () => { setSearch(""); setPage(1); } });
+  if (filterGroup) activeFilters.push({ key: "group", label: "Group", value: labelOfGroup(filterGroup), clear: () => onFilterGroupChange("") });
+  if (category) activeFilters.push({ key: "subgroup", label: "Subgroup", value: labelOfSub(category), clear: () => { setCategory(""); setPage(1); } });
+  const clearAllFilters = () => { setSearch(""); setFilterGroup(""); setCategory(""); setPage(1); };
+
+  // ── Action-bar popovers: close on outside click / Escape ────────────────────
+  useEffect(() => {
+    if (!fileMenuOpen && !colsMenuOpen) return undefined;
+    const onDown = (e) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(e.target)) setFileMenuOpen(false);
+      if (colsMenuRef.current && !colsMenuRef.current.contains(e.target)) setColsMenuOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") { setFileMenuOpen(false); setColsMenuOpen(false); } };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [fileMenuOpen, colsMenuOpen]);
+
+  // Hide/show catalog columns. The last visible column can't be hidden, and the
+  // stored order is left untouched so drag-reorder survives a hide/show.
+  const toggleCol = (key) => setHiddenCols((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key);
+    else if (CATALOG_COLS.length - next.size > 1) next.add(key);
+    return next;
+  });
+
+  const openCreate = () => { setFormGroup(""); setAttrErrors({}); setFormTab("details"); setFormSaved(null); setForm(emptyForm()); };
   const openEdit = (it) => {
     const cat = it.category || "";
     setFormGroup(sgIndex[cat] || "");
     setAttrErrors({});
+    setFormTab("details");
+    setFormSaved({ id: it.id, itemName: it.itemName || "", variantAttributes: it.variantAttributes ?? null });
     setForm({
       id: it.id, category: cat, itemName: it.itemName || "",
       specification: it.specification || "", description: it.description || "",
@@ -264,7 +351,23 @@ export default function BomItemsMaster() {
         : await api.post(`/bom-items-master`, body);
       if (res?.success) {
         showSuccess(form.id ? "Item updated" : "Item created");
-        setForm(null);
+        if (form.id) {
+          setForm(null);
+          setFormSaved(null);
+        } else {
+          // Makes are a child resource under the item's id, so they can only be
+          // added once the item exists. Stay open on the new id and let the
+          // Makes tab light up — no second POST, nothing half-saved.
+          const newId = res?.data?.id ?? null;
+          if (newId) {
+            setForm((f) => (f ? { ...f, id: newId } : f));
+            setFormSaved({ id: newId, itemName: body.itemName, variantAttributes: body.variantAttributes });
+            setCatalogTotal((n) => n + 1);
+          } else {
+            setForm(null);
+            setFormSaved(null);
+          }
+        }
         await loadCatalog();
       } else {
         showError(res?.message || "Failed to save item");
@@ -396,6 +499,7 @@ export default function BomItemsMaster() {
     }
 
     setImp((s) => ({ ...s, stage: "done", result: { created, updated, makesAdded, makesUpdated, failures } }));
+    if (created) setCatalogTotal((n) => n + created); // keeps the count honest while a filter is on
     await loadCatalog();
   };
 
@@ -431,7 +535,9 @@ export default function BomItemsMaster() {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const pageClamped = Math.min(page, totalPages);
   const pageItems = sortedItems.slice((pageClamped - 1) * pageSize, pageClamped * pageSize);
-  const orderedCols = colOrder.map((k) => CATALOG_COLS.find((c) => c.key === k)).filter(Boolean);
+  const orderedCols = colOrder
+    .map((k) => CATALOG_COLS.find((c) => c.key === k))
+    .filter((c) => c && !hiddenCols.has(c.key));
 
   const onColDragStart = (e, key) => { dragCol.current = key; e.dataTransfer.effectAllowed = "move"; };
   const onColDragOver = (e, key) => { e.preventDefault(); if (dragOverCol !== key) setDragOverCol(key); };
@@ -449,6 +555,64 @@ export default function BomItemsMaster() {
   };
   const onColDragEnd = () => { setDragOverCol(null); dragCol.current = null; };
 
+  /**
+   * The auto-sizing column: blank for an item no basis reads from, otherwise
+   * either confirmation that every make carries the number, or exactly which
+   * makes don't. Empty is meaningful here — it means "no template sizes off this".
+   */
+  const healthCell = (it) => {
+    const h = healthOf(it);
+    if (!h) return null;
+    const missing = h.incompleteMakes || [];
+    const names = attrNames(h);
+    const unknownField = (h.requiredAttributes || []).some((a) => a.inSchema === false);
+    if (!missing.length) {
+      return (
+        <span className="bim-badge bim-badge-on"
+          title={`Every make records ${names}, which auto-sizing reads for ${(h.usedByProjectTypes || []).join(", ")}.`}>
+          {names} ✓
+        </span>
+      );
+    }
+    const detail = missing.slice(0, 8)
+      .map((m) => `• ${[m.make, m.model].filter(Boolean).join(" ") || "(unnamed make)"} — no ${(m.missingLabels || []).join(", ")}`)
+      .join("\n");
+    return (
+      <span className={`bim-badge ${h.blocking ? "bim-badge-err" : "bim-badge-warn"}`}
+        title={`${unknownField ? `This item has no "${names}" field, so no make can record one.\n` : ""}`
+          + `Quantities sized from these makes come out blank:\n${detail}`
+          + (missing.length > 8 ? `\n…and ${missing.length - 8} more` : "")}>
+        {missing.length} of {h.makeCount} make{h.makeCount === 1 ? "" : "s"} missing {names}
+      </span>
+    );
+  };
+
+  // Shared by both views so the row actions can't drift apart.
+  const rowActions = (it) => (
+    <div className="bim-actions">
+      <button className="bim-iconbtn" title="Manage makes" onClick={() => setMakesItem(it)}><Layers size={15} /></button>
+      <button className="bim-iconbtn" title="Edit" onClick={() => openEdit(it)}><Pencil size={15} /></button>
+      {it.isActive !== false && (
+        <button className="bim-iconbtn bim-iconbtn-danger" title="Deactivate" onClick={() => deactivate(it)}><Trash2 size={15} /></button>
+      )}
+    </div>
+  );
+
+  const emptyState = activeFilters.length > 0 ? (
+    <div className="bim-empty">
+      <div className="bim-empty-title">Nothing matches these filters</div>
+      <div className="bim-empty-sub">
+        No item matches {activeFilters.map((f) => `${f.label.toLowerCase()} ${f.value}`).join(" and ")}.
+      </div>
+      <button className="bim-btn bim-btn-secondary bim-btn-sm" onClick={clearAllFilters}>Clear all filters</button>
+    </div>
+  ) : (
+    <div className="bim-empty">
+      <div className="bim-empty-title">No items in the catalog yet</div>
+      <div className="bim-empty-sub">Click “Add item”, or Import from Excel.</div>
+    </div>
+  );
+
   return (
     <div className="bim-page">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -456,7 +620,14 @@ export default function BomItemsMaster() {
 
       <div className="bim-head">
         <div>
-          <div className="bim-title">Master Items (BOM catalog)</div>
+          <div className="bim-titlerow">
+            <span className="bim-title">Master Items (BOM catalog)</span>
+            {!loading && (
+              <span className="bim-count">
+                Showing {totalItems} of {catalogTotal} item{catalogTotal !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
           <div className="bim-sub">Catalog items, their variant attributes, and makes.</div>
         </div>
       </div>
@@ -464,7 +635,7 @@ export default function BomItemsMaster() {
       <div className="bim-actionbar">
         <div className="bim-search">
           <Search size={14} />
-          <input className="bim-inp" placeholder="Search name / spec / make"
+          <input className="bim-inp" placeholder="Search name / spec / make / HSN"
             value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
         <select className="bim-inp" value={filterGroup} onChange={(e) => onFilterGroupChange(e.target.value)} title="Filter the catalog by group">
@@ -476,32 +647,161 @@ export default function BomItemsMaster() {
           <option value="">{filterGroup ? "— All subgroups —" : "pick a group"}</option>
           {(sgByGroup[filterGroup] || []).map((sg) => <option key={sg.value} value={sg.value}>{sg.label || sg.value}</option>)}
         </select>
-        <select className="bim-inp" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} title="Or filter by any category value">
-          <option value="">All categories</option>
-          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
         <div className="bim-spacer" />
-        <button className="bim-btn bim-btn-secondary" onClick={downloadTemplate} title="Blank Excel workbook with an example">
-          <Download size={14} /> Template
-        </button>
-        <button className="bim-btn bim-btn-secondary" onClick={exportCatalog} disabled={exporting} title="Download the whole catalog as Excel">
-          {exporting ? "Exporting…" : <><Download size={14} /> Export</>}
-        </button>
-        <button className="bim-btn bim-btn-secondary" onClick={() => fileRef.current?.click()} title="Import items + makes from Excel">
-          <Upload size={14} /> Import
-        </button>
+
+        {/* Columns only mean something in the table; the grid gets the sort
+            control the column headers would otherwise provide. */}
+        {view === "table" ? (
+          <div className="bim-menu" ref={colsMenuRef}>
+            <button className="bim-btn bim-btn-secondary" onClick={() => { setColsMenuOpen((o) => !o); setFileMenuOpen(false); }}
+              aria-haspopup="true" aria-expanded={colsMenuOpen} title="Choose which columns to show">
+              <Columns3 size={14} /> Columns <ChevronDown size={14} />
+            </button>
+            {colsMenuOpen && (
+              <div className="bim-menu-pop">
+                <div className="bim-menu-head">Visible columns</div>
+                {CATALOG_COLS.map((c) => {
+                  const shown = !hiddenCols.has(c.key);
+                  const lastOne = shown && CATALOG_COLS.length - hiddenCols.size <= 1;
+                  return (
+                    <label key={c.key} className={`bim-menu-check ${lastOne ? "bim-menu-check-off" : ""}`}
+                      title={lastOne ? "At least one column must stay visible" : undefined}>
+                      <input type="checkbox" checked={shown} disabled={lastOne} onChange={() => toggleCol(c.key)} />
+                      {c.label}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bim-sortpick">
+            <select className="bim-inp" value={sortCol} title="Sort the cards"
+              onChange={(e) => { setSortCol(e.target.value); setPage(1); }}>
+              <option value="">Sort: default</option>
+              {CATALOG_COLS.map((c) => <option key={c.key} value={c.key}>Sort: {c.label}</option>)}
+            </select>
+            <button className="bim-btn bim-btn-secondary" disabled={!sortCol}
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              title={sortDir === "asc" ? "Ascending — click for descending" : "Descending — click for ascending"}>
+              <SortIcon dir={sortCol ? sortDir : null} />
+            </button>
+          </div>
+        )}
+
+        <div className="bim-menu" ref={fileMenuRef}>
+          <button className="bim-btn bim-btn-secondary" onClick={() => { setFileMenuOpen((o) => !o); setColsMenuOpen(false); }}
+            aria-haspopup="true" aria-expanded={fileMenuOpen} title="Excel template, export and import">
+            <FileSpreadsheet size={14} /> {exporting ? "Exporting…" : "Import / Export"} <ChevronDown size={14} />
+          </button>
+          {fileMenuOpen && (
+            <div className="bim-menu-pop bim-menu-pop-wide">
+              <button className="bim-menu-item" onClick={() => { setFileMenuOpen(false); downloadTemplate(); }}>
+                <Download size={14} />
+                <span><b>Download template</b><small>Blank workbook with an example row</small></span>
+              </button>
+              <button className="bim-menu-item" disabled={exporting} onClick={() => { setFileMenuOpen(false); exportCatalog(); }}>
+                <FileDown size={14} />
+                <span><b>Export catalog</b><small>Every item, its attributes and makes</small></span>
+              </button>
+              <button className="bim-menu-item" onClick={() => { setFileMenuOpen(false); fileRef.current?.click(); }}>
+                <FileUp size={14} />
+                <span><b>Import from Excel</b><small>Upsert items + makes from a workbook</small></span>
+              </button>
+            </div>
+          )}
+        </div>
+
         <button className="bim-btn bim-btn-primary" onClick={openCreate}><Plus size={15} /> Add item</button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={onFilePicked} />
+      </div>
+
+      {itemsNeedingAttention.length > 0 && (
+        <div className="bim-health-banner">
+          <b>
+            {itemsNeedingAttention.length} catalog item{itemsNeedingAttention.length === 1 ? "" : "s"} have makes
+            missing a number that auto-sizing needs.
+          </b>
+          <span>
+            A template line sized from the selected make reads that number off it. Where it is blank, the lead's
+            quantity comes out blank too. Affected:{" "}
+            {itemsNeedingAttention.map((h) => `${h.itemName} (${attrNames(h)})`).join(" · ")}.
+          </span>
+        </div>
+      )}
+
+      {activeFilters.length > 0 && (
+        <div className="bim-chips">
+          <span className="bim-chips-label">Filters</span>
+          {activeFilters.map((f) => (
+            <span key={f.key} className="bim-chip">
+              <span className="bim-chip-k">{f.label}:</span> {f.value}
+              <button className="bim-chip-x" onClick={f.clear} title={`Remove ${f.label.toLowerCase()} filter`} aria-label={`Remove ${f.label} filter`}>
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+          <button className="bim-btn bim-btn-ghost bim-btn-sm" onClick={clearAllFilters}>Clear all</button>
+        </div>
+      )}
+
+      {/* View switcher sits on its own row, directly above whichever view it controls. */}
+      <div className="bim-viewbar">
+        <div className="bim-viewtoggle" role="group" aria-label="View">
+          <button className={`bim-viewbtn ${view === "table" ? "bim-viewbtn-active" : ""}`}
+            onClick={() => setView("table")} aria-pressed={view === "table"} title="Table view">
+            <Rows3 size={14} /> Table
+          </button>
+          <button className={`bim-viewbtn ${view === "grid" ? "bim-viewbtn-active" : ""}`}
+            onClick={() => setView("grid")} aria-pressed={view === "grid"} title="Grid view">
+            <LayoutGrid size={14} /> Grid
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <div className="bim-muted" style={{ padding: 16 }}>Loading…</div>
       ) : (
         <div className="bim-table-wrap bim-fill">
+          {view === "grid" ? (
+            <div className="bim-cards-scroll">
+              {pageItems.length === 0 ? emptyState : (
+                <div className="bim-cards">
+                  {pageItems.map((it) => (
+                    <div key={it.id} className={`bim-card ${it.isActive === false ? "bim-card-off" : ""}`}>
+                      <div className="bim-card-top">
+                        <div>
+                          <div className="bim-card-name">{it.itemName}</div>
+                          <div className="bim-card-cat">{it.category || "—"}</div>
+                        </div>
+                        <span className={`bim-badge ${it.isActive === false ? "bim-badge-off" : "bim-badge-on"}`}>
+                          {it.isActive === false ? "Inactive" : "Active"}
+                        </span>
+                      </div>
+                      {healthOf(it) && <div className="bim-card-health">{healthCell(it)}</div>}
+                      <div className="bim-card-spec">{it.specification || "No specification"}</div>
+                      <div className="bim-card-meta">
+                        <span><b>Unit</b>{it.defaultUnit || "—"}</span>
+                        <span><b>Tax</b>{it.defaultTaxPercent != null ? `${it.defaultTaxPercent}%` : "—"}</span>
+                        <span><b>HSN</b>{it.hsnCode || "—"}</span>
+                      </div>
+                      <div className="bim-card-foot">{rowActions(it)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="bim-table-scroll">
             <table className="bim-table">
               <thead>
                 <tr>
+                  {/* Not draggable or sortable: it is a health check, not catalog data. */}
+                  {showHealthCol && (
+                    <th className="bim-th" title="Whether each make records the number a template's auto-sizing basis reads off it">
+                      <span className="bim-th-content">Auto-sizing</span>
+                    </th>
+                  )}
                   {orderedCols.map((col) => (
                     <th key={col.key} className={`bim-th ${dragOverCol === col.key ? "bim-col-drag-over" : ""}`}
                       draggable onDragStart={(e) => onColDragStart(e, col.key)} onDragOver={(e) => onColDragOver(e, col.key)}
@@ -519,25 +819,19 @@ export default function BomItemsMaster() {
               </thead>
               <tbody>
                 {pageItems.length === 0 && (
-                  <tr><td colSpan={orderedCols.length + 1} className="bim-muted" style={{ padding: 16 }}>No items. Click “Add item”, or Import from Excel.</td></tr>
+                  <tr><td colSpan={orderedCols.length + (showHealthCol ? 2 : 1)}>{emptyState}</td></tr>
                 )}
                 {pageItems.map((it) => (
                   <tr key={it.id} style={{ opacity: it.isActive === false ? 0.55 : 1 }}>
+                    {showHealthCol && <td>{healthCell(it)}</td>}
                     {orderedCols.map((col) => <td key={col.key}>{col.render(it)}</td>)}
-                    <td>
-                      <div className="bim-actions">
-                        <button className="bim-iconbtn" title="Manage makes" onClick={() => setMakesItem(it)}><Layers size={15} /></button>
-                        <button className="bim-iconbtn" title="Edit" onClick={() => openEdit(it)}><Pencil size={15} /></button>
-                        {it.isActive !== false && (
-                          <button className="bim-iconbtn bim-iconbtn-danger" title="Deactivate" onClick={() => deactivate(it)}><Trash2 size={15} /></button>
-                        )}
-                      </div>
-                    </td>
+                    <td>{rowActions(it)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          )}
           <div className="bim-pager">
             <div className="bim-pager-info">{totalItems} item{totalItems !== 1 ? "s" : ""}</div>
             <div className="bim-pager-size">
@@ -645,75 +939,116 @@ export default function BomItemsMaster() {
 
       {form && (
         <div className="bim-overlay" onMouseDown={() => !saving && setForm(null)}>
-          <div className="bim-modal" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="bim-modal bim-modal-tabbed" onMouseDown={(e) => e.stopPropagation()}>
             <div className="bim-modal-head">
-              <div className="bim-modal-title">{form.id ? "Edit item" : "Add item"}</div>
+              <div className="bim-modal-headline">
+                <span className="bim-modal-icon"><Package size={18} /></span>
+                <div>
+                  <div className="bim-modal-title">{form.id ? "Edit item" : "Add item"}</div>
+                  <div className="bim-modal-subtitle">
+                    A catalog item, its commercial defaults, and the attributes every make of it fills.
+                  </div>
+                </div>
+              </div>
               <button className="bim-iconbtn" onClick={() => setForm(null)}><X size={18} /></button>
             </div>
 
+            {/* Two tabs only. Makes earns one because it is a separate entity with
+                its own rows and its own save — the item's own fields stay on one page. */}
+            <div className="bim-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={formTab === "details"}
+                className={`bim-tab ${formTab === "details" ? "bim-tab-active" : ""}`}
+                onClick={() => setFormTab("details")}>Details</button>
+              <button type="button" role="tab" aria-selected={formTab === "makes"} disabled={!form.id}
+                className={`bim-tab ${formTab === "makes" ? "bim-tab-active" : ""}`}
+                title={!form.id ? "Save the item first to add makes" : undefined}
+                onClick={() => form.id && setFormTab("makes")}>Makes</button>
+              {!form.id && <span className="bim-tabs-hint">Save the item first to add makes</span>}
+            </div>
+
+            {formTab === "makes" && formSaved ? (
+              <ItemMakesModal embedded item={formSaved} health={healthOf(formSaved)} onChanged={loadHealth}
+                showError={showError} showSuccess={showSuccess} />
+            ) : (
             <div className="bim-modal-body">
-              <div className="bim-field">
-                <label>Category — Group → Subgroup</label>
-                <div className="bim-grid2">
+              <FormSection>Identification</FormSection>
+              <div className="bim-formgrid">
+                <div className="bim-field">
+                  <label>Group</label>
                   <select className="bim-inp" value={formGroup} onChange={(e) => onFormGroupChange(e.target.value)}>
                     <option value="">— Group —</option>
                     {groups.map((g) => <option key={g.value} value={g.value}>{g.label || g.value}</option>)}
                   </select>
+                </div>
+                <div className="bim-field">
+                  <label>Subgroup</label>
                   <select className="bim-inp" value={form.category} onChange={(e) => setF("category", e.target.value)} disabled={!formGroup}>
                     <option value="">{formGroup ? "— Subgroup (optional) —" : "pick a group"}</option>
                     {(sgByGroup[formGroup] || []).map((sg) => <option key={sg.value} value={sg.value}>{sg.label || sg.value}</option>)}
                   </select>
                 </div>
-                {form.category && !formGroup ? (
-                  <div className="bim-muted" style={{ fontSize: 11, marginTop: 4 }}>
-                    Current category: <b>{form.category}</b> — legacy value, kept unless you pick a subgroup above.
-                  </div>
-                ) : (
-                  <div className="bim-muted" style={{ fontSize: 11, marginTop: 4 }}>
-                    Subgroup is optional — leave it empty for a cross-subgroup catalog item (filed under <b>COMMON</b>).
-                  </div>
-                )}
+                <div className="bim-span2">
+                  <Hint>
+                    Group → Subgroup is the item's category. Subgroup is optional — leave it empty for a
+                    cross-subgroup catalog item (filed under <b>COMMON</b>).
+                  </Hint>
+                  {form.category && !formGroup && (
+                    <Hint>
+                      Current category: <b>{form.category}</b> — legacy value, kept unless you pick a subgroup above.
+                    </Hint>
+                  )}
+                </div>
+
+                <div className="bim-field bim-span2">
+                  <label>Item name *</label>
+                  <input className="bim-inp" value={form.itemName}
+                    onChange={(e) => setF("itemName", e.target.value)} placeholder="e.g. Solar Module" />
+                  <Hint>Shown in every item picker. Excel import matches existing items on this name.</Hint>
+                </div>
               </div>
 
-              <div className="bim-field">
-                <label>Item name *</label>
-                <input className="bim-inp" value={form.itemName}
-                  onChange={(e) => setF("itemName", e.target.value)} placeholder="e.g. Solar Module" />
+              <FormSection>Description</FormSection>
+              <div className="bim-formgrid">
+                <div className="bim-field bim-span2">
+                  <label>Specification</label>
+                  <textarea className="bim-inp" rows={3} value={form.specification}
+                    onChange={(e) => setF("specification", e.target.value)} placeholder="Base spec text for this item" />
+                  <Hint>The item's own spec. Anything that differs per make belongs in Variant attributes below.</Hint>
+                </div>
+                <div className="bim-field bim-span2">
+                  <label>Description</label>
+                  <textarea className="bim-inp" rows={2} value={form.description}
+                    onChange={(e) => setF("description", e.target.value)} />
+                  <Hint>Optional longer note. The catalog table shows Specification, not this.</Hint>
+                </div>
               </div>
 
-              <div className="bim-field">
-                <label>Specification</label>
-                <textarea className="bim-inp" rows={3} value={form.specification}
-                  onChange={(e) => setF("specification", e.target.value)} placeholder="Base spec text for this item" />
-              </div>
-              <div className="bim-field">
-                <label>Description</label>
-                <textarea className="bim-inp" rows={2} value={form.description}
-                  onChange={(e) => setF("description", e.target.value)} />
-              </div>
-
-              <div className="bim-grid2">
+              <FormSection>Commercial defaults</FormSection>
+              <div className="bim-formgrid">
                 <div className="bim-field">
                   <label>Default unit</label>
                   <input className="bim-inp" value={form.defaultUnit} onChange={(e) => setF("defaultUnit", e.target.value)} />
+                  <Hint>Unit this item is counted in — e.g. Nos, Mtr, Kg.</Hint>
                 </div>
                 <div className="bim-field">
                   <label>Default tax %</label>
                   <input className="bim-inp" type="number" min="0" step="any" value={form.defaultTaxPercent}
                     onChange={(e) => setF("defaultTaxPercent", e.target.value)} />
+                  <Hint>Default GST rate. Leave empty if it varies.</Hint>
                 </div>
-              </div>
-              <div className="bim-field">
-                <label>HSN code</label>
-                <input className="bim-inp" value={form.hsnCode} onChange={(e) => setF("hsnCode", e.target.value)} />
+                <div className="bim-field">
+                  <label>HSN code</label>
+                  <input className="bim-inp" value={form.hsnCode} onChange={(e) => setF("hsnCode", e.target.value)} />
+                  <Hint>Harmonised System code. Also matched by the catalog search box.</Hint>
+                </div>
               </div>
 
               {/* ── Variant-attribute builder (drag to reorder) ── */}
-              <div className="bim-field">
-                <label>Variant attributes</label>
-                <div className="bim-muted" style={{ fontSize: 11, marginBottom: 6 }}>
+              <FormSection>Variant attributes</FormSection>
+              <div className="bim-field bim-span2">
+                <Hint>
                   Fields each variant (make) of this item fills — e.g. wattage, cell type, face. Drag <GripVertical size={11} style={{ verticalAlign: "-2px" }} /> to reorder.
-                </div>
+                </Hint>
 
                 {(form.variantAttributes || []).length === 0 ? (
                   <div className="bim-muted" style={{ fontSize: 12, padding: "4px 0" }}>
@@ -765,26 +1100,36 @@ export default function BomItemsMaster() {
                   <Plus size={13} /> Add field
                 </button>
               </div>
+            </div>
+            )}
 
-              {form.id && (
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginTop: 4 }}>
+            <div className="bim-modal-foot bim-modal-foot-split">
+              {formTab === "details" && form.id ? (
+                <label className="bim-foot-toggle" title="Inactive items stay in the catalog but drop out of pickers">
                   <input type="checkbox" checked={form.isActive} onChange={(e) => setF("isActive", e.target.checked)} /> Active
                 </label>
-              )}
-            </div>
-
-            <div className="bim-modal-foot">
-              <button className="bim-btn bim-btn-secondary" onClick={() => setForm(null)}>Cancel</button>
-              <button className="bim-btn bim-btn-primary" onClick={saveForm} disabled={saving}>
-                <Save size={14} /> {saving ? "Saving…" : "Save"}
-              </button>
+              ) : <span />}
+              <div className="bim-foot-actions">
+                {formTab === "details" ? (
+                  <>
+                    <button className="bim-btn bim-btn-secondary" onClick={() => setForm(null)}>Cancel</button>
+                    <button className="bim-btn bim-btn-primary" onClick={saveForm} disabled={saving}>
+                      <Save size={14} /> {saving ? "Saving…" : "Save"}
+                    </button>
+                  </>
+                ) : (
+                  // Makes save themselves on the tab; the item's own Save doesn't apply here.
+                  <button className="bim-btn bim-btn-primary" onClick={() => setForm(null)}>Done</button>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {makesItem && (
-        <ItemMakesModal item={makesItem} onClose={() => setMakesItem(null)}
+        <ItemMakesModal item={makesItem} health={healthOf(makesItem)} onChanged={loadHealth}
+          onClose={() => setMakesItem(null)}
           showError={showError} showSuccess={showSuccess} />
       )}
     </div>
