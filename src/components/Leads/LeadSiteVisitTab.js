@@ -245,7 +245,12 @@ export function SiteVisitForm({ lead, leadId, leadInfo, followupId, visit, curre
             <span>Date of Visit</span>
             <input type="date" value={form.visitDate} onChange={set("visitDate")} />
           </label>
-          <div className="lsv-ro"><span>Visited By</span><b>{currentUser?.name || "—"}</b></div>
+          {/* The visitor stored on the report — NOT whoever is looking at it.
+              Falls back to the current user only for a report not yet saved,
+              since saving is what stamps them as the visitor. */}
+          <div className="lsv-ro"><span>Visited By</span>
+            <b>{visit?.visitedByName || (isEdit ? "—" : currentUser?.name) || "—"}</b>
+          </div>
         </div>
       </section>
 
@@ -498,7 +503,7 @@ export default function LeadSiteVisitTab({ lead, currentUser, permissions, onRef
           <span className="lead-card-ico"><MapPin size={17} strokeWidth={2} /></span><h4 className="lsv-heading">Site Visit Report</h4>
           {report && (
             <span className="lsv-recorded">
-              Last updated by {report.visitedByName || "—"}
+              Recorded by {report.visitedByName || "—"}
               {report.visitDate ? ` · ${fmtDate(report.visitDate)}` : ""}
             </span>
           )}

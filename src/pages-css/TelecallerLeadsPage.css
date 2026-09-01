@@ -948,3 +948,78 @@
 .tc-stat-card--active {
   transform: translateY(-2px);
 }
+/* ── Create Lead button (page header) ──────────────────────────────────────── */
+.tc-header { justify-content: space-between; }
+.tc-create-lead-btn { flex-shrink: 0; }
+
+/* ── Proposals / offline PDFs (detail modal) ───────────────────────────────── */
+.tc-proposals {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 4px 0 10px;
+}
+.tc-proposals-empty {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--ct-9ca3af, #9ca3af);
+  padding: 4px 0;
+}
+.tc-proposal-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 8px;
+  background: var(--c-f8fafc, #f8fafc);
+}
+.tc-proposal-row .tc-bill-view-btn {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
+}
+.tc-proposal-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.tc-proposal-link {
+  background: none; border: none; padding: 0;
+  font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 600;
+  color: var(--ct-2563eb, #2563eb); cursor: pointer;
+}
+.tc-proposal-link:hover:not(:disabled) { text-decoration: underline; }
+.tc-proposal-link:disabled { opacity: .5; cursor: not-allowed; }
+.tc-proposal-link--danger { color: var(--ct-dc2626, #dc2626); }
+.tc-proposal-upload {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1.5px dashed var(--c-cbd5e1, #cbd5e1);
+  border-radius: 8px;
+  font-size: 12px; font-weight: 600;
+  color: var(--ct-2563eb, #2563eb);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.tc-proposal-upload:hover {
+  background: var(--c-eff6ff, #eff6ff);
+  border-color: var(--c-2563eb, #2563eb);
+}
+.tc-proposal-upload.is-busy { opacity: .6; cursor: not-allowed; }
+.tc-proposal-hint { font-size: 11px; color: var(--ct-9ca3af, #9ca3af); }
+
+/* ── Lead detail page (reuses the .ld-* shell from Leads-Enquire.css) ──────── */
+.tc-hero-priority {
+  font-size: 12px; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px;
+  background: var(--c-f8fafc, #f8fafc);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  white-space: nowrap;
+}
+.ld-detail-page .tc-handed-off-banner { margin: 0 0 12px; }
+.ld-detail-page .tc-detail-enquiry { padding: 10px 14px; }
+.tc-proposal-intro {
+  margin: 0 14px 10px;
+  font-size: 12px; line-height: 1.5;
+  color: var(--ct-64748b, #64748b);
+}
+.ld-detail-page .tc-proposals { margin: 0 14px 14px; }
+
+/* ── Full-width tab bodies (Site Report / Follow-ups / Proposals) ──────────── */
+/* The overview grid caps cards at column width; these tabs own the whole row. */
+.ld-tab-content--full .ld-info-card--full { max-width: none; width: 100%; }
+.ld-tab-content--full > .lfu,
+.ld-tab-content--full > .lsv { width: 100%; }
+
+/* Import panel + Create Lead sit together at the right of the page header. */
+.tc-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }

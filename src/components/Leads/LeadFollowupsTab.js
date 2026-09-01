@@ -66,7 +66,20 @@ const PRIORITY_COLOR = { High: "#EF4444", Medium: "#F59E0B", Low: "#10B981" };
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function LeadFollowupsTab({ lead, currentUser, permissions, onRefreshLead, showSuccess, showError }) {
+// Where this tab reads and writes. The defaults are the generic /followups
+// endpoints, which carry no ownership check of their own — fine on a screen the
+// caller already had to be authorised to open. A restricted host (the telecaller
+// lead detail) passes its own guarded paths instead, so the same UI can be
+// mounted without widening what that role can reach.
+export const DEFAULT_FOLLOWUP_ENDPOINTS = {
+  list:      lead => `/followups/lead/${lead.id}`,
+  assignees: ()   => `/filters/followup-assignees`,
+  create:    ()   => `/followups/create`,
+  update:    (id) => `/followups/update/${id}`,
+};
+
+export default function LeadFollowupsTab({ lead, currentUser, permissions, onRefreshLead, showSuccess, showError,
+                                           endpoints = DEFAULT_FOLLOWUP_ENDPOINTS }) {
   const [followups,  setFollowups]  = useState([]);
   const [loading,    setLoading]    = useState(false);
   const [filter,     setFilter]     = useState("All");
@@ -74,6 +87,10 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
   const [showDirect, setShowDirect] = useState(false);
   const [completing, setCompleting] = useState(null);
   const [users,      setUsers]      = useState([]);
+
+  // Frozen once so it can sit in the fetch callback's dep list without looping
+  // when a host passes an inline object literal.
+  const [ep] = useState(() => ({ ...DEFAULT_FOLLOWUP_ENDPOINTS, ...(endpoints || {}) }));
 
   // Delegate to the app-standard notification toast (ToastContainer) instead of a local block.
   const toast$ = (msg, type = "success") => {
@@ -83,18 +100,20 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
   const fetch$ = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get(`/followups/lead/${lead.id}`);
+      const data = await api.get(ep.list(lead));
       if (data.success) setFollowups(data.data || []);
     } catch (e) {
       if (e.message !== "SESSION_EXPIRED") toast$("Failed to load follow-ups", "error");
     } finally { setLoading(false); }
-  }, [lead.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead, ep]);
 
   useEffect(() => {
     fetch$();
-    api.get("/filters/followup-assignees")
-      .then(data => setUsers(Array.isArray(data) ? data : []))
+    api.get(ep.assignees(lead))
+      .then(data => setUsers(Array.isArray(data) ? data : (data?.data || [])))
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetch$]);
 
   const counts = {
@@ -151,7 +170,7 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
       {/* Forms — shown one at a time; hide the list while open */}
       {showDirect && (
         <DirectInteractionForm
-          lead={lead} currentUser={currentUser} users={users}
+          lead={lead} currentUser={currentUser} users={users} ep={ep}
           onCreated={() => { setShowDirect(false); afterCreate("Interaction recorded!"); }}
           onCancel={() => setShowDirect(false)}
         />
@@ -159,7 +178,7 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
 
       {showAdd && (
         <AddForm
-          lead={lead} currentUser={currentUser} users={users}
+          lead={lead} currentUser={currentUser} users={users} ep={ep}
           onCreated={() => { setShowAdd(false); afterCreate("Follow-up scheduled!"); }}
           onCancel={() => setShowAdd(false)}
         />
@@ -181,7 +200,7 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
 
           {completing && (
             <CompleteModal
-              followup={completing}
+              followup={completing} lead={lead} ep={ep}
               onSaved={() => { setCompleting(null); fetch$(); toast$("Outcome saved!"); }}
               onCancel={() => setCompleting(null)}
             />
@@ -198,7 +217,7 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
             <div className="lfu-list-scroll">
               <div className="lfu-list">
                 {sorted.map((f, i) => (
-                  <FollowupCard key={f.id} followup={f} index={i}
+                  <FollowupCard key={f.id} followup={f} index={i} lead={lead} ep={ep}
                     onComplete={() => setCompleting(f)}
                     onCancelled={() => { fetch$(); toast$("Cancelled"); }}
                     onDeleted={() => { fetch$(); toast$("Deleted"); }}
@@ -216,7 +235,7 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
 }
 
 // ── Direct Interaction Form ───────────────────────────────────────────────────
-function DirectInteractionForm({ lead, currentUser, users, onCreated, onCancel }) {
+function DirectInteractionForm({ lead, currentUser, users, onCreated, onCancel, ep }) {
   const [saving, setSaving] = useState(false);
   const toLocalDT = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const todayStr = toLocalDT(new Date());
@@ -248,7 +267,7 @@ function DirectInteractionForm({ lead, currentUser, users, onCreated, onCancel }
 
       const dt = form.visitedAt.replace("T", " ") + ":00";
 
-      await api.post("/followups/create", {
+      await api.post(ep.create(lead), {
         relatedType:  "LEAD",
         relatedId:    lead.id,
         leadId:       lead.id,
@@ -405,7 +424,7 @@ function EmptyState({ filter, onSchedule, onDirect, canCreate }) {
 }
 
 // ── Follow-up card ────────────────────────────────────────────────────────────
-function FollowupCard({ followup: f, index, onComplete, onCancelled, showToast, permissions }) {
+function FollowupCard({ followup: f, index, onComplete, onCancelled, showToast, permissions, lead, ep }) {
   const [busy,     setBusy]     = useState(false);
   const [expanded, setExpanded] = useState(false);
   const tm      = TYPE_META[f.followupType] || TYPE_META.Call;
@@ -418,7 +437,7 @@ function FollowupCard({ followup: f, index, onComplete, onCancelled, showToast, 
     if (!window.confirm("Cancel this follow-up?")) return;
     setBusy(true);
     try {
-      await api.put(`/followups/update/${f.id}`, { status: "Cancelled", outcome: "Cancelled by user" });
+      await api.put(ep.update(f.id, lead), { status: "Cancelled", outcome: "Cancelled by user" });
       onCancelled();
     } catch (e) { showToast(e.message || "Failed", "error"); }
     finally { setBusy(false); }
@@ -517,7 +536,7 @@ function FollowupCard({ followup: f, index, onComplete, onCancelled, showToast, 
 }
 
 // ── Schedule new follow-up form ───────────────────────────────────────────────
-function AddForm({ lead, currentUser, users, onCreated, onCancel }) {
+function AddForm({ lead, currentUser, users, onCreated, onCancel, ep }) {
   const [saving, setSaving] = useState(false);
   const nowPlus30 = new Date(Date.now() + 30 * 60000);
   const defaultDT = new Date(nowPlus30.getTime() - nowPlus30.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -537,7 +556,7 @@ function AddForm({ lead, currentUser, users, onCreated, onCancel }) {
     setSaving(true);
     try {
       const dt = form.scheduledAt.replace("T", " ") + ":00";
-      await api.post("/followups/create", {
+      await api.post(ep.create(lead), {
         relatedType:  "LEAD",
         relatedId:    lead.id,
         leadId:       lead.id,
@@ -628,7 +647,7 @@ function AddForm({ lead, currentUser, users, onCreated, onCancel }) {
 }
 
 // ── Complete / record outcome modal ───────────────────────────────────────────
-function CompleteModal({ followup: f, onSaved, onCancel }) {
+function CompleteModal({ followup: f, onSaved, onCancel, lead, ep }) {
   const [saving,    setSaving]    = useState(false);
   const [outcome,   setOutcome]   = useState("");
   const [newStatus, setNewStatus] = useState("Completed");
@@ -639,7 +658,7 @@ function CompleteModal({ followup: f, onSaved, onCancel }) {
     if (!outcome.trim()) { alert("Please describe what happened"); return; }
     setSaving(true);
     try {
-      await api.put(`/followups/update/${f.id}`, { status: newStatus, outcome: outcome.trim() });
+      await api.put(ep.update(f.id, lead), { status: newStatus, outcome: outcome.trim() });
       onSaved();
     } catch (e) { if (e.message !== "SESSION_EXPIRED") alert(e.message || "Failed to save"); }
     finally { setSaving(false); }

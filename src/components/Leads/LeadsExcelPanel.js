@@ -21,6 +21,13 @@ const TEMPLATES = [
     publicPath: true,
   },
   {
+    id: "telecaller",
+    name: "Telecaller Template",
+    description: "Cold-call leads — imported under your own name",
+    filename: "leads_import_telecaller.xlsx",
+    publicPath: true,
+  },
+  {
     id: "pm_suryagarh",
     name: "PM Surya Ghar Template",
     description: "For PM Surya Ghar leads — Group, Category & Scheme auto-filled on import",
@@ -29,14 +36,20 @@ const TEMPLATES = [
   },
 ];
 
-export default function LeadsExcelPanel({ onImportDone, currentUser }) {
+export default function LeadsExcelPanel({ onImportDone, currentUser, allowAssigneeColumn = true,
+                                          templateIds, importUrl = "/leads/bulk-create" }) {
+  // A host may narrow the template list (the telecaller board offers only its
+  // own) — order follows the registry, not the prop.
+  const templates = templateIds
+    ? TEMPLATES.filter(t => templateIds.includes(t.id))
+    : TEMPLATES;
   const fileRef          = useRef(null);
   const [loading,        setLoading]        = useState(false);
   const [progress,       setProgress]       = useState({ done: 0, total: 0 });
   const [result,         setResult]         = useState(null);
   const [showResult,     setShowResult]     = useState(false);
   const [templateModal,  setTemplateModal]  = useState(false);
-  const [activeTemplate, setActiveTemplate] = useState("standard");
+  const [activeTemplate, setActiveTemplate] = useState(() => (templateIds?.[0]) || "standard");
 
   // ── Download template ─────────────────────────────────────────────────────
   const handleDownloadTemplate = (tpl) => {
@@ -100,6 +113,22 @@ export default function LeadsExcelPanel({ onImportDone, currentUser }) {
       if (!phone) errs.push("Phone required");
       if (phone && !/^\d{10}$/.test(phone)) errs.push("Phone must be exactly 10 digits");
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.push("Email format invalid");
+    } else if (templateId === "telecaller") {
+      // Same column order as the standard sheet. Group and Category are
+      // required here because the telecaller create path rejects a lead
+      // without them; Enquiry and State are not.
+      const name  = String(row[0] || "").trim();
+      const phone = String(row[2] || "").trim().replace(/\s/g, "");
+      const email = String(row[1] || "").trim();
+      const group = String(row[5] || "").trim();
+      const cat   = String(row[6] || "").trim();
+
+      if (!name)  errs.push("Client Name required");
+      if (!phone) errs.push("Phone required");
+      if (!group) errs.push("Group required");
+      if (!cat)   errs.push("Category required");
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.push("Email format invalid");
+      if (phone && !/^\d{10}$/.test(phone)) errs.push("Phone must be exactly 10 digits");
     } else {
       const name  = String(row[0]  || "").trim();
       const phone = String(row[2]  || "").trim().replace(/\s/g, "");
@@ -146,8 +175,35 @@ export default function LeadsExcelPanel({ onImportDone, currentUser }) {
         district:        String(row[8] || "").trim() || null,
         city:            String(row[9] || "").trim() || null,
         pincode:         null,
-        assignedToEmail: String(row[10] || "").trim() || null,
+        // Suppressed on a self-owning import (the telecaller board): the
+        // server ignores it there, so sending it would be misleading.
+        assignedToEmail: allowAssigneeColumn ? (String(row[10] || "").trim() || null) : null,
         templateType:    "pm_suryagarh",
+      };
+    }
+
+    if (templateId === "telecaller") {
+      const tcNotes    = String(row[14] || "").trim();
+      const tcEnquiry  = String(row[7]  || "").trim();
+      const tcCapacity = String(row[13] || "").trim();
+      return {
+        name:         String(row[0]  || "").trim(),
+        email:        String(row[1]  || "").trim().toLowerCase() || null,
+        phone:        String(row[2]  || "").trim().replace(/\s/g, ""),
+        source:       String(row[3]  || "").trim() || "Others",
+        priority:     String(row[4]  || "").trim() || "Medium",
+        groupName:    String(row[5]  || "").trim() || null,
+        subGroupName: String(row[6]  || "").trim() || null,
+        enquiry:      tcNotes ? `${tcEnquiry}\n\nNotes: ${tcNotes}` : tcEnquiry,
+        state:        String(row[8]  || "").trim() || null,
+        district:     String(row[9]  || "").trim() || null,
+        city:         String(row[10] || "").trim() || null,
+        pincode:      String(row[11] || "").trim() || null,
+        solarScheme:  String(row[12] || "").trim() || null,
+        capacity:     tcCapacity || null,
+        capacityUnit: tcCapacity ? "kW" : null,
+        // No assignee column — the server assigns the importing telecaller.
+        templateType: "telecaller",
       };
     }
 
@@ -169,7 +225,7 @@ export default function LeadsExcelPanel({ onImportDone, currentUser }) {
       city:            String(row[10] || "").trim()  || null,
       pincode:         String(row[11] || "").trim()  || null,
       solarScheme:     String(row[12] || "").trim()  || null,
-      assignedToEmail: String(row[13] || "").trim()  || null,
+      assignedToEmail: allowAssigneeColumn ? (String(row[13] || "").trim() || null) : null,
       templateType:    "standard",
     };
   };
@@ -254,7 +310,7 @@ export default function LeadsExcelPanel({ onImportDone, currentUser }) {
     }));
 
     try {
-      const res  = await api.post("/leads/bulk-create", finalPayloads);
+      const res  = await api.post(importUrl, finalPayloads);
       const data = res.data ?? res;
 
       setResult({
@@ -357,7 +413,7 @@ export default function LeadsExcelPanel({ onImportDone, currentUser }) {
               Or import directly with an existing filled file.
             </p>
             <div className="lep-tpl-list">
-              {TEMPLATES.map(tpl => (
+              {templates.map(tpl => (
                 <div key={tpl.id} className="lep-tpl-item">
                   <div className="lep-tpl-item-info">
                     <div className="lep-tpl-item-name">{tpl.name}</div>
