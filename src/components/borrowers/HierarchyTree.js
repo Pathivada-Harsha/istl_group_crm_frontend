@@ -14,6 +14,7 @@
 import React from 'react';
 import { Building2, Users, Eye, Trash2 } from 'lucide-react';
 import Pagination from './Pagination';
+import SanctionStatusBadge from './SanctionStatusBadge';
 
 const TYPE_BADGE_CLASS = {
   'Parent Group': 'brx-badge-purple',
@@ -28,8 +29,8 @@ const TypeBadge = ({ label }) => (
 );
 
 const HierarchyTree = ({
-  data, loading, search, onSelectCompany, onSelectGroup, onDeleteCompany, onDeleteGroup,
-  page, pageCount, pageSize, totalRows, onPageChange, onPageSizeChange,
+  data, loading, search, onSelectCompany, onSelectGroup, onViewGroup, onDeleteCompany, onDeleteGroup,
+  page, pageCount, pageSize, totalRows, onPageChange, onPageSizeChange, onStatusChanged,
 }) => {
   const groups = data?.groups || [];
   const standalone = data?.standalone || [];
@@ -77,16 +78,20 @@ const HierarchyTree = ({
                   </span>
                 </td>
                 <td><TypeBadge label="Parent Group" /></td>
-                <td className="brx-dash">—</td>
+                <td className="brx-mono">{g.cin || <span className="brx-dash">—</span>}</td>
                 <td className="brx-num">{g.sanctionsCount}</td>
                 <td className="brx-num">{g.totalSanctionedAmount || '₹0.00 Cr'}</td>
-                <td className="brx-dash">—</td>
+                <td>
+                  <span className={`brx-status-pill ${g.status === 'Active' ? 'brx-status-active' : 'brx-status-muted'}`}>
+                    {g.status}
+                  </span>
+                </td>
                 <td className="brx-right">
                   <div className="brx-row-actions">
                     <button
                       type="button" className="brx-icon-btn"
-                      title={`Open ${g.groupName}`} aria-label={`Open ${g.groupName}`}
-                      onClick={() => onSelectGroup(g.id)}
+                      title={`View ${g.groupName}`} aria-label={`View ${g.groupName}`}
+                      onClick={() => onViewGroup(g.id)}
                     >
                       <Eye size={15} aria-hidden="true" />
                     </button>
@@ -119,9 +124,14 @@ const HierarchyTree = ({
                 <td className="brx-num">{c.sanctionsCount}</td>
                 <td className="brx-num">{c.totalSanctionedAmount || '₹0.00 Cr'}</td>
                 <td>
-                  <span className={`brx-status-pill ${c.sanctionsCount > 0 ? 'brx-status-active' : 'brx-status-muted'}`}>
-                    {c.status}
-                  </span>
+                  <SanctionStatusBadge
+                    sanctionId={c.latestSanctionId}
+                    refNo={c.latestSanctionRefNo}
+                    cin={c.cin}
+                    status={c.status}
+                    disabled={!c.latestSanctionId}
+                    onChanged={onStatusChanged}
+                  />
                 </td>
                 <td className="brx-right">
                   <div className="brx-row-actions">

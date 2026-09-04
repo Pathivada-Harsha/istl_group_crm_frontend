@@ -17,7 +17,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  FileText, Eye, Download, RefreshCw, Paperclip, ChevronDown, ChevronUp,
+  FileText, Eye, Download, Paperclip, ChevronDown, ChevronUp,
   FileSpreadsheet, FileType2,
 } from 'lucide-react';
 import { BsInfoCircle } from 'react-icons/bs';
@@ -346,10 +346,6 @@ export const DocumentCard = ({ sanction, onOpenDocument, onStartAttach, attachin
               >
                 <Download size={14} aria-hidden="true" />
                 Download
-              </button>
-              <button type="button" className="br-btn br-btn-sm" onClick={onStartAttach} disabled={attaching}>
-                <RefreshCw size={14} aria-hidden="true" />
-                Replace
               </button>
             </>
           ) : (

@@ -111,12 +111,38 @@ const borrowerApi = {
 
   // `rawExtracted` is the untouched parser output, stored alongside the saved
   // values so an edited figure can be audited against what was read.
-  saveSanction: async (sanction, rawExtracted) =>
+  // identityCin/identityRegisteredAddress: a reviewer's correction to a
+  // misread CIN/registered address, made on the same "Review what was
+  // read" screen — applied to the borrower in the SAME backend transaction
+  // as the sanction save (see BorrowerService#saveSanction), so a failure
+  // partway through can never leave the borrower updated with no sanction
+  // to show for it (2026-09-02 save-flow atomicity fix).
+  saveSanction: async (sanction, rawExtracted, identityCin, identityRegisteredAddress) =>
     (await req('/borrower/sanction/save', {
+      method: 'POST', body: { sanction, rawExtracted, identityCin, identityRegisteredAddress },
+    })).data,
+
+  // A sanction associated directly with a Parent Group or Sub Group, not any
+  // company — see BorrowerService#saveGroupSanction. Returns the saved
+  // sanction wrapper directly (there's no borrower to nest it under).
+  saveGroupSanction: async (groupId, sanction, rawExtracted) =>
+    (await req(`/borrower/groups/${groupId}/sanction/save`, {
       method: 'POST', body: { sanction, rawExtracted },
     })).data,
 
+  // Sanctions associated directly with one Parent Group or Sub Group —
+  // never a child company's own sanctions.
+  listGroupSanctions: async (groupId) =>
+    (await req(`/borrower/groups/${groupId}/sanctions`)).data || [],
+
   removeSanction: async (id) => req(`/borrower/sanction/delete/${id}`, { method: 'DELETE' }),
+
+  // The one editable Active/Inactive control — changes only this sanction's
+  // own status. Every Company/Parent Group/Sub Group's own displayed status
+  // is derived from sanctions like this one at read time, never stored or
+  // edited directly — see BorrowerService.deriveStatusLabel.
+  updateSanctionStatus: async (id, activeStatus) =>
+    (await req(`/borrower/sanction/${id}/status`, { method: 'PUT', body: { activeStatus } })).data,
 
   uploadDoc: async (sanctionId, file) =>
     postFile(`/borrower/sanction/${sanctionId}/upload-doc`, file, 'Upload failed'),
@@ -220,6 +246,28 @@ const borrowerApi = {
   updateHierarchy: async (borrowerId, { groupId, isSubsidiary, isSpv }) =>
     (await req(`/borrower/${borrowerId}/hierarchy`, {
       method: 'PUT', body: { groupId, isSubsidiary, isSpv },
+    })).data,
+
+  // Atomic resolve + hierarchy-placement for the sanction-import "confirm
+  // this company" step (CompanyMatchModal) — one backend transaction that
+  // also creates the Parent/Sub Group itself when asked to (pass
+  // newParentGroupName/newSubGroupName), rather than the frontend creating
+  // the group first via a separate createGroup() call and only then
+  // resolving the borrower — that used to let a failure after group
+  // creation leave the new group committed with no company/sanction
+  // attached to it (2026-09-02 save-flow atomicity fix).
+  resolveWithHierarchy: async (identity, {
+    parentGroupId, newParentGroupName, newParentGroupCin, newParentGroupAddress,
+    subGroupId, newSubGroupName, newSubGroupCin, newSubGroupAddress,
+    isSubsidiary, isSpv,
+  }) =>
+    (await req('/borrower/resolve-with-hierarchy', {
+      method: 'POST',
+      body: {
+        identity, parentGroupId, newParentGroupName, newParentGroupCin, newParentGroupAddress,
+        subGroupId, newSubGroupName, newSubGroupCin, newSubGroupAddress,
+        isSubsidiary, isSpv,
+      },
     })).data,
 
   // Candidate borrowers for a parsed letter's identity, ranked by

@@ -11,7 +11,7 @@
 // server-sanitised fragment, not raw upload content.
 
 import React, { useEffect, useState } from 'react';
-import { X, Download, FileText, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Download, FileText, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
 import '../../pages-css/BorrowerRegistry.css';
 
@@ -58,7 +58,7 @@ const DocumentViewerModal = ({ sanctionId, fileName, onClose }) => {
   const displayName = state.meta?.fileName || fileName || 'Sanction letter';
 
   return (
-    <div className="br-modal-backdrop" onMouseDown={onClose}>
+    <div className="br-modal-backdrop br-modal-backdrop-viewer" onMouseDown={onClose}>
       <div
         className="br-modal br-modal-viewer"
         onMouseDown={(e) => e.stopPropagation()}
@@ -77,6 +77,21 @@ const DocumentViewerModal = ({ sanctionId, fileName, onClose }) => {
             </div>
           </div>
           <div className="br-viewer-actions">
+            {/* Only meaningful for the PDF path — it's a real blob URL a new
+                tab can navigate to. The DOCX path has no such URL (it's
+                sanitised HTML rendered inline server-side), same as the
+                Purchase Orders preview this mirrors, which only ever
+                handles PDFs to begin with. */}
+            {state.status === 'pdf' && (
+              <button
+                type="button"
+                className="br-btn br-btn-sm"
+                onClick={() => window.open(state.url, '_blank')}
+              >
+                <ExternalLink size={14} aria-hidden="true" />
+                <span>Open in Tab</span>
+              </button>
+            )}
             <button
               type="button"
               className="br-btn br-btn-sm"

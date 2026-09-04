@@ -108,6 +108,14 @@ const BorrowerRegistry = () => {
     setError('');
     try {
       const parsed = await borrowerApi.parseSanction(file);
+      // A ref no. already on file is checked at parse time (see
+      // BorrowerService's _duplicateRefNo flag) — surface that here,
+      // immediately, rather than letting the reviewer go through CIN/Name
+      // matching and the review form first only to be blocked at Save.
+      if (parsed?._duplicateRefNo) {
+        showWarning('A sanction with this reference number has already been imported.', 'Already imported', 4000);
+        return;
+      }
       // Confirm which company the letter belongs to (or create a new one)
       // before the review screen opens, so the sanction never gets attached
       // to the wrong record on a name that merely looks similar.
@@ -284,6 +292,7 @@ const BorrowerRegistry = () => {
         search={search}
         onSelectCompany={(id) => navigate(`/lender/borrowers/${id}`)}
         onSelectGroup={(id) => navigate(`/lender/borrowers/group/${id}`)}
+        onViewGroup={(id) => navigate(`/lender/borrowers/group/${id}/detail`)}
         onDeleteCompany={(c) => setDeleteTarget(c)}
         onDeleteGroup={(g) => setDeleteGroupTarget(g)}
         page={hierarchyPage}
@@ -292,6 +301,7 @@ const BorrowerRegistry = () => {
         totalRows={hierarchyData.totalElements || 0}
         onPageChange={setHierarchyPage}
         onPageSizeChange={(n) => { setHierarchyPageSize(n); setHierarchyPage(1); }}
+        onStatusChanged={loadHierarchy}
       />
 
       {deleteTarget && (
@@ -505,8 +515,20 @@ const BorrowerRegistry = () => {
         <CompanyMatchModal
           parsed={matchStep.parsed}
           onClose={() => setMatchStep(null)}
-          onResolved={(borrowerId) => {
-            setReview({ initial: matchStep.parsed, file: matchStep.file, borrowerId });
+          onResolved={(borrowerId, meta) => {
+            setReview({
+              initial: matchStep.parsed, file: matchStep.file, borrowerId,
+              isNewBorrower: !!meta?.isNewBorrower,
+            });
+            setMatchStep(null);
+          }}
+          onResolvedGroup={(resolvedGroupTarget, meta) => {
+            setReview({
+              initial: matchStep.parsed,
+              file: matchStep.file,
+              groupTarget: resolvedGroupTarget,
+              isNewGroup: !!meta?.isNewGroup,
+            });
             setMatchStep(null);
           }}
         />
@@ -516,6 +538,9 @@ const BorrowerRegistry = () => {
         <SanctionFormModal
           mode="import"
           borrowerId={review.borrowerId}
+          isNewBorrower={review.isNewBorrower}
+          groupTarget={review.groupTarget}
+          isNewGroup={review.isNewGroup}
           initial={review.initial}
           file={review.file}
           onClose={() => setReview(null)}
@@ -523,9 +548,17 @@ const BorrowerRegistry = () => {
             setReview(null);
             loadHierarchy();
             showSuccess('Sanction letter saved to the registry.', 'Saved');
-            // Land on the record just created — that is where the derived
-            // panel shows what the import worked out.
-            if (saved?.id) navigate(`/lender/borrowers/${saved.id}`);
+            // A brand-new Parent/Sub Group created for this import (never
+            // reachable here before — this page has no groupTarget of its
+            // own to start from) has no company row to land on; go to the
+            // group itself instead.
+            if (review.isNewGroup && saved?.groupId) {
+              navigate(`/lender/borrowers/group/${saved.groupId}`);
+            } else if (saved?.id && !review.groupTarget) {
+              // Land on the record just created — that is where the derived
+              // panel shows what the import worked out.
+              navigate(`/lender/borrowers/${saved.id}`);
+            }
           }}
         />
       )}

@@ -23,12 +23,19 @@ import {
 import SanctionCompareModal from './SanctionCompareModal';
 import RepaymentScheduleTab from './RepaymentScheduleTab';
 import { SANCTION_FIELDS as FIELDS, sanctionFieldGroups } from './sanctionFields';
-import { BORROWER_IMPORT_KEYS } from './borrowerFields';
+import { BORROWER_IMPORT_KEYS, CIN_REGEX } from './borrowerFields';
 import '../../pages-css/BorrowerRegistry.css';
 
 const EMPTY = FIELDS.reduce((a, f) => ({ ...a, [f.key]: f.defaultValue ?? '' }), {});
 const GROUPS = sanctionFieldGroups();
 const FIELD_KIND = Object.fromEntries(FIELDS.map((f) => [f.key, f.kind]));
+// Only fields that declare one — same convention as sanctionFields.js
+// documents for `normalize`, applied uniformly wherever a value is typed
+// into `form` (the initial-load effects reuse this too, so a value read off
+// a letter is shaped identically to one typed by hand).
+const FIELD_NORMALIZE = Object.fromEntries(
+  FIELDS.filter((f) => f.normalize).map((f) => [f.key, f.normalize]),
+);
 
 // A letter often states the moratorium only inline in the Tenor sentence
 // ("18 years including moratorium of 9 months") rather than as its own row —
@@ -247,6 +254,21 @@ const SanctionFormModal = ({
   initial = null,        // parsed field map (import) or saved wrapper (edit)
   borrowerId = null,     // set when adding a sanction to a known borrower
   borrowerName = null,   // pre-fills the borrower field for a known borrower
+  // True when `borrowerId` was created moments ago, solely for this import,
+  // and has no sanction yet (CompanyMatchModal's "new company" flow). A
+  // borrower must never persist with zero sanction letters, so backing out
+  // of this screen without saving deletes it again — see handleCancel below.
+  isNewBorrower = false,
+  // Set when this sanction is associated directly with a Parent Group or Sub
+  // Group instead of any company — { groupId, groupName, type: 'GROUP' | 'SUB_GROUP' }.
+  // Mutually exclusive with borrowerId/borrowerName: no company is resolved
+  // or created, and the save goes to borrowerApi.saveGroupSanction instead.
+  groupTarget = null,
+  // True when `groupTarget` itself was created moments ago, solely for this
+  // import (CompanyMatchModal's New Parent Group / New Sub Group flow), and
+  // has no sanction yet. Same reasoning as isNewBorrower above — see
+  // handleCancel.
+  isNewGroup = false,
   file = null,           // the uploaded File, for preview and post-save storage
   allowAttach = false,   // offer to attach a letter while entering by hand
   onClose,
@@ -326,7 +348,8 @@ const SanctionFormModal = ({
       if (initial[key] !== undefined && initial[key] !== null) {
         const v = String(initial[key]);
         next[key] = kind === 'money' ? normalizeMoneyValue(key, v)
-          : key === 'interestRateText' ? stripRoiFromText(v) : v;
+          : key === 'interestRateText' ? stripRoiFromText(v)
+          : FIELD_NORMALIZE[key] ? FIELD_NORMALIZE[key](v) : v;
       }
     });
     setStatedRoiPct(initial.roiPct != null ? String(initial.roiPct) : '');
@@ -369,7 +392,8 @@ const SanctionFormModal = ({
           if (parsed[key] != null) {
             const v = String(parsed[key]);
             next[key] = kind === 'money' ? normalizeMoneyValue(key, v)
-              : key === 'interestRateText' ? stripRoiFromText(v) : v;
+              : key === 'interestRateText' ? stripRoiFromText(v)
+              : FIELD_NORMALIZE[key] ? FIELD_NORMALIZE[key](v) : v;
           }
         });
         setStatedRoiPct(parsed.roiPct != null ? String(parsed.roiPct) : '');
@@ -389,7 +413,8 @@ const SanctionFormModal = ({
     const clean = {};
     Object.entries(updates).forEach(([key, v]) => {
       clean[key] = FIELD_KIND[key] === 'money' ? normalizeMoneyValue(key, v)
-        : key === 'interestRateText' ? stripRoiFromText(v) : v;
+        : key === 'interestRateText' ? stripRoiFromText(v)
+        : FIELD_NORMALIZE[key] ? FIELD_NORMALIZE[key](v) : v;
     });
     setForm((f) => ({ ...f, ...clean }));
     setCompare(null);
@@ -549,7 +574,8 @@ const SanctionFormModal = ({
 
   const set = (key) => (e) => {
     const raw = e.target.value;
-    const value = FIELD_KIND[key] === 'money' ? stripRs(raw) : raw;
+    const value = FIELD_KIND[key] === 'money' ? stripRs(raw)
+      : FIELD_NORMALIZE[key] ? FIELD_NORMALIZE[key](raw) : raw;
     setForm((f) => ({ ...f, [key]: value }));
   };
 
@@ -559,13 +585,24 @@ const SanctionFormModal = ({
   const setDate = (key) => (iso) => setForm((f) => ({ ...f, [key]: iso }));
 
   const missingRequired = FIELDS
-    .filter((f) => f.required && !String(form[f.key] || '').trim())
+    .filter((f) => f.required && !(groupTarget && f.key === 'borrowerName') && !String(form[f.key] || '').trim())
     .map((f) => f.label);
 
   const handleSave = async () => {
     setError('');
     if (missingRequired.length) {
       setError(`Still needed: ${missingRequired.join(', ')}`);
+      return;
+    }
+    // CIN is optional (a borrower may genuinely have none on file) but, if
+    // present, must be a well-formed 21-character CIN — checked here too,
+    // not just server-side (saveSanction's requireValidCin would reject it
+    // anyway), so a mode="import" correction gets an immediate, specific
+    // message rather than a round-trip. toCin's own normalize already
+    // strips anything that isn't A-Z/0-9 as the reviewer types, so this
+    // only ever catches a genuinely wrong length/shape.
+    if (mode === 'import' && form.cin && !CIN_REGEX.test(form.cin)) {
+      setError('Enter a valid 21-character CIN, e.g. U40106MH2026PTC223978');
       return;
     }
     // "Other" with nothing entered has no interval to schedule against —
@@ -594,15 +631,33 @@ const SanctionFormModal = ({
       // group, Cat / Sub Cat, SL ref.) ride along; the server fills only blank
       // fields with them, so an import never overwrites something typed.
       let bId = borrowerId;
-      if (!bId) {
+      if (!groupTarget && !bId) {
         const identity = { borrowerName: form.borrowerName.trim() };
         BORROWER_IMPORT_KEYS.forEach((k) => {
-          const v = initial?.[k];
+          // Prefer the live form value for a key this form actually renders
+          // (form[k] is only ever undefined for a BORROWER_IMPORT_KEYS entry
+          // with no field in SANCTION_FIELDS, e.g. promoterName) — so a
+          // reviewer's correction to a rendered field (e.g. CIN) is what
+          // actually gets saved, not the original parsed value it started from.
+          const v = form[k] !== undefined ? form[k] : initial?.[k];
           if (v != null && String(v).trim()) identity[k] = String(v);
         });
         const b = await borrowerApi.resolve(identity);
         bId = b.id;
       }
+
+      // A one-time chance to correct a misread CIN/registered address —
+      // editable only in import mode (see sanctionFields.js
+      // `editableOnImport`). Sent as part of the sanction save itself (not
+      // a separate call beforehand) so the identity correction and the
+      // sanction row commit or fail together in one transaction — see
+      // BorrowerService#saveSanction (2026-09-02 save-flow atomicity fix).
+      // Blank fields are simply omitted; the backend never uses a blank
+      // value to erase what's on file. Meaningless for a Group/Sub-Group-level
+      // sanction — a Group's own CIN/address is managed via its own Edit
+      // action, never through a sanction import.
+      const identityCin = !groupTarget && mode === 'import' ? form.cin.trim() : '';
+      const identityRegisteredAddress = !groupTarget && mode === 'import' ? form.registeredAddress.trim() : '';
 
       // Built from FIELDS rather than a hand-written literal, so a field added
       // to the array is posted without a second edit here. Money fields are
@@ -614,7 +669,7 @@ const SanctionFormModal = ({
         // a second Save after the first (create/import mode) must update
         // that same row, not post id: null again and create a duplicate.
         id: savedSanctionId || initial?.id || null,
-        borrowerId: bId,
+        ...(groupTarget ? {} : { borrowerId: bId }),
         ...FIELDS.filter((f) => f.persisted !== false).reduce((p, f) => ({
           ...p,
           [f.key]: f.kind === 'money' ? withRs(form[f.key]) : form[f.key],
@@ -624,10 +679,14 @@ const SanctionFormModal = ({
         extractionEngine: engine || initial?.extractionEngine || null,
       };
 
-      const saved = await borrowerApi.saveSanction(
-        payload,
-        mode === 'import' ? initial : null,
-      );
+      const saved = groupTarget
+        ? await borrowerApi.saveGroupSanction(groupTarget.groupId, payload, mode === 'import' ? initial : null)
+        : await borrowerApi.saveSanction(
+            payload,
+            mode === 'import' ? initial : null,
+            identityCin,
+            identityRegisteredAddress,
+          );
 
       // Store the letter against the row we just created. Matched by id, not
       // refNo — the backend cleans/normalizes refNo on the way in
@@ -639,9 +698,13 @@ const SanctionFormModal = ({
       // edit's starting id) is unambiguous; only a session's first-ever save
       // of a brand-new sanction has no id yet, and that new row is
       // guaranteed to have the highest id among this borrower's sanctions.
+      // A group-level save returns the saved sanction wrapper directly
+      // (there's no borrower to nest a `.sanctions` list under).
       const knownId = savedSanctionId || initial?.id;
       let target = null;
-      if (saved?.sanctions?.length) {
+      if (groupTarget) {
+        target = saved;
+      } else if (saved?.sanctions?.length) {
         target = knownId
           ? saved.sanctions.find((s) => String(s.id) === String(knownId))
           : saved.sanctions.reduce((max, s) => (Number(s.id) > Number(max.id) ? s : max));
@@ -678,12 +741,27 @@ const SanctionFormModal = ({
     }
   };
 
+  // Backing out (backdrop click, the X button, or Cancel) without saving —
+  // as opposed to handleSave's own onClose above, which only runs once a
+  // sanction has actually been written. If this borrower was created just
+  // for this import (see isNewBorrower's own comment), it must not survive
+  // a cancel with zero sanctions attached; removal is best-effort and never
+  // blocks the modal from closing.
+  const handleCancel = () => {
+    if (isNewBorrower && borrowerId) {
+      borrowerApi.remove(borrowerId).catch(() => {});
+    } else if (isNewGroup && groupTarget?.groupId) {
+      borrowerApi.deleteGroup(groupTarget.groupId).catch(() => {});
+    }
+    onClose?.();
+  };
+
   const title = mode === 'import'
     ? 'Review what was read'
     : mode === 'edit' ? 'Edit sanction' : 'Add sanction';
 
   return (
-    <div className="br-modal-backdrop" onMouseDown={onClose}>
+    <div className="br-modal-backdrop" onMouseDown={handleCancel}>
       {reading && <CrmPreloader text="Reading sanction letter…" />}
       {/* Wide in every mode now: thirty-odd fields in a single narrow column
           is unusable, whether they arrived from a letter or by hand. */}
@@ -730,9 +808,15 @@ const SanctionFormModal = ({
                   </span>
                 </p>
               )}
+              {groupTarget && (
+                <p className="br-modal-sub">
+                  Associated with: <strong>{groupTarget.groupName}</strong>
+                  {' — '}{groupTarget.type === 'SUB_GROUP' ? 'Sub Group' : 'Parent Group'}
+                </p>
+              )}
             </div>
           </div>
-          <button type="button" className="br-icon-btn" onClick={onClose} aria-label="Close">
+          <button type="button" className="br-icon-btn" onClick={handleCancel} aria-label="Close">
             <X size={18} aria-hidden="true" />
           </button>
         </div>
@@ -799,11 +883,26 @@ const SanctionFormModal = ({
                 <div className="br-form-grid">
                   {fields
                     .filter((f) => !f.formHidden)
+                    // A Group/Sub-Group-level sanction has no company: the
+                    // Borrower field is replaced by the "Associated With"
+                    // line in the header, and CIN/Registered Address are a
+                    // company's own identity fields, not this Group's own
+                    // (managed separately, on the Group's own Edit action).
+                    .filter((f) => !(groupTarget && (f.key === 'borrowerName' || f.key === 'cin' || f.key === 'registeredAddress')))
                     // Only meaningful once Repayment Frequency is actually
                     // Other — showing it unconditionally would invite a
                     // custom interval nobody asked for.
                     .filter((f) => f.key !== 'repaymentFrequencyOtherMonths' || form.repaymentFrequency === 'OTHER')
-                    .map((f) => (
+                    .map((f) => {
+                    // A field marked editableOnImport is a plain typeable box
+                    // only while mode === 'import' — the one moment a
+                    // borrower-identity value just extracted from this same
+                    // letter can still turn out wrong and be worth fixing
+                    // before Save (see handleSave's updateImportedIdentity
+                    // call). Locked everywhere else, same as any other
+                    // displayOnly field.
+                    const locked = f.displayOnly && !(f.editableOnImport && mode === 'import');
+                    return (
                     <label
                       key={f.key}
                       className={`br-field ${f.wide ? 'br-field-wide' : ''}`}
@@ -819,7 +918,22 @@ const SanctionFormModal = ({
                           <span className="br-chip br-chip-warn">check</span>
                         )}
                       </span>
-                      {f.readOnly ? (
+                      {locked ? (
+                        <>
+                          <input
+                            type="text"
+                            value={form[f.key] || ''}
+                            readOnly
+                            placeholder={f.placeholder}
+                            className={[
+                              'br-input',
+                              'br-input-readonly',
+                              f.mono ? 'br-input-mono' : '',
+                            ].filter(Boolean).join(' ')}
+                          />
+                          {f.hint && <span className="br-field-hint">{f.hint}</span>}
+                        </>
+                      ) : f.readOnly ? (
                         <>
                           <input
                             type="text"
@@ -879,6 +993,7 @@ const SanctionFormModal = ({
                           value={form[f.key]}
                           onChange={set(f.key)}
                           placeholder={f.placeholder}
+                          maxLength={f.maxLength}
                           className={[
                             'br-input',
                             lowConfidence.has(f.key) ? 'br-input-warn' : '',
@@ -886,7 +1001,7 @@ const SanctionFormModal = ({
                           ].filter(Boolean).join(' ')}
                         />
                       )}
-                      {!f.readOnly && f.hint && (
+                      {!f.readOnly && !locked && f.hint && (
                         <span className="br-field-hint">
                           {f.key === 'israAmount' && derived.israIsContractual === false
                             ? 'This is the interest component of the DSRA calculation. It does not indicate '
@@ -901,7 +1016,8 @@ const SanctionFormModal = ({
                         </span>
                       )}
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </fieldset>
             ))}
@@ -1008,7 +1124,7 @@ const SanctionFormModal = ({
         {error && <div className="br-banner br-banner-danger">{error}</div>}
 
         <div className="br-modal-foot">
-          <button type="button" className="br-btn" onClick={onClose} disabled={saving}>
+          <button type="button" className="br-btn" onClick={handleCancel} disabled={saving}>
             Cancel
           </button>
           <button

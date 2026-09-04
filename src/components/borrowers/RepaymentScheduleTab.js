@@ -497,10 +497,9 @@ const RepaymentScheduleTab = ({
             <table className="br-table-list br-schedule-table">
               <thead>
                 <tr>
-                  <th className="br-center">No.</th>
+                  <th className="br-center">Period</th>
                   <th className="br-center">Repayment Date</th>
                   <th className="br-right">No. of Days</th>
-                  <th className="br-center">Period</th>
                   <th className="br-right">Loan Opening</th>
                   <th className="br-right">Repayment %</th>
                   <th className="br-right">Disbursement</th>
@@ -521,10 +520,9 @@ const RepaymentScheduleTab = ({
                   const isSplitHalf = r.periodType === 'split-moratorium' || r.periodType === 'split-repayment';
                   return (
                     <tr key={r.no} className={rowClass}>
-                      <td className={`br-center${isSplitHalf ? ' br-schedule-split-edge' : ''}`}>{r.no}</td>
+                      <td className={`br-center${isSplitHalf ? ' br-schedule-split-edge' : ''}`}>{r.periodLabel}</td>
                       <td className="br-center">{formatDate(r.displayEnd)}</td>
                       <td className="br-right">{days}</td>
-                      <td className="br-center">{r.periodLabel}</td>
                       <td className="br-right">{formatCrore(r.opening)}</td>
                       <td className="br-right">
                         {r.amortIndex === null ? '—'
@@ -567,7 +565,7 @@ const RepaymentScheduleTab = ({
               {amortCount > 0 && (
                 <tfoot>
                   <tr className="br-schedule-total-row">
-                    <td colSpan={5}>Total Repayment %</td>
+                    <td colSpan={4}>Total Repayment %</td>
                     <td className={`br-right ${pctValid ? 'br-tone-ok' : 'br-tone-warn'}`}>
                       {/* A correctly-filled schedule always shows a plain
                           100% — totalPct is exactly 100 by construction
