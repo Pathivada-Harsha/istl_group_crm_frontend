@@ -282,6 +282,17 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><GroupDetail /></ProtectedRoute>
           } />
 
+          {/* Group/Sub Group's own ENTITY detail view — reached only via the
+              "eye" (view) action on a Group/Sub Group row; the route above
+              (no /detail suffix) stays the hierarchy MANAGEMENT page,
+              reached by clicking the group's name. Points at the SAME
+              BorrowerDetail component the company route above uses, not a
+              separate page — see its own `groupId` branch: one detail-view
+              design for every entity type, only the data differs. */}
+          <Route path="/lender/borrowers/group/:groupId/detail" element={
+            <ProtectedRoute><BorrowerDetail /></ProtectedRoute>
+          } />
+
           <Route path="/lender/borrowers/:id/sanctions/:sanctionId" element={
             <ProtectedRoute><SanctionDetail /></ProtectedRoute>
           } />

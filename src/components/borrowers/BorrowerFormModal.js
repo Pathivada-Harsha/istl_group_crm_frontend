@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Check } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
-import { BORROWER_FIELDS as FIELDS, borrowerFieldGroups } from './borrowerFields';
+import { BORROWER_FIELDS as FIELDS, borrowerFieldGroups, CIN_REGEX } from './borrowerFields';
 import { loadGoogleMaps } from '../../utils/googleMaps';
 import HierarchyPicker, { EMPTY_HIERARCHY, hierarchyFromBorrower, resolveHierarchyGroupId } from './HierarchyPicker';
 import '../../pages-css/BorrowerRegistry.css';
@@ -14,9 +14,15 @@ import '../../pages-css/BorrowerRegistry.css';
 const EMPTY = FIELDS.reduce((a, f) => ({ ...a, [f.key]: '' }), {});
 const GROUPS = borrowerFieldGroups();
 
-const BorrowerFormModal = ({ borrower = null, onClose, onSaved }) => {
+// initialHierarchy: pre-selects the Parent/Sub Group when this modal is
+// opened "from" that group's own detail page (its "Add Company" action) —
+// only meaningful for a brand-new borrower (`borrower` is null); editing an
+// existing one always loads its actual saved hierarchy instead, below.
+const BorrowerFormModal = ({ borrower = null, initialHierarchy = null, onClose, onSaved }) => {
   const [form, setForm] = useState({ ...EMPTY });
-  const [hierarchy, setHierarchy] = useState({ ...EMPTY_HIERARCHY });
+  const [hierarchy, setHierarchy] = useState(
+    () => (initialHierarchy ? { ...EMPTY_HIERARCHY, ...initialHierarchy } : { ...EMPTY_HIERARCHY }),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   // idle | loading | done | error — feedback next to the Pincode field only.
@@ -79,6 +85,13 @@ const BorrowerFormModal = ({ borrower = null, onClose, onSaved }) => {
     setError('');
     if (!form.borrowerName.trim()) {
       setError('Borrower name is required');
+      return;
+    }
+    // toCin (the field's normalize) already strips anything that isn't A-Z/0-9
+    // and caps length at 21 as the user types, so this only ever catches a
+    // genuinely wrong structure — too short, or the wrong shape entirely.
+    if (form.cin && !CIN_REGEX.test(form.cin)) {
+      setError('Enter a valid 21-character CIN, e.g. U40106MH2026PTC223978');
       return;
     }
     if (form.pincode && form.pincode.length !== 6) {
