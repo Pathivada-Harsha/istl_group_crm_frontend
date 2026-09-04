@@ -356,6 +356,13 @@
   .brx-head-actions { width: 100%; }
   .brx-head-actions .brx-btn { flex: 1 1 auto; }
   .brx-filters { flex-direction: column; align-items: stretch; }
+  /* .brx-filters just became a column flex container, so the desktop
+     `flex: 1 1 260px` on .brx-search would now apply that 260px as a
+     HEIGHT basis instead of a width one — stretching the search box to
+     ~260px tall with the 42px input pinned to its top, which drags the
+     icon (centred at 50% of the oversized box) visibly below the input.
+     Reset to the box's natural content height on every stacked layout. */
+  .brx-search { flex: none; width: 100%; min-width: 0; }
   .brx-select { max-width: none; width: 100%; }
   .brx-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -371,6 +378,13 @@
      scroll (already there) takes over rather than squeezing every cell
      past the point of being readable. */
   .brx-tree-table th, .brx-tree-table td { padding: 8px 10px; }
+}
+
+@media (max-width: 400px) {
+  /* Below ~400px two stat cards per row start crushing the value/label
+     text (e.g. "₹3076.22 Cr"); one per row keeps every figure on its own
+     line instead of wrapping mid-number. */
+  .brx-stats { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

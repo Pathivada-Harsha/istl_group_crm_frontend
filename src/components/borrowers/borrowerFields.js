@@ -12,6 +12,19 @@
 // income-tax department never issues a lower-case one, and a mixed-case
 // value on file just makes later exact-match lookups miss.
 const toPan = (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+// CIN: same treatment as PAN — MCA never issues a lower-case one, so typed
+// case is normalized away rather than preserved. 21 characters, letters and
+// digits only; exported so every other CIN input in the app (the sanction
+// screens' import-mode correction box, in particular) normalizes identically
+// rather than growing its own copy of this rule.
+export const toCin = (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 21);
+// MCA's CIN shape: status digit (U/L), 5-digit industry code, 2-letter state
+// code, 4-digit year, 3-letter ownership-type code, 6-digit registration
+// number — always exactly 21 characters. Checked only after toCin's own
+// normalization, so this only ever needs to catch a genuinely wrong
+// structure (wrong length, wrong digit/letter positions), never a case or
+// stray-character issue toCin already handles.
+export const CIN_REGEX = /^[UL][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/;
 // Digits only — a pincode or phone number with a stray space or dash typed
 // into it silently breaks any lookup keyed on the raw string.
 const toDigits = (max) => (v) => v.replace(/\D/g, '').slice(0, max);
@@ -25,7 +38,8 @@ export const BORROWER_FIELDS = [
   // another name, so it lives on the sanction, not here.
   { key: 'borrowerName', group: 'Identity', label: 'Borrower name', required: true,
     placeholder: 'Company name in full' },
-  { key: 'cin', group: 'Identity', label: 'CIN', mono: true, placeholder: 'U40106RJ2021PTC074829' },
+  { key: 'cin', group: 'Identity', label: 'CIN', mono: true, placeholder: 'U40106RJ2021PTC074829',
+    normalize: toCin, maxLength: 21 },
   { key: 'pan', group: 'Identity', label: 'PAN', mono: true, placeholder: 'AAKCR8842J',
     normalize: toPan, maxLength: 10 },
 
@@ -74,7 +88,7 @@ export const BORROWER_FIELDS = [
  * someone typed.
  */
 export const BORROWER_IMPORT_KEYS = [
-  'cin', 'promoterName', 'sponsorName', 'guarantorName',
+  'cin', 'registeredAddress', 'promoterName', 'sponsorName', 'guarantorName',
   'groupName', 'borrowerCategory', 'borrowerSubCategory', 'state',
 ];
 

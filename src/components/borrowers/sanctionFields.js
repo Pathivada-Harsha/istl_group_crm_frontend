@@ -23,6 +23,20 @@
 //   persisted   false excludes a field from the save payload entirely — for
 //               a readOnly field with no entity column of its own (e.g. the
 //               calculated DSRA/ISRA amounts). Defaults to true.
+//   displayOnly the form shows this field's own loaded value but never as a
+//               typeable box — unlike readOnly, its value comes straight from
+//               form/initial, not a deriveSanction() calculation. For a
+//               borrower-level value (e.g. CIN) shown here for context that
+//               this form doesn't own and has no path to persist.
+//   editableOnImport combined with displayOnly: true, the field is a typeable
+//               box only in mode="import" (SanctionFormModal checks this
+//               against its own `mode` prop) — a one-time chance to correct
+//               a misread borrower-identity value before/as it's first
+//               written — sent as part of the same saveSanction() call, not
+//               a separate one, so the correction and the sanction commit
+//               or fail together. Stays locked in create/edit mode, where
+//               correcting an already-established borrower's identity
+//               belongs on its own Identity screen, not here.
 //   options     for kind: 'select' — [{ value, label }] shown in the dropdown
 //   formLabel   overrides `label` on the sanction form only — the detail
 //               page and registry table keep showing `label`
@@ -32,8 +46,13 @@
 //   textarea    render as a multi-line box on the sanction form instead of
 //               a single-line input — for a value long enough to need
 //               wrapping (a full clause, not a phrase)
+//   normalize   (v) => v — reshapes every keystroke before it lands in form
+//               state, same convention as borrowerFields.js (e.g. toCin).
+//   maxLength   HTML maxlength on the typeable box, alongside normalize —
+//               belt-and-braces so a value can't grow past it either way.
 
 import { REPAYMENT_FREQUENCIES } from './sanctionDerive';
+import { toCin } from './borrowerFields';
 
 export const SANCTION_FIELDS = [
   // ── Number ──
@@ -47,12 +66,45 @@ export const SANCTION_FIELDS = [
     kind: 'text', placeholder: 'Company name in full', width: 220 },
   { key: 'lenderName', group: 'Borrower Details', label: 'Lender',
     kind: 'text', placeholder: 'Vindhya Infra Finance Ltd.', width: 180 },
+  // Borrower-owned, not a sanction column — mirrored in from BorrowerEntity.cin
+  // (via BorrowerService.toWrapper for edit mode, or straight from the parsed
+  // letter for import mode). persisted: false keeps it out of the *sanction*
+  // fields in the save payload — a correction rides along as the separate
+  // identityCin key on the same saveSanction() call instead (see handleSave),
+  // applied to the borrower in the same backend transaction as the sanction
+  // itself. editableOnImport: only this one review, right after a fresh
+  // extraction, gets a typeable box; an established borrower's CIN is
+  // corrected on its own Identity details, not through a sanction.
+  { key: 'cin', group: 'Borrower Details', label: 'CIN',
+    kind: 'text', mono: true, placeholder: 'Not on file', width: 180,
+    persisted: false, displayOnly: true, editableOnImport: true,
+    normalize: toCin, maxLength: 21,
+    hint: "The borrower's own CIN, from its company record." },
   { key: 'projectName', group: 'Borrower Details', label: 'Project',
     kind: 'text', placeholder: '50 MWac ground-mounted solar', width: 200 },
   { key: 'category', group: 'Borrower Details', label: 'Category',
     kind: 'text', placeholder: 'Utility-Scale Solar', width: 150 },
-  { key: 'location', group: 'Borrower Details', label: 'Location',
-    kind: 'text', placeholder: 'Jodhpur, Rajasthan', width: 160 },
+  // Borrower-owned, not a sanction column — same treatment as `cin` above.
+  // Deliberately NOT bound to borrower_sanctions.location: that's a
+  // separate, genuinely independent per-sanction/project value (it can
+  // legitimately differ from the borrower's own registered address) and is
+  // left untouched by this — nothing here reads it or writes to it.
+  { key: 'registeredAddress', group: 'Borrower Details', label: 'Registered Address',
+    kind: 'text', placeholder: 'Not provided', width: 160,
+    persisted: false, displayOnly: true, editableOnImport: true,
+    hint: "The borrower's own registered address, from its company record." },
+  // No longer shown in the form — it was confusingly displayed as "Location"
+  // under Borrower Details, but is genuinely a separate, independent
+  // per-sanction/project value (BorrowerSanctionEntity.location) that can
+  // legitimately differ from the borrower's own Registered Address above,
+  // and has no other consumer anywhere in the app today. formHidden only
+  // drops it from the rendered grid — it stays in FIELDS/the save payload
+  // so an existing sanction's stored value keeps round-tripping unchanged
+  // (applySanction() sets it unconditionally on every save; dropping this
+  // key entirely would silently null out whatever was already saved there
+  // the next time someone edits and re-saves that sanction).
+  { key: 'location', group: 'Borrower Details', label: 'Project Location',
+    kind: 'text', width: 160, formHidden: true },
 
   // ── Project Cost & Means of Finance ──
   // Money is quoted in crore on this sheet, so the inputs say so and a bare

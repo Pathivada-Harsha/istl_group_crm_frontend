@@ -502,7 +502,15 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
 /* The review modal carries a form, a live derived panel and a document preview
    side by side, so it needs real width — it was cramped at 1080. */
 .br-modal-wide { max-width: 1320px; }
-.br-modal-viewer { max-width: 1100px; height: 92vh; }
+/* Matches the Purchase Orders document preview's own presentation — a
+   near-fullscreen, viewport-width panel rather than a narrower dialog, since
+   this modal's whole purpose is reading the actual document, not a form. */
+.br-modal-viewer { width: 96vw; max-width: 1300px; height: 95vh; }
+/* Darker backdrop for the document viewer specifically (matching Purchase
+   Orders' own preview overlay) — scoped to this one modifier class so every
+   other .br-modal-backdrop (forms, confirmations) keeps its existing, lighter
+   overlay. */
+.br-modal-backdrop-viewer { background: rgba(0, 0, 0, .72); }
 
 .br-modal-head {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -514,7 +522,7 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
   color: var(--ct-111827, #111827);
 }
 .br-modal-title-row { display: flex; align-items: center; gap: 6px; }
-.br-modal-sub { margin: 4px 0 0; font-size: 12px; color: var(--ct-6b7280, #6b7280); }
+.br-modal-sub { margin: 4px 0 0; font-size: 12px; color: var(--ct-6b7280, #6b7280); overflow-wrap: anywhere; }
 
 /* Import mode's "check every value" reminder — click-to-reveal off this
    icon rather than a permanent line, so it doesn't compete with the title
@@ -1240,8 +1248,43 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
 }
 
 .br-modal-confirm { max-width: 440px; }
-.br-confirm-text { margin: 0 0 10px; font-size: 13px; line-height: 1.6; }
-.br-confirm-note { margin: 0; font-size: 12px; line-height: 1.55; }
+/* .br-modal-body only ever sets overflow-y: auto — but per the CSS overflow
+   spec, when one axis is anything other than 'visible' the other axis
+   computes to 'auto' too, not 'visible'. That gave every confirm dialog
+   (this one included) an implicit horizontal scrollbar the instant its
+   content was even a pixel wider than the (narrow, 440px) box — exactly the
+   bug here. Scoped to .br-modal-confirm specifically so the wider
+   side-by-side modals (the sanction review form, the compare view) keep
+   whatever horizontal behavior they already had. */
+.br-modal-confirm .br-modal-body { overflow-x: hidden; }
+.br-confirm-text {
+  margin: 0 0 10px; font-size: 13px; line-height: 1.6;
+  overflow-wrap: anywhere; word-break: break-word;
+}
+.br-confirm-note { margin: 0; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+
+/* The sanction-status confirmation dialog's identifying details — reference
+   number, current/new status — sit in the same 440px-capped confirm modal
+   above, so the ref number (which can run long) must wrap rather than force
+   width the same way .br-confirm-text does. */
+.br-confirm-detail {
+  margin: 0 0 12px; padding: 8px 10px; border-radius: 6px;
+  background: var(--c-f8fafc, #f8fafc); border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.br-confirm-detail-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em;
+  color: var(--ct-6b7280, #6b7280);
+}
+.br-confirm-detail-value {
+  font-size: 13px; color: var(--ct-111827, #111827);
+  overflow-wrap: anywhere; word-break: break-word;
+}
+.br-confirm-status-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.br-confirm-status-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 13px; color: var(--ct-374151, #374151);
+}
 
 /* ── compare with the attached letter ───────────────────────────────────── */
 
@@ -1558,6 +1601,14 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
   font-size: 13px; font-weight: 600; color: var(--ct-374151, #374151);
   margin: 22px 0 10px;
 }
+/* Sub-headings inside an expanded Sub Group panel — "Direct Sub Group
+   Sanctions" / "Companies" — only shown when both sections are present at
+   once (see GroupDetail.js), so a panel with just one never gets a
+   redundant label above it. */
+.brx-subgroup-section-heading {
+  font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--ct-6b7280, #6b7280); margin: 10px 14px 6px;
+}
 .brx-subgroup-panel { margin-bottom: 14px; }
 .brx-subgroup-panel:last-child { margin-bottom: 0; }
 .brx-subgroup-header {
@@ -1654,6 +1705,39 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
 .brx-status-active { background: var(--c-dcfce7, #dcfce7); color: var(--ct-15803d, #15803d); }
 .brx-status-muted { background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-6b7280, #6b7280); }
 
+/* The one editable Active/Inactive control — a sanction letter's own status.
+   Company/Group status pills above stay plain .brx-status-pill (read-only,
+   derived); only this one opens a menu.
+   The menu/backdrop are portaled straight to <body> (see
+   SanctionStatusBadge.js) rather than positioned relative to this wrapper —
+   every table this badge sits in scrolls its own body (.brx-tree-scroll's
+   overflow-x/y: auto), which clips a plain `position: absolute` menu the
+   moment it would extend past that scrolling ancestor's edge. Portaling
+   escapes that clipping entirely without touching any table/card CSS; the
+   menu's own on-screen position (left/top/bottom) is computed in JS from the
+   button's getBoundingClientRect() and set inline, so only z-index/appearance
+   live here. */
+.brx-status-dropdown { position: relative; display: inline-block; }
+.brx-status-pill-btn {
+  border: none; cursor: pointer; gap: 4px; font-family: inherit;
+}
+.brx-status-dropdown-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+}
+.brx-status-dropdown-menu {
+  z-index: 1001;
+  background: var(--c-fff, #fff); border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 4px; display: flex; flex-direction: column;
+}
+.brx-status-dropdown-item {
+  border: none; background: none; text-align: left; padding: 6px 10px;
+  font-size: 12px; border-radius: 6px; cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; gap: 6px;
+}
+.brx-status-dropdown-check { flex: 0 0 12px; display: inline-flex; color: var(--ct-15803d, #15803d); }
+.brx-status-dropdown-item:hover { background: var(--c-f1f5f9, #f1f5f9); }
+
 /* Company-match confirmation modal (import flow). Fixed rather than the
    plain .br-modal-body max-height cap, so the modal is the same size whether
    there's one candidate or ten, with a scrollbar taking over past that —
@@ -1663,7 +1747,15 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
    opts back into a visible one, same thin styling .br-scroll-body already
    uses elsewhere, just for this one scroll container. */
 .br-match-body {
-  height: 420px;
+  /* A fixed height here used to make sense (the old, longer content — a
+     full candidate list plus a Sanction Allocation section — regularly
+     filled or exceeded it); now that the compact Match Status + a handful
+     of candidates rarely do, max-height lets the modal shrink to fit its
+     actual content instead of always reserving this much room, while still
+     capping it (with the scrollbar below taking over) if a long candidate
+     list ever needs more space than that. */
+  max-height: 420px;
+  align-content: start;
   scrollbar-width: thin;
   scrollbar-color: var(--c-cbd5e1, #cbd5e1) transparent;
 }
@@ -1691,6 +1783,16 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
 .br-match-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .br-match-name { font-weight: 600; color: var(--ct-111827, #111827); }
 .br-match-sub { font-size: 12px; color: var(--ct-6b7280, #6b7280); }
+
+/* Explicit CIN/Name match-result breakdown — the "Match Result" fieldset
+   inside CompanyMatchModal. */
+.br-match-status-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  font-size: 13px; margin-bottom: 6px;
+}
+.br-match-status-yes { font-weight: 600; color: var(--ct-15803d, #15803d); }
+.br-match-status-no { font-weight: 600; color: var(--ct-6b7280, #6b7280); }
+.br-match-status-overall { margin: 6px 0 4px; font-size: 13px; }
 
 /* Respect a user's reduced-motion preference for the viewer spinner. */
 @media (prefers-reduced-motion: reduce) {
