@@ -5,7 +5,6 @@ import '../components_css/Navbar.css';
 import logo from "../images/logo.png";
 import ThemeToggle from './ThemeToggle';
 import { NotificationBell } from './Notifications/NotificationPage';
-import { CRMBotNavButton } from './CRMAssistantBot';
 
 function Navbar({ onMenuClick }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -103,8 +102,7 @@ function Navbar({ onMenuClick }) {
         <div className="navbar-right">
 
 
-          {/* CRM Assistant — opens the right-side drawer (SUPERADMIN/ADMIN only) */}
-          <CRMBotNavButton />
+          {/* CRM Assistant — hidden for all users */}
 
           {/* Theme toggle (light / dark) */}
           <ThemeToggle />

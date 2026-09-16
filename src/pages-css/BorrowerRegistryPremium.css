@@ -267,7 +267,20 @@
   font-size: 22px; font-weight: 700; letter-spacing: -.01em;
   color: var(--ct-111827, #111827); font-variant-numeric: tabular-nums;
 }
-.brx-stat-sub { font-size: 11.5px; color: var(--ct-9ca3af, #9ca3af); }
+/* Clamped to 2 lines rather than left to grow the card taller than its
+   neighbors (e.g. ROI's full rate-reset text) — Card (OverviewSummaryCards.js)
+   detects the actual clamp (scrollHeight > clientHeight) and, only then,
+   shows the (i) icon beside it that reveals the untruncated text. */
+.brx-stat-sub-row { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.brx-stat-sub {
+  font-size: 11.5px; color: var(--ct-6b7280, #6b7280); min-width: 0;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.brx-stat-sub-row .br-info-btn { flex-shrink: 0; margin-top: 1px; }
+/* Portal-rendered (see Card) — .br-info-popover's own `left`/`top` are
+   overridden inline per-instance, but it still needs a sane max width since
+   it's no longer sized relative to a nearby positioned ancestor. */
+.br-info-popover.br-info-popover-portal { width: 240px; z-index: 2000; }
 
 /* ── registry table toolbar: type tabs + status filter + sort ─────────────
    Sits as the top strip of .brx-tree-card, above the table itself — the

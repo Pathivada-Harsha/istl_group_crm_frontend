@@ -951,23 +951,23 @@ export const deriveRepaymentSchedule = (form) => {
 };
 
 /**
- * One deriveRepaymentSchedule() result per Sanction Term on `sanctionLike`
+ * One deriveRepaymentSchedule() result per Sanction Limit on `sanctionLike`
  * (a live SanctionFormModal `form` draft, or an already-saved sanction
- * wrapper straight from the API — both have the same `.terms[]` shape),
- * each fed that term's own Actual Disb. Date, Term Limit, and repayment-
+ * wrapper straight from the API — both have the same `.limits[]` shape),
+ * each fed that limit's own Actual Disb. Date, Limit Amount, and repayment-
  * percentage profile instead of the whole sanction's. Shared by
  * SanctionFormModal's own Repayment Schedule tab and the read-only
  * Repayment Schedule section on the Borrower/Group Detail pages
  * (SanctionOverviewPanel.js) — one calculation, not two copies that could
  * drift apart.
  */
-export const buildTermScheduleViews = (sanctionLike) => (sanctionLike?.terms || []).map((term) => deriveRepaymentSchedule({
+export const buildLimitScheduleViews = (sanctionLike) => (sanctionLike?.limits || []).map((l) => deriveRepaymentSchedule({
   ...sanctionLike,
-  disbursementDate: term.actualDisbursementDate,
-  debtAmount: term.termLimit,
+  disbursementDate: l.actualDisbursementDate,
+  debtAmount: l.facilityLimitAmount,
   repaymentStartDate: '',
   repaymentEndDate: '',
-  repaymentProfileJson: term.repaymentProfileJson || '',
+  repaymentProfileJson: l.repaymentProfileJson || '',
 }));
 
 export default deriveSanction;

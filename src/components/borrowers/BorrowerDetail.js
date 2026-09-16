@@ -23,7 +23,7 @@ import React, {
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, FileText, Pencil, Plus,
-  Building2, Users, Paperclip, Upload, Trash2, AlertTriangle, CalendarClock,
+  Building2, Users, Paperclip, Upload, Trash2, AlertTriangle, CalendarClock, Wallet,
   Eye, Download, Check, ChevronRight,
 } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
@@ -35,10 +35,10 @@ import DocumentViewerModal from './DocumentViewerModal';
 import SanctionCompareModal from './SanctionCompareModal';
 import SanctionStatusBadge from './SanctionStatusBadge';
 import {
-  RepaymentScheduleSection, statusLabel,
+  RepaymentScheduleSection, DisbursementScheduleSection, statusLabel,
 } from './SanctionOverviewPanel';
 import SanctionDetailView from './SanctionDetailView';
-import { deriveRepaymentSchedule, buildTermScheduleViews } from './sanctionDerive';
+import { deriveRepaymentSchedule, buildLimitScheduleViews } from './sanctionDerive';
 // The Group/Sub Group entity-detail branch (see the `groupId` route param
 // below) reuses these exact presentational pieces — no separate
 // "GroupEntityDetail" page/design; this is the SAME detail-view component
@@ -54,6 +54,7 @@ const TABS = [
   { key: 'overview', label: 'Overview', icon: Building2 },
   { key: 'letters', label: 'Sanction Letters', icon: FileText },
   { key: 'schedule', label: 'Repayment Schedule', icon: CalendarClock },
+  { key: 'disbursement', label: 'Disbursement Schedule', icon: Wallet },
 ];
 const TAB_KEYS = new Set(TABS.map((t) => t.key));
 
@@ -653,7 +654,7 @@ const BorrowerDetail = () => {
       ? groupSanctions.find((s) => String(s.id) === String(sanctionIdParam))
       : null) || groupSanctions[0] || null;
     const groupScheduleView = activeGroupSanction ? deriveRepaymentSchedule(activeGroupSanction) : null;
-    const groupTermScheduleViews = activeGroupSanction ? buildTermScheduleViews(activeGroupSanction) : [];
+    const groupLimitScheduleViews = activeGroupSanction ? buildLimitScheduleViews(activeGroupSanction) : [];
     // Never persisted, never a real borrower row — SanctionDetailView and
     // RepaymentScheduleSection only ever read `borrower?.borrowerName` off
     // this (as a display-name fallback / export filename), so the Group/Sub
@@ -726,7 +727,8 @@ const BorrowerDetail = () => {
               {t.label}
             </button>
           ))}
-          {groupHasMultipleSanctions && (groupActiveTab === 'overview' || groupActiveTab === 'schedule') && (
+          {groupHasMultipleSanctions
+            && ['overview', 'schedule', 'disbursement'].includes(groupActiveTab) && (
             <div className="br-tabstrip-switch">
               <SanctionSwitcher
                 label="Viewing sanction:"
@@ -821,8 +823,12 @@ const BorrowerDetail = () => {
             borrower={groupAsBorrower}
             sanction={activeGroupSanction}
             scheduleView={groupScheduleView}
-            termScheduleViews={groupTermScheduleViews}
+            limitScheduleViews={groupLimitScheduleViews}
           />
+        )}
+
+        {groupActiveTab === 'disbursement' && (
+          <DisbursementScheduleSection sanction={activeGroupSanction} />
         )}
 
         {compare && (
@@ -922,7 +928,7 @@ const BorrowerDetail = () => {
   // in-progress form, since a saved sanction already carries the identical
   // field names (sanctionFields.js's key IS the DTO property).
   const pageScheduleView = active ? deriveRepaymentSchedule(active) : null;
-  const pageTermScheduleViews = active ? buildTermScheduleViews(active) : [];
+  const pageLimitScheduleViews = active ? buildLimitScheduleViews(active) : [];
 
   return (
     <div className="br-page">
@@ -1035,7 +1041,8 @@ const BorrowerDetail = () => {
             Schedule's own content — a single sanction (or none) needs no
             picker at all, and it never shows on Sanction Letters, which is
             itself the place to pick a row. */}
-        {hasMultipleSanctions && (activeTab === 'overview' || activeTab === 'schedule') && (
+        {hasMultipleSanctions
+          && ['overview', 'schedule', 'disbursement'].includes(activeTab) && (
           <div className="br-tabstrip-switch">
             <SanctionSwitcher
               label="Viewing sanction:"
@@ -1138,8 +1145,12 @@ const BorrowerDetail = () => {
       {activeTab === 'schedule' && (
         <RepaymentScheduleSection
           borrower={borrower} sanction={active} scheduleView={pageScheduleView}
-          termScheduleViews={pageTermScheduleViews}
+          limitScheduleViews={pageLimitScheduleViews}
         />
+      )}
+
+      {activeTab === 'disbursement' && (
+        <DisbursementScheduleSection sanction={active} />
       )}
 
       {/* Not tied to any one tab — each Sanction Letters row's View/Download/

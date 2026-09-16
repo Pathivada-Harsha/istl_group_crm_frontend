@@ -124,10 +124,10 @@
    off rather than intentionally scrollable. A lower, table-specific floor
    plus tighter cell padding lets it sit inside one card column unscrolled at
    desktop widths (1440px+), while overflow-x:auto stays as the fallback on
-   anything narrower. (.br-table-list.sr-terms-table-readonly — both classes,
+   anything narrower. (.br-table-list.sr-limits-table-readonly — both classes,
    so this wins over the shared 720px rule regardless of file load order.) */
-.br-table-list.sr-terms-table-readonly { min-width: 600px; }
-.sr-terms-table-readonly th, .sr-terms-table-readonly td { white-space: nowrap; padding: 10px 10px; }
+.br-table-list.sr-limits-table-readonly { min-width: 600px; }
+.sr-limits-table-readonly th, .sr-limits-table-readonly td { white-space: nowrap; padding: 10px 10px; }
 
 /* ── Overview tab dashboard cards (SanctionDetailView.js) ─────────────────
    Additive to .brx-stat/.br-card/.br-dl above — reuses those, doesn't

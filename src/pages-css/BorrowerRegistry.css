@@ -458,76 +458,146 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
 .br-banner-danger { background: var(--c-fee2e2, #fee2e2); color: var(--ct-b91c1c, #b91c1c); }
 .br-banner-info { background: var(--c-eff6ff, #eff6ff); color: var(--ct-1e40af, #1e40af); margin: 12px 0 0; }
 
-/* A brief, self-dismissing (3s) validation message centered on the whole
-   screen — e.g. Sanction Terms' Save-time checks — rather than a
-   persistent inline banner the reviewer would see by default while still
-   filling the form in. Portalled to document.body, so it sits above every
-   modal (including this one) regardless of scroll position. */
+/* A validation message centered on the whole screen — e.g. Sanction Terms'
+   Save-time checks — rather than a persistent inline banner the reviewer
+   would see by default while still filling the form in. Portalled to
+   document.body, so it sits above every modal (including this one)
+   regardless of scroll position. Stays up until its own × is clicked —
+   long enough to read and act on, not a fixed timer. */
 .br-center-toast {
   position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  z-index: 3000; max-width: 380px; padding: 14px 20px; border-radius: 8px;
+  z-index: 3000; max-width: 380px; padding: 14px 16px 14px 20px; border-radius: 8px;
   background: var(--ct-991b1b, #991b1b); color: var(--c-white, #ffffff);
   font-size: 13px; font-weight: 500; line-height: 1.5; text-align: center;
   box-shadow: 0 16px 40px rgba(0, 0, 0, .28);
   animation: brCenterToastIn .18s ease-out;
+  display: flex; align-items: flex-start; gap: 10px;
 }
+.br-center-toast-close {
+  flex-shrink: 0; border: none; background: none; padding: 2px; margin: -1px -1px 0 0;
+  color: var(--c-white, #ffffff); opacity: .8; cursor: pointer; display: flex;
+}
+.br-center-toast-close:hover { opacity: 1; }
 @keyframes brCenterToastIn {
   from { opacity: 0; transform: translate(-50%, -50%) scale(.94); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* ── Sanction Terms (Product section) ────────────────────────────────────── */
-.br-terms-card {
+/* Same brief, self-dismissing, portalled-to-body toast as .br-center-toast
+   above, just an amber "heads up, this happened" tone instead of that one's
+   red "this is blocking your save" tone — for a side effect the reviewer
+   caused by typing (see SanctionLimitsCard's handleAmountChange), not a
+   validation failure. */
+.br-limits-toast {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 3000; max-width: 420px; padding: 14px 20px; border-radius: 8px;
+  background: var(--ct-b45309, #b45309); color: var(--c-white, #ffffff);
+  font-size: 13px; font-weight: 500; line-height: 1.5; text-align: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .28);
+  animation: brCenterToastIn .18s ease-out;
+}
+
+/* ── Sanction Limits (Product section) ───────────────────────────────────── */
+.br-limits-card {
   margin-top: 6px; padding: 16px;
   background: var(--c-f8fafc, #f8fafc); border: 1px solid var(--c-e5e7eb, #e5e7eb);
   border-radius: 8px;
 }
-.br-terms-head {
+.br-limits-head {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
   margin-bottom: 12px;
 }
-.br-terms-title-row { display: flex; align-items: center; gap: 4px; margin: 0 0 4px; }
-.br-terms-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--ct-111827, #111827); }
-.br-terms-sub { margin: 0; font-size: 12px; color: var(--ct-6b7280, #6b7280); max-width: 520px; }
-.br-terms-table th, .br-terms-table td { white-space: nowrap; }
-.br-terms-table .br-input, .br-terms-table select.br-input { min-width: 120px; }
-.br-terms-delete { color: var(--ct-dc2626, #dc2626); }
-.br-terms-delete:hover { background: var(--c-fee2e2, #fee2e2); }
-.br-terms-delete:disabled { color: var(--ct-cbd5e1, #cbd5e1); cursor: not-allowed; }
-.br-terms-delete:disabled:hover { background: none; }
-.br-terms-summary {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px;
+.br-limits-title-row { display: flex; align-items: center; gap: 4px; margin: 0 0 4px; }
+.br-limits-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--ct-111827, #111827); }
+.br-limits-sub { margin: 0; font-size: 12px; color: var(--ct-6b7280, #6b7280); max-width: 520px; }
+/* Sanction Valid Till (plain text) sits beside the Add Limit button, not as
+   its own summary tile — both live in this right-hand cluster of the head row. */
+.br-limits-head-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.br-limits-valid-till { font-size: 12px; color: var(--ct-6b7280, #6b7280); white-space: nowrap; }
+.br-limits-valid-till strong { color: var(--ct-111827, #111827); font-weight: 700; }
+/* Fixed layout (widths come from the <colgroup> in SanctionFormModal.js)
+   plus a much lower floor than .br-table-list's usual 720px — this table
+   only ever holds short figures/selects/dates, so it can fit a normal
+   screen width without .br-table-wrap's horizontal scroll ever engaging;
+   the floor just keeps it from getting illegibly cramped on a phone. */
+.br-limits-table { table-layout: fixed; min-width: 560px; }
+.br-limits-table th, .br-limits-table td { padding: 10px 8px; }
+/* Headers wrap instead of truncating — "Tentative Disb. Date *" losing its
+   own asterisk to an ellipsis would hide the required-field marker this
+   table relies on. Body cells stay single-line/ellipsis since every value
+   in them is short by construction (an amount, a date, a % figure). */
+.br-limits-table th { white-space: normal; line-height: 1.35; }
+.br-limits-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The expanded Tranches panel (colSpan across most of the row) is a whole
+   nested table/section, not a short value — it must NOT inherit the
+   single-line/ellipsis treatment above or its own rows would get clipped. */
+.br-limits-table .br-tranches-row td { white-space: normal; overflow: visible; text-overflow: clip; }
+.br-limits-table .br-input, .br-limits-table select.br-input { min-width: 0; padding: 7px 8px; }
+.br-limits-table .br-input-prefix { padding: 7px 0 7px 8px; }
+.br-limits-table .po-dtp-trigger { padding: 6px 8px; min-height: 34px; gap: 5px; }
+.br-limits-table .br-limit-name-toggle { max-width: 100%; }
+.br-limits-table .br-limit-name-toggle svg { flex-shrink: 0; }
+.br-limit-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* The Limit name doubles as the tranches expand/collapse control when a
+   Limit has any — chevron + name together, one click target, rather than a
+   separate tiny arrow button in its own column beside plain text. A Limit
+   with no tranches renders the name as plain text (nothing to expand). */
+.br-limit-name-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: none; background: none; padding: 0; margin: 0 auto;
+  font: inherit; font-weight: 600; color: var(--ct-111827, #111827); cursor: pointer;
 }
-.br-terms-summary-tile {
+.br-limit-name-toggle:hover { color: var(--ct-2563eb, #2563eb); }
+.br-limits-delete { color: var(--ct-dc2626, #dc2626); }
+.br-limits-delete:hover { background: var(--c-fee2e2, #fee2e2); }
+.br-limits-delete:disabled { color: var(--ct-cbd5e1, #cbd5e1); cursor: not-allowed; }
+.br-limits-delete:disabled:hover { background: none; }
+.br-limits-summary {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 16px;
+}
+.br-limits-summary-tile {
   display: flex; flex-direction: column; gap: 3px; padding: 10px 12px;
   background: var(--c-white, #ffffff); border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 6px;
 }
-.br-terms-summary-label { font-size: 11px; color: var(--ct-6b7280, #6b7280); }
-.br-terms-summary-value { font-size: 15px; font-weight: 700; color: var(--ct-111827, #111827); }
-.br-terms-info-list { margin: 0; padding-left: 18px; }
-.br-terms-info-list li + li { margin-top: 4px; }
+.br-limits-summary-label { font-size: 11px; color: var(--ct-6b7280, #6b7280); }
+.br-limits-summary-value { font-size: 15px; font-weight: 700; color: var(--ct-111827, #111827); }
+.br-limits-info-list { margin: 0; padding-left: 18px; }
+.br-limits-info-list li + li { margin-top: 4px; }
 @media (max-width: 900px) {
-  .br-terms-summary { grid-template-columns: repeat(2, 1fr); }
+  .br-limits-summary { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Repayment Schedule tab, once Sanction Terms exist — a term dropdown above
-   one term's own schedule at a time (not every term stacked at once).
+/* ── Tranches (nested under each Limit row) ──────────────────────────────── */
+.br-tranches-row td { background: var(--c-ffffff, #fff); padding: 10px 16px 14px 40px; }
+.br-tranches-panel {
+  padding: 12px; background: var(--c-f8fafc, #f8fafc); border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 6px;
+}
+.br-tranches-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.br-tranches-title { font-size: 12px; font-weight: 600; color: var(--ct-111827, #111827); }
+.br-tranches-table th, .br-tranches-table td { white-space: nowrap; padding: 8px 12px; }
+.br-tranches-table .br-input { min-width: 120px; }
+.br-tranches-total { margin-top: 8px; font-size: 12px; font-weight: 600; }
+.br-tranches-empty { font-size: 12px; color: var(--ct-6b7280, #6b7280); }
+
+/* Repayment Schedule tab, once Sanction Limits exist — a limit dropdown above
+   one limit's own schedule at a time (not every limit stacked at once).
    Mirrors .br-schedule-panel's own "fill whatever .br-modal has left" flex
    sizing (see that class's own comment) since this wrapper now sits between
    .br-modal and it, replacing the two-column .br-modal-body grid the
    Sanction Details tab uses — full width, not a form grid. */
-.br-term-schedule-body {
+.br-limit-schedule-body {
   flex: 1 1 0; min-height: 0; display: flex; flex-direction: column;
   padding: 16px 22px 0; overflow: hidden;
 }
-.br-term-schedule-section { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
-/* Term dropdown and the "Term N — Facility · Rs. X Cr · Actual Disb. Date"
+.br-limit-schedule-section { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+/* Limit dropdown and the "Limit N — Facility · Rs. X Cr · Actual Disb. Date"
    text sit in one row now, not stacked — the dropdown first, sized to its
    own content rather than stretching full width like every other input. */
-.br-term-schedule-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; flex: none; }
-.br-term-schedule-select { width: auto; min-width: 160px; flex: none; }
-.br-term-schedule-title { font-size: 14px; font-weight: 700; color: var(--ct-111827, #111827); }
-.br-term-schedule-sub { font-size: 12px; color: var(--ct-6b7280, #6b7280); }
+.br-limit-schedule-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; flex: none; }
+.br-limit-schedule-select { width: auto; min-width: 160px; flex: none; }
+.br-limit-schedule-title { font-size: 14px; font-weight: 700; color: var(--ct-111827, #111827); }
+.br-limit-schedule-sub { font-size: 12px; color: var(--ct-6b7280, #6b7280); }
 
 .br-empty { text-align: center; padding: 18px 8px; }
 .br-empty p { margin: 0 0 8px; }
@@ -658,8 +728,8 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
 /* Wide variant for the Sanction Terms rules — a 4-bullet list needs more
    room than the base popover's 260px before it wraps awkwardly. */
 .br-info-popover-wide { width: 340px; }
-.br-info-popover .br-terms-info-list { margin: 0; padding-left: 16px; }
-.br-info-popover .br-terms-info-list li + li { margin-top: 6px; }
+.br-info-popover .br-limits-info-list { margin: 0; padding-left: 16px; }
+.br-info-popover .br-limits-info-list li + li { margin-top: 6px; }
 
 /* Filename of the letter being reviewed, shown at the top of the modal. */
 .br-modal-file { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1037,6 +1107,17 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
    as one bracketed pair rather than two separate rows that just happen to
    be next to each other. */
 .br-schedule-split-edge { box-shadow: inset 3px 0 0 var(--c-f59e0b, #f59e0b); }
+/* Under the repayment leg's own Total Debt Service figure — the combined,
+   whole-term amount the borrower actually owes (both legs' Total Debt
+   Service added together), so it's visible without making the reviewer
+   add the split rows up by hand. */
+.br-schedule-term-total-note {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ct-92400e, #92400e);
+}
 /* Ordinary (non-moratorium, non-split) repayment rows — a deliberately
    faint tint, since most rows in a long schedule are this kind and a
    heavier one would compete with the moratorium/split highlighting rather
@@ -1224,6 +1305,14 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
    Opening up-and-left instead anchors it over the header itself, which is
    always on screen the moment this icon is even clickable. */
 .br-schedule-section-head .br-info-popover { top: auto; left: auto; bottom: calc(100% + 6px); right: 0; }
+/* Same off-right-edge problem as .br-schedule-section-head above — this
+   info icon sits at the end of a flex:1 title too (br-schedule-header-
+   spacer pushes it to the far right of the Disbursement schedule card's
+   header), so the popover's shared left:0 default runs it off the
+   viewport's right edge. Unlike that one there's always a rendered
+   schedule below it once this icon exists, so opening down (the default
+   top) is fine — only the horizontal side needs flipping. */
+.br-disb-section .br-info-popover { left: auto; right: 0; }
 .br-schedule-section-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .br-schedule-section-actions .br-btn:disabled { cursor: default; }
 /* The Term dropdown now sits inline right after the title (see
