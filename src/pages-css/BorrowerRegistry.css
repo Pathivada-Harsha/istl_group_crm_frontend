@@ -2045,7 +2045,7 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
    pieces this page needed that no existing component already provided (the
    3 summary cards reuse .brx-stat, the search box reuses .br-search/
    .br-filters, the level filter reuses FilterSelect, and the footer reuses
-   Pagination.js, all as-is). Same --c-*/--ct-* token convention as the rest
+   Pagination.js, all as-is). Same --c-… / --ct-… token convention as the rest
    of this file, reusing colors already established elsewhere here rather
    than inventing new ones. */
 .bmd-header-icon {

@@ -122,6 +122,7 @@ import {
   parseDate, bucketCount, bucketLabel, bucketToISODate,
   nodeGrid, validateSchedule,
 } from '../../utils/scopeSchedule.js';
+import { exportScopeSchedulePdf } from './scopeSchedulePdf.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -1308,6 +1309,52 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
     showSuccess('Excel exported.');
   };
 
+  // ── Schedule PDF — landscape Gantt, the shape of project_schedule_ref.pdf ────
+  // Hands scopeSchedulePdf the live scope/phases plus ONE reader for a leaf's
+  // actual %, so the PDF's roll-up is this tab's roll-up rather than a second
+  // implementation that could drift from it. Mode-aware exactly as the table is:
+  // a typed value in SIMPLE, the summed weekly cells in DETAILED.
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const exportSchedulePdf = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const out = await exportScopeSchedulePdf({
+        scope,
+        phases,
+        header: {
+          projectName: orderBook.orderTitle || orderBook.projectName || '',
+          projectId: orderBook.projectId || orderBook.orderBookNo || orderBook.id,
+          customer: orderBook.customerName || '',
+          totalValue: projectTotal ? fmtMoney(projectTotal) : '',
+        },
+        progressOf: (phaseId, nodeId) => {
+          const phase = phases.find(ph => ph.id === phaseId);
+          if (!phase) return 0;
+          if (!nodeId) return leafActualVal(phase, null);
+          const find = (nodes) => {
+            for (const n of nodes || []) {
+              if (n.id === nodeId) return n;
+              const hit = find(n.children);
+              if (hit) return hit;
+            }
+            return null;
+          };
+          const node = find(phase.subItems);
+          return node ? leafActualVal(phase, node) : 0;
+        },
+        user: { name: (JSON.parse(localStorage.getItem('bd_portal_user') || '{}').user || {}).name },
+      });
+      showSuccess(`Schedule PDF downloaded (${out.rows} tasks, ${out.pages} page${out.pages === 1 ? '' : 's'}).`);
+    } catch (e) {
+      if (e && e.message === 'NO_TASKS') showError('Add at least one scope line before downloading the schedule.');
+      else if (e && e.message === 'NO_DATES') showError('Set the planned start and end dates before downloading the schedule.');
+      else showError('Could not build the schedule PDF.');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   // Real schedule duration from the dates (0 = dates not set / invalid).
   const unit = scope.planUnit || 'WEEK';
   const planDuration = bucketCount(scope.plannedStartDate, scope.plannedEndDate, unit);
@@ -1982,6 +2029,10 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
               )}
               <button className="obd-btn obd-btn--ghost" onClick={exportExcel} title="Export EPC tracker to Excel">
                 <Download size={14} /> Export Excel
+              </button>
+              <button className="obd-btn obd-btn--ghost" onClick={exportSchedulePdf} disabled={pdfBusy}
+                title="Download the schedule as a landscape Gantt PDF">
+                <FaFilePdf size={13} /> {pdfBusy ? 'Building…' : 'Download PDF'}
               </button>
               <button className="obd-btn obd-btn--primary" onClick={save} disabled={saving}>
                 <Save size={14} /> {saving ? 'Saving…' : 'Save Schedule'}
