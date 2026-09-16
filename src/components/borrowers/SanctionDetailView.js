@@ -3,7 +3,7 @@
 // The read-only Overview tab, shared by both BorrowerDetail.js branches
 // (company and Parent/Sub Group): a full-width, plain-flowing dashboard —
 // KPI row, then cards grouped into rows (Borrower/Project Details;
-// Project Cost & Finance/Limit Terms/Derived Values; Interest &
+// Project Cost & Finance/Limits/Derived Values; Interest &
 // Repayment/Repayment Details; then the remaining compact cards). Every
 // value shown here is read straight from `sanction`/`borrower` — nothing is
 // computed here that isn't already computed by buildDetailRows/DERIVED_ROWS
@@ -34,13 +34,13 @@ import OverviewSummaryCards from './OverviewSummaryCards';
 import BorrowerDetailsCard from './BorrowerDetailsCard';
 import ProjectDetailsCard from './ProjectDetailsCard';
 import ProjectFinanceCard from './ProjectFinanceCard';
-import LimitTermsCard from './LimitTermsCard';
+import LimitsCard from './LimitsCard';
 import DetailedSection from './DetailedSection';
 import '../../pages-css/SanctionRedesign.css';
 
 const NAV_ORDER = [
   'Overview', 'Borrower Details', 'Project Details', 'Project Cost & Finance',
-  'Product', 'Limit Terms', 'Interest & Repayment', 'Important Dates',
+  'Product', 'Limits', 'Interest & Repayment', 'Important Dates',
   'Conditions & Covenants', 'Derived Values', 'Status', 'Additional Information',
 ];
 const NAV_ICONS = {
@@ -48,7 +48,7 @@ const NAV_ICONS = {
   'Project Details': FileText,
   'Project Cost & Finance': Landmark,
   Product: Package,
-  'Limit Terms': ClipboardList,
+  Limits: ClipboardList,
   'Interest & Repayment': Percent,
   'Repayment Details': RefreshCw,
   'Important Dates': Calendar,
@@ -77,7 +77,7 @@ const REPAYMENT_SCHEDULE_KEYS = [
   'repaymentFrequencyOtherMonths', 'repaymentStartDate', 'repaymentEndDate',
 ];
 
-// sanction.limitAmount/term.termLimit arrive already formatted for display
+// sanction.limitAmount/limit.facilityLimitAmount arrive already formatted for display
 // ("₹65.50 Cr", from SanctionValueParser.formatCrore) here, unlike the edit
 // modal's own numFrom, which reads the raw, unformatted form value — so this
 // one strips everything but digits/decimal/minus, not just commas.
@@ -85,7 +85,7 @@ const numFrom = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0
 
 /**
  * @param {object} borrower
- * @param {object|null} sanction — the active BorrowerSanctionWrapper (with `terms`, all
+ * @param {object|null} sanction — the active BorrowerSanctionWrapper (with `limits`, all
  *   SANCTION_FIELDS keys, and every `derived*` figure), or null when the
  *   borrower/group has no sanction recorded yet.
  *
@@ -141,7 +141,7 @@ const SanctionDetailView = ({ borrower, sanction }) => {
     (hasDsraPermission || !DSRA_DETAIL_KEYS.has(d.key))
     && (hasIsraPermission || !ISRA_DETAIL_KEYS.has(d.key))
   ));
-  const terms = sanction.terms || [];
+  const limits = sanction.limits || [];
   const limit = numFrom(sanction.limitAmount);
 
   // Stable anchor id per card — id defaults to the section's own nav id, or
@@ -193,7 +193,7 @@ const SanctionDetailView = ({ borrower, sanction }) => {
   const borrowerSec = sectionByGroup['Borrower Details'];
   const projectSec = sectionByGroup['Project Details'];
   const financeSec = sectionByGroup['Project Cost & Finance'];
-  const limitSec = sectionByGroup['Limit Terms'];
+  const limitSec = sectionByGroup['Limits'];
   const interestSec = sectionByGroup['Interest & Repayment'];
   const productSec = sectionByGroup.Product;
   const datesSec = sectionByGroup['Important Dates'];
@@ -222,7 +222,7 @@ const SanctionDetailView = ({ borrower, sanction }) => {
 
       <div className="sr-card-grid-3 sr-card-grid-3-equal">
         {renderSection(financeSec, <ProjectFinanceCard rows={rowsByGroup[financeSec.group] || []} />)}
-        {renderSection(limitSec, <LimitTermsCard terms={terms} limit={limit} />)}
+        {renderSection(limitSec, <LimitsCard limits={limits} limit={limit} />)}
         {renderSection(derivedSec, (
           <DetailedSection icon={NAV_ICONS[derivedSec.group]} title={derivedSec.group}>
             <dl className="br-dl">

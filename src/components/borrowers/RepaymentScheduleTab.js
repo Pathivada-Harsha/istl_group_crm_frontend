@@ -517,12 +517,26 @@ const RepaymentScheduleTab = ({
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((r) => {
+                {pageRows.map((r, idx) => {
                   const days = Math.round((r.end.getTime() - r.start.getTime()) / 86400000);
                   const rowClass = r.periodType === 'moratorium' ? 'br-schedule-row-moratorium'
                     : r.periodType === 'split-moratorium' || r.periodType === 'split-repayment' ? 'br-schedule-row-split'
                       : 'br-schedule-row-repayment';
                   const isSplitHalf = r.periodType === 'split-moratorium' || r.periodType === 'split-repayment';
+                  // The repayment leg's own Total Debt Service is only what's
+                  // owed for its own (shorter) slice of the term — split out
+                  // this way so the reviewer can see the two legs' interest
+                  // priced separately, per showDetailedInterest above. But the
+                  // borrower still owes one combined payment for the whole
+                  // term, the same figure mergeSplitInterestRows would show as
+                  // this row's Total Debt Service without the permission — so
+                  // it's called out here too rather than making the reviewer
+                  // add the two rows up themselves.
+                  const moratoriumLeg = r.periodType === 'split-repayment' ? pageRows[idx - 1] : null;
+                  const isSplitPair = moratoriumLeg && moratoriumLeg.periodType === 'split-moratorium';
+                  const moratoriumLegDebtService = isSplitPair ? moratoriumLeg.principalDue + moratoriumLeg.interestDue : null;
+                  const repaymentLegDebtService = isSplitPair ? r.principalDue + r.interestDue : null;
+                  const termTotalDebtService = isSplitPair ? moratoriumLegDebtService + repaymentLegDebtService : null;
                   return (
                     <tr key={r.no} className={rowClass}>
                       <td className={`br-center${isSplitHalf ? ' br-schedule-split-edge' : ''}`}>{r.periodLabel}</td>
@@ -547,7 +561,18 @@ const RepaymentScheduleTab = ({
                       <td className="br-right">{r.isFirstRow && debt !== null ? formatCrore(debt) : '—'}</td>
                       <td className="br-right">{formatCrore(r.principalDue)}</td>
                       <td className="br-right">{formatCrore(r.interestDue)}</td>
-                      <td className="br-right">{formatCrore(r.principalDue + r.interestDue)}</td>
+                      <td className="br-right">
+                        {formatCrore(r.principalDue + r.interestDue)}
+                        {termTotalDebtService !== null && (
+                          <div className="br-schedule-term-total-note">
+                            Term total: {formatCrore(moratoriumLegDebtService).replace(/^₹|\sCr$/g, '')}
+                            {' + '}
+                            {formatCrore(repaymentLegDebtService).replace(/^₹|\sCr$/g, '')}
+                            {' = '}
+                            {formatCrore(termTotalDebtService)}
+                          </div>
+                        )}
+                      </td>
                       <td className="br-right">{formatCrore(r.closing)}</td>
                       {showDsra && (
                         <td className="br-right">

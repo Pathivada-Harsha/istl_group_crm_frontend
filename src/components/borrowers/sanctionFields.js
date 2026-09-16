@@ -61,7 +61,7 @@ import { toCin } from './borrowerFields';
 // SanctionDocExtractor.INSTRUMENT_CANON exactly (same values), so whatever a
 // letter's Instrument auto-fill picked always lands on a real option here.
 // Shared, one definition, by both the Product section's Instrument dropdown
-// and the Sanction Terms table's own Facility Type column.
+// and the Sanction Limits table's own Facility Type column.
 export const FACILITY_TYPE_OPTIONS = [
   { value: '', label: 'Select' },
   { value: 'Term Loan', label: 'Term Loan' },
@@ -77,10 +77,10 @@ export const FACILITY_TYPE_OPTIONS = [
   { value: 'Working Capital Loan', label: 'Working Capital Loan' },
 ];
 
-// Sanction Terms table row label — Term 1 is always "Fund Based Limit",
-// every term after it is "Non Fund Based Limit - <roman numeral>" (I, II,
-// III, ...), derived purely from the term's own array position so it
-// updates automatically as terms are added/removed. Never stored — same
+// Sanction Limits table row label — Limit 1 is always "Fund Based Limit",
+// every limit after it is "Non Fund Based Limit - <roman numeral>" (I, II,
+// III, ...), derived purely from the limit's own array position so it
+// updates automatically as limits are added/removed. Never stored — same
 // "computed on every render" treatment as % of Limit above.
 const toRoman = (num) => {
   const table = [
@@ -101,10 +101,10 @@ export const getSanctionLimitLabel = (index) => (
 
 // Declaration order below drives the section-nav order in SanctionFormModal
 // (via sanctionFieldGroups()) — 01 Number … 12 Additional Information, with
-// Sanction Terms/Derived Values/Status inserted between these FIELDS-backed
+// Sanction Limits/Derived Values/Status inserted between these FIELDS-backed
 // groups by SanctionFormModal itself (they have no scalar fields of their
-// own: Sanction Terms is the `terms` array/SanctionTermsCard, Derived Values
-// is computed by deriveSanction, Status is the sanction's status/source).
+// own: Sanction Limits is the `limits` array/SanctionLimitsCard, Derived
+// Values is computed by deriveSanction, Status is the sanction's status/source).
 export const SANCTION_FIELDS = [
   // ── 01 Number ──
   // The registry sheet heads this column "SL Ref. No"; the letter calls it the
@@ -193,8 +193,8 @@ export const SANCTION_FIELDS = [
   // (INSTRUMENT_CANON) only ever auto-fills one of these exact strings, so
   // whatever the letter picked always lands on a real option here, selected
   // by default; a blank first option covers a letter that named none of them.
-  // Shared with the Sanction Terms table's own Facility Type column (rendered
-  // in the 06 Sanction Terms section, right after this one) — one
+  // Shared with the Sanction Limits table's own Facility Type column (rendered
+  // in the 06 Sanction Limits section, right after this one) — one
   // definition, so the two dropdowns can never drift apart.
   { key: 'limitAmount', group: 'Product', label: 'Limit',
     required: true, kind: 'money', placeholder: '270.04', suffix: 'in ₹ Cr',
@@ -238,13 +238,13 @@ export const SANCTION_FIELDS = [
     kind: 'text', placeholder: 'p.a. (floating, linked to 1-yr MCLR + spread)',
     width: 200, listHidden: true },
   // Tentative/Actual Disb. Date used to live here as their own boxes. They
-  // now live on Sanction Terms instead — Term 1 carries exactly the same two
-  // dates, same behavior/validation/repayment-schedule logic, just per-term
-  // rather than one shared pair — see SanctionFormModal's withDerivedTerm1
-  // and SanctionTermsCard. Removed from here entirely (not just hidden) so
+  // now live on Sanction Limits instead — Limit 1 carries exactly the same two
+  // dates, same behavior/validation/repayment-schedule logic, just per-limit
+  // rather than one shared pair — see SanctionFormModal's withDerivedLimit1
+  // and SanctionLimitsCard. Removed from here entirely (not just hidden) so
   // there's no duplicate disbursement-date field anywhere in this group;
   // `disbursementDate`/`tentativeDisbursementDate` still exist as plain
-  // (non-FIELDS) `form` keys in SanctionFormModal, kept in sync from Term 1,
+  // (non-FIELDS) `form` keys in SanctionFormModal, kept in sync from Limit 1,
   // since every other derived calculation (deriveSanction,
   // resolveRepaymentWindow, the "Updates as you type" panel, the backend's
   // own validateSanction) already reads those exact field names and is

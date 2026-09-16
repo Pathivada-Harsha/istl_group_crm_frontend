@@ -17,7 +17,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  FileText, Eye, Download, Paperclip, ChevronDown, ChevronUp,
+  FileText, Eye, Download, Paperclip, ChevronDown, ChevronUp, ChevronRight,
   FileSpreadsheet, FileType2,
 } from 'lucide-react';
 import { BsInfoCircle } from 'react-icons/bs';
@@ -93,7 +93,7 @@ export const sourceLabel = (s) => ({
 /**
  * The (i) icon a field label carries when it has explanatory hint text —
  * click to reveal, same pattern already used in the edit form (SanctionFormModal.js)
- * for "Why review this" and the Sanction Terms rules popover, just once per
+ * for "Why review this" and the Sanction Limits rules popover, just once per
  * field instead of once per section. Keeps every field's caption out of the
  * layout by default; a reader who wants it clicks for it instead of it
  * always taking a line — shared here (rather than staying local to the edit
@@ -411,19 +411,19 @@ export const DocumentCard = ({ sanction, onOpenDocument, onStartAttach, attachin
  * The Repayment Schedule section — info popover, export menu, the full
  * instalment table. `scheduleView` is `deriveRepaymentSchedule(sanction)`,
  * computed by the caller so this component never needs to know about
- * sanctionDerive.js itself. `termScheduleViews` (also caller-computed, via
- * sanctionDerive's buildTermScheduleViews) is one such view per Sanction
- * Term — when the sanction has any, a Term dropdown picks which one this
+ * sanctionDerive.js itself. `limitScheduleViews` (also caller-computed, via
+ * sanctionDerive's buildLimitScheduleViews) is one such view per Sanction
+ * Limit — when the sanction has any, a Limit dropdown picks which one this
  * section shows, same as SanctionFormModal's own Repayment Schedule tab;
- * `scheduleView` alone still covers a sanction saved before Sanction Terms
+ * `scheduleView` alone still covers a sanction saved before Sanction Limits
  * existed, so no sanction ever renders with nothing here.
  */
 export const RepaymentScheduleSection = ({
-  borrower, sanction, scheduleView, termScheduleViews = [],
+  borrower, sanction, scheduleView, limitScheduleViews = [],
 }) => {
   const [expanded, setExpanded] = useState(true);
   const [showInfo, setShowInfo] = useState(false);
-  const [selectedTermIndex, setSelectedTermIndex] = useState(0);
+  const [selectedLimitIndex, setSelectedLimitIndex] = useState(0);
   if (!sanction || !scheduleView) {
     return (
       <div className="sr-detail-empty">
@@ -431,29 +431,29 @@ export const RepaymentScheduleSection = ({
       </div>
     );
   }
-  const terms = sanction.terms || [];
-  const hasTerms = terms.length > 0;
-  const i = hasTerms ? Math.min(selectedTermIndex, terms.length - 1) : -1;
-  const activeTerm = hasTerms ? terms[i] : null;
-  const activeView = hasTerms ? termScheduleViews[i] : scheduleView;
-  const activeForm = hasTerms
-    ? { ...sanction, disbursementDate: activeTerm.actualDisbursementDate, debtAmount: activeTerm.termLimit }
+  const limits = sanction.limits || [];
+  const hasLimits = limits.length > 0;
+  const i = hasLimits ? Math.min(selectedLimitIndex, limits.length - 1) : -1;
+  const activeLimit = hasLimits ? limits[i] : null;
+  const activeView = hasLimits ? limitScheduleViews[i] : scheduleView;
+  const activeForm = hasLimits
+    ? { ...sanction, disbursementDate: activeLimit.actualDisbursementDate, debtAmount: activeLimit.facilityLimitAmount }
     : sanction;
   return (
     <section className="br-card br-schedule-section">
       <header className="br-card-head br-schedule-section-head">
         <span className="br-dot br-dot-schedule" aria-hidden="true" />
         <h2 className="br-card-title">Repayment schedule</h2>
-        {expanded && terms.length > 1 && (
-          <div className="br-term-schedule-heading br-schedule-term-picker">
+        {expanded && limits.length > 1 && (
+          <div className="br-limit-schedule-heading br-schedule-limit-picker">
             <select
-              className="br-input br-term-schedule-select"
+              className="br-input br-limit-schedule-select"
               value={i}
-              onChange={(e) => setSelectedTermIndex(Number(e.target.value))}
+              onChange={(e) => setSelectedLimitIndex(Number(e.target.value))}
             >
-              {terms.map((t, idx) => (
+              {limits.map((l, idx) => (
                 <option key={idx} value={idx}>
-                  {t.limitLabel || getSanctionLimitLabel(idx)}
+                  {l.limitLabel || getSanctionLimitLabel(idx)}
                 </option>
               ))}
             </select>
@@ -496,6 +496,228 @@ export const RepaymentScheduleSection = ({
       </header>
       {expanded && (
         <RepaymentScheduleTab view={activeView} form={activeForm} readOnly paginated tableHeading={null} />
+      )}
+    </section>
+  );
+};
+
+const numFromDisb = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+// A Limit or Tranche counts as disbursed the moment its own Actual Disb.
+// Date is filled in — same "Actual = it happened" convention every other
+// Actual Disb. Date field on this page already carries, no extra check
+// against today's date.
+const disbStatus = (actualDate) => (actualDate ? 'Disbursed' : 'Pending');
+
+/**
+ * Disbursement Schedule tab — separate from RepaymentScheduleSection above
+ * (that one tracks loan repayment/amortization; this one tracks how much of
+ * the sanction has actually gone out the door, and when). Purely a read-only
+ * reshuffle of `sanction.limits[]`/each limit's own `tranches[]` — the exact
+ * same data SanctionLimitsCard (edit) and LimitsCard (Overview tab) already
+ * show, just aggregated across the whole sanction in one place instead of
+ * needing to open each Limit row individually. No new data source.
+ */
+export const DisbursementScheduleSection = ({ sanction }) => {
+  const [showInfo, setShowInfo] = useState(false);
+  const [expandedLimits, setExpandedLimits] = useState(() => new Set());
+  const toggleLimit = (idx) => setExpandedLimits((prev) => {
+    const next = new Set(prev);
+    if (next.has(idx)) next.delete(idx); else next.add(idx);
+    return next;
+  });
+
+  if (!sanction) {
+    return (
+      <div className="sr-detail-empty">
+        <p className="br-muted">Nothing to show until a sanction is recorded.</p>
+      </div>
+    );
+  }
+
+  const limits = sanction.limits || [];
+  const overallLimit = numFromDisb(sanction.limitAmount);
+  // A tranched Limit counts only its own disbursed Tranches toward the
+  // total — not its full amount — since it can be partially drawn; an
+  // untranched Limit counts its full amount once its own Actual Disb. Date
+  // is filled in.
+  let totalDisbursed = 0;
+  limits.forEach((l) => {
+    const tranches = l.tranches || [];
+    if (tranches.length > 0) {
+      tranches.forEach((tr) => {
+        if (tr.actualDisbursementDate) totalDisbursed += numFromDisb(tr.trancheAmount);
+      });
+    } else if (l.actualDisbursementDate) {
+      totalDisbursed += numFromDisb(l.facilityLimitAmount);
+    }
+  });
+  const totalPending = Math.max(overallLimit - totalDisbursed, 0);
+  const pctDisbursed = overallLimit > 0 ? (totalDisbursed / overallLimit) * 100 : 0;
+
+  return (
+    <section className="br-card br-disb-section">
+      <header className="br-card-head">
+        <span className="br-dot br-dot-schedule" aria-hidden="true" />
+        <h2 className="br-card-title">Disbursement schedule</h2>
+        <span className="br-schedule-header-spacer" aria-hidden="true" />
+        <span className="br-info-wrap">
+          <button
+            type="button"
+            className="br-info-btn"
+            onClick={() => setShowInfo((v) => !v)}
+            aria-label="About this section"
+            aria-expanded={showInfo}
+          >
+            <BsInfoCircle size={14} aria-hidden="true" />
+          </button>
+          {showInfo && (
+            <div className="br-info-popover" role="tooltip">
+              Tracks each Limit's own disbursement — and, where a Limit is split
+              into Tranches, each Tranche's own amount and date — separately
+              from the repayment schedule. A Limit or Tranche counts as
+              Disbursed once its Actual Disb. Date is filled in.
+            </div>
+          )}
+        </span>
+      </header>
+
+      {limits.length === 0 ? (
+        <p className="br-muted br-pad">No Limits recorded for this sanction yet.</p>
+      ) : (
+        <>
+          <div className="br-limits-summary">
+            <div className="br-limits-summary-tile">
+              <span className="br-limits-summary-label">Total Sanction Limit</span>
+              <span className="br-limits-summary-value">Rs. {overallLimit.toFixed(2)} Cr</span>
+            </div>
+            <div className="br-limits-summary-tile">
+              <span className="br-limits-summary-label">Total Disbursed</span>
+              <span className="br-limits-summary-value br-tone-ok">Rs. {totalDisbursed.toFixed(2)} Cr</span>
+            </div>
+            <div className="br-limits-summary-tile">
+              <span className="br-limits-summary-label">Total Pending</span>
+              <span className="br-limits-summary-value br-tone-warn">Rs. {totalPending.toFixed(2)} Cr</span>
+            </div>
+            <div className="br-limits-summary-tile">
+              <span className="br-limits-summary-label">% Disbursed</span>
+              <span className="br-limits-summary-value">{pctDisbursed.toFixed(2)}%</span>
+            </div>
+          </div>
+
+          <div className="br-table-wrap">
+            <table className="br-table-list br-disb-table">
+              <thead>
+                <tr>
+                  <th className="br-center">Limit</th>
+                  <th className="br-right">Amount Rs. Cr's</th>
+                  <th>Instrument</th>
+                  <th className="br-right">Pending Rs. Cr's</th>
+                  <th className="br-center">Tentative Disb. Date</th>
+                  <th className="br-center">Actual Disb. Date</th>
+                  <th className="br-center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {limits.map((l, i) => {
+                  const limitName = l.limitLabel || getSanctionLimitLabel(i);
+                  const tranches = l.tranches || [];
+                  const hasTranches = tranches.length > 0;
+                  const disbursedCount = tranches.filter((tr) => tr.actualDisbursementDate).length;
+                  const isOpen = expandedLimits.has(i);
+                  const status = disbStatus(l.actualDisbursementDate);
+                  const limitAmt = numFromDisb(l.facilityLimitAmount);
+                  // Same "a tranched limit counts only its disbursed
+                  // tranches" rule the sanction-wide Total Pending tile
+                  // above already uses, just scoped to this one row.
+                  const disbursedAmt = hasTranches
+                    ? tranches.reduce((t, tr) => t + (tr.actualDisbursementDate ? numFromDisb(tr.trancheAmount) : 0), 0)
+                    : (l.actualDisbursementDate ? limitAmt : 0);
+                  const pendingAmt = Math.max(limitAmt - disbursedAmt, 0);
+                  return (
+                    <React.Fragment key={i}>
+                      <tr>
+                        <td className="br-center">
+                          {hasTranches ? (
+                            <button
+                              type="button" className="br-limit-name-toggle"
+                              onClick={() => toggleLimit(i)}
+                              aria-label={`${isOpen ? 'Hide' : 'Show'} tranches for ${limitName}`}
+                              aria-expanded={isOpen}
+                              title="Tranches"
+                            >
+                              {isOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+                              {limitName}
+                            </button>
+                          ) : limitName}
+                        </td>
+                        <td className="br-right">{l.facilityLimitAmount || '—'}</td>
+                        <td>{l.facilityType || '—'}</td>
+                        <td className="br-right">
+                          <span className={pendingAmt > 0 ? 'br-tone-warn' : 'br-tone-ok'}>
+                            Rs. {pendingAmt.toFixed(2)} Cr
+                          </span>
+                        </td>
+                        <td className="br-center">{l.tentativeDisbursementDate || '—'}</td>
+                        <td className="br-center">{l.actualDisbursementDate || '—'}</td>
+                        <td className="br-center">
+                          {hasTranches ? (
+                            <span className={`brx-type-badge ${disbursedCount === tranches.length ? 'brx-badge-green' : 'brx-badge-orange'}`}>
+                              {disbursedCount} of {tranches.length} tranches disbursed
+                            </span>
+                          ) : (
+                            <span className={`brx-type-badge ${status === 'Disbursed' ? 'brx-badge-green' : 'brx-badge-orange'}`}>
+                              {status}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                      {isOpen && hasTranches && (
+                        <tr className="br-tranches-row">
+                          <td colSpan={7}>
+                            <div className="br-tranches-panel">
+                              <div className="br-tranches-head">
+                                <span className="br-tranches-title">Tranches for {limitName}</span>
+                              </div>
+                              <table className="br-table-list br-tranches-table">
+                                <thead>
+                                  <tr>
+                                    <th>Tranche</th>
+                                    <th className="br-right">Amount Rs. Cr's</th>
+                                    <th className="br-center">Tentative Disb. Date</th>
+                                    <th className="br-center">Actual Disb. Date</th>
+                                    <th className="br-center">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {tranches.map((tr, tIdx) => {
+                                    const trStatus = disbStatus(tr.actualDisbursementDate);
+                                    return (
+                                      <tr key={tIdx}>
+                                        <td>Tranche {tIdx + 1}</td>
+                                        <td className="br-right">{tr.trancheAmount || '—'}</td>
+                                        <td className="br-center">{tr.tentativeDisbursementDate || '—'}</td>
+                                        <td className="br-center">{tr.actualDisbursementDate || '—'}</td>
+                                        <td className="br-center">
+                                          <span className={`brx-type-badge ${trStatus === 'Disbursed' ? 'brx-badge-green' : 'brx-badge-orange'}`}>
+                                            {trStatus}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   );

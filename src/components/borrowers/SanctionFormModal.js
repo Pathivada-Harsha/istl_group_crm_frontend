@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, AlertTriangle, FileText, Paperclip, Calendar, Plus, Trash2 } from 'lucide-react';
+import { X, Check, AlertTriangle, FileText, Paperclip, Calendar, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { BsInfoCircle } from 'react-icons/bs';
 import borrowerApi from '../../services/borrowerApi';
 import { useAuth } from '../../hooks/useAuth';
@@ -34,7 +34,7 @@ import { statusLabel, sourceLabel, FieldInfoHint } from './SanctionOverviewPanel
 import '../../pages-css/BorrowerRegistry.css';
 import '../../pages-css/SanctionRedesign.css';
 
-// `terms` (Sanction Terms — Product section) isn't a flat SANCTION_FIELDS
+// `limits` (Sanction Limits — Product section) isn't a flat SANCTION_FIELDS
 // scalar, so it's not part of the FIELDS-driven reduce below; added here so
 // every fresh form (and every reset back to EMPTY) still starts with a real
 // array, never undefined. `disbursementDate`/`tentativeDisbursementDate`
@@ -42,20 +42,20 @@ import '../../pages-css/SanctionRedesign.css';
 // its own comment) but every other piece of this form still reads them by
 // exactly these names (deriveSanction, resolveRepaymentWindow, the "Updates
 // as you type" panel, the payload sent to save) — kept here as plain form
-// keys, synced from Term 1 by an effect rather than typed into directly.
+// keys, synced from Limit 1 by an effect rather than typed into directly.
 const EMPTY = {
   ...FIELDS.reduce((a, f) => ({ ...a, [f.key]: f.defaultValue ?? '' }), {}),
-  terms: [], disbursementDate: '', tentativeDisbursementDate: '',
+  limits: [], disbursementDate: '', tentativeDisbursementDate: '',
 };
 const GROUPS = sanctionFieldGroups();
 // The section-nav order the redesign requires — three sections (Sanction
-// Terms, Derived Values, Status) have no scalar SANCTION_FIELDS entries of
-// their own (terms is its own array/SanctionTermsCard; Derived Values is
+// Limits, Derived Values, Status) have no scalar SANCTION_FIELDS entries of
+// their own (limits is its own array/SanctionLimitsCard; Derived Values is
 // computed by deriveSanction; Status is the sanction's status/source), so
 // they're spliced in here rather than living in sanctionFields.js.
 const NAV_ORDER = [
   'Number', 'Borrower Details', 'Project Details', 'Project Cost & Finance',
-  'Product', 'Limit Terms', 'Interest & Repayment', 'Important Dates',
+  'Product', 'Limits', 'Interest & Repayment', 'Important Dates',
   'Conditions & Covenants', 'Derived Values', 'Status', 'Additional Information',
 ];
 const NAV_SECTIONS = (() => {
@@ -92,37 +92,38 @@ const withDerivedMoratorium = (next) => {
 };
 
 /**
- * Sanction Terms must always start with Term 1 — never an empty table, on
+ * Sanction Limits must always start with Limit 1 — never an empty table, on
  * a brand-new sanction as much as one already saved. Only runs while
- * `terms` is genuinely empty (never touches an already-loaded Term 1, so a
+ * `limits` is genuinely empty (never touches an already-loaded Limit 1, so a
  * reviewer's own edit is never overwritten).
  *
- * For a sanction saved before Sanction Terms existed, `legacyTentative`/
+ * For a sanction saved before Sanction Limits existed, `legacyTentative`/
  * `legacyActual` are that OLD record's own top-level Tentative/Actual Disb.
  * Date values (read once, straight off `initial`, since the FIELDS-driven
  * copy in the caller no longer populates `next.disbursementDate`/
  * `next.tentativeDisbursementDate` — those keys are reserved for the
- * Term-1-synced mirror kept for deriveSanction/resolveRepaymentWindow/the
+ * Limit-1-synced mirror kept for deriveSanction/resolveRepaymentWindow/the
  * backend's own validateSanction, not for this seed to read back from) —
- * Term 1 inherits them, so the existing repayment schedule keeps computing
+ * Limit 1 inherits them, so the existing repayment schedule keeps computing
  * exactly as it did before this change. On a genuinely new sanction both
- * are blank, and Term 1 simply starts blank too, same as every other term
+ * are blank, and Limit 1 simply starts blank too, same as every other limit
  * a reviewer adds by hand.
  */
-const withDerivedTerm1 = (next, legacyTentative, legacyActual, legacyRepaymentProfileJson) => {
-  if (next.terms && next.terms.length) return next;
+const withDerivedLimit1 = (next, legacyTentative, legacyActual, legacyRepaymentProfileJson) => {
+  if (next.limits && next.limits.length) return next;
   return {
     ...next,
-    terms: [{
-      termLimit: next.limitAmount || '',
+    limits: [{
+      facilityLimitAmount: next.limitAmount || '',
       facilityType: next.instrument || '',
       tentativeDisbursementDate: toIsoDate(legacyTentative) || toIsoDate(legacyActual) || '',
       actualDisbursementDate: toIsoDate(legacyActual) || '',
-      // A sanction saved before Sanction Terms existed kept its edited
-      // repayment percentages at the sanction level — Term 1 inherits that
-      // same profile so its (now per-term) schedule keeps showing exactly
+      // A sanction saved before Sanction Limits existed kept its edited
+      // repayment percentages at the sanction level — Limit 1 inherits that
+      // same profile so its (now per-limit) schedule keeps showing exactly
       // what was already saved, not a reset-to-default equal split.
       repaymentProfileJson: legacyRepaymentProfileJson || '',
+      tranches: [],
     }],
   };
 };
@@ -135,24 +136,6 @@ const withDerivedLimit = (next) => {
   if (String(next.limitAmount || '').trim()) return next;
   const seed = next.debtAmount || next.sanctionedAmount;
   return seed ? { ...next, limitAmount: seed } : next;
-};
-
-/**
- * Rebuilds every Sanction Term's amount as an equal split of `limitAmount`
- * (a plain ₹-Cr number, same crore-scale text every money field on this form
- * already stores — see stripRs/withRs above) across `count` terms, last term
- * absorbing the rounding remainder — same "acknowledge every prior figure's
- * rounding" shape as defaultRepaymentPercents in sanctionDerive.js, just for
- * money instead of percentages. Only ever called from "+ Add Term"; editing
- * a term by hand afterward never re-triggers this.
- */
-const equalSplitTermLimits = (limitAmount, count) => {
-  const total = parseFloat(String(limitAmount ?? '').replace(/,/g, ''));
-  if (!Number.isFinite(total) || count <= 0) return Array(Math.max(count, 0)).fill('');
-  const share = Math.floor((total / count) * 100) / 100;
-  const amounts = Array(count).fill(share);
-  amounts[count - 1] = Math.round((total - share * (count - 1)) * 100) / 100;
-  return amounts.map((cr) => cr.toFixed(2));
 };
 
 // A letter's date arrives as "14 Mar 2025" (or "14/03/2025", or already ISO);
@@ -192,7 +175,7 @@ const SanctionDatePicker = ({ value, onChange, placeholder = 'Select date', warn
   // than a plain `position: absolute` child of wrapRef. Every other place
   // this picker is used sits inside a plain, non-scrolling fieldset (already
   // carved out with `overflow: visible`, see that CSS rule's own comment),
-  // but the Sanction Terms table's Tentative/Actual Disb. Date columns sit
+  // but the Sanction Limits table's Tentative/Actual Disb. Date columns sit
   // inside .br-table-wrap, which is deliberately overflow-x: auto for its
   // own horizontal scrollbar — an absolutely-positioned child of a cell in
   // there gets silently clipped the moment the calendar grid would extend
@@ -392,27 +375,27 @@ const stripRoiFromText = (v) => String(v ?? '').replace(RATE_IN_TEXT, ' ').repla
 
 const numFrom = (v) => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
 
-// Sanction Terms' own Amount box: the "Rs." prefix and the "Amount Rs. Cr's"
+// Sanction Limits' own Amount box: the "Rs." prefix and the "Amount Rs. Cr's"
 // column header already say the unit is crore, so the typed/shown value
-// itself should be a bare number — some imported terms carry a baked-in
+// itself should be a bare number — some imported limits carry a baked-in
 // "Cr"/"Crore" suffix (see stripRs above); this drops it for just this box
 // without touching stripRs itself (used for every other money field on the
 // form, where that suffix normalization is still wanted).
 const stripCrUnit = (v) => stripRs(v).replace(/\s*(cr\.?|crores?)\s*$/i, '');
 
 /**
- * Product section, "Sanction Terms" table — splits the Limit above across
- * one or more facility tranches. Purely a `terms` array in/out (the parent
+ * Product section, "Limits" table — splits the Limit above across
+ * one or more facility limits. Purely a `limits` array in/out (the parent
  * owns the state, same "controlled" shape as every other field on this
  * form) — the two Save-blocking rules it enforces (sum = Limit, every
- * Actual Disb. Date before COD) are computed by the caller (sanctionTermsError
+ * Actual Disb. Date before COD) are computed by the caller (sanctionLimitsError
  * in SanctionFormModal) and simply displayed here as `error`.
  */
-const SanctionTermsCard = ({ terms, limitAmount, onChange, minDate, maxDate }) => {
+const SanctionLimitsCard = ({ limits, limitAmount, onChange, minDate, maxDate, sanctionValidFrom, sanctionValidTill }) => {
   const limit = numFrom(limitAmount);
-  const total = terms.reduce((t, term) => t + numFrom(term.termLimit), 0);
+  const total = limits.reduce((t, l) => t + numFrom(l.facilityLimitAmount), 0);
   const remaining = limit - total;
-  const balanced = terms.length > 0 && Math.abs(remaining) < 0.01;
+  const balanced = limits.length > 0 && Math.abs(remaining) < 0.01;
 
   // The rules below used to sit as an always-visible banner under the
   // table; moved behind an (i) beside the title instead, same click-to-show
@@ -426,66 +409,181 @@ const SanctionTermsCard = ({ terms, limitAmount, onChange, minDate, maxDate }) =
     return () => document.removeEventListener('mousedown', onOutside);
   }, [showHint]);
 
+  // Adding a limit no longer re-splits every existing limit's Amount —
+  // doing that used to silently push an already-tranched limit's Tranches
+  // past its own (now smaller) Amount. Instead, only the NEW row gets a
+  // default: whatever's left of the overall Limit once every existing row's
+  // own Amount is subtracted (same "default to what's unallocated" rule
+  // handleAddTranche already applies one level down) — every existing row's
+  // Amount, and therefore its Tranches, stays exactly as the reviewer left it.
   const handleAdd = () => {
-    const next = [...terms, {
-      termLimit: '', facilityType: '', tentativeDisbursementDate: '', actualDisbursementDate: '',
-      repaymentProfileJson: '',
-    }];
-    const amounts = equalSplitTermLimits(limitAmount, next.length);
-    onChange(next.map((t, i) => ({ ...t, termLimit: amounts[i] })));
+    const used = limits.reduce((t, l) => t + numFrom(l.facilityLimitAmount), 0);
+    const remaining = Math.max(numFrom(limitAmount) - used, 0);
+    onChange([...limits, {
+      facilityLimitAmount: remaining > 0 ? remaining.toFixed(2) : '',
+      facilityType: '', tentativeDisbursementDate: '', actualDisbursementDate: '',
+      repaymentProfileJson: '', tranches: [],
+    }]);
   };
-  // Sanction Terms must always keep at least Term 1 (see withDerivedTerm1) —
+  // Sanction Limits must always keep at least Limit 1 (see withDerivedLimit1) —
   // deleting the only remaining row would leave no Actual Disb. Date for
   // the repayment schedule (or the backend's own required-field check) to
   // anchor on, so the last row's delete action is simply unavailable.
-  const handleRemove = (idx) => { if (terms.length > 1) onChange(terms.filter((_, i) => i !== idx)); };
-  const updateTerm = (idx, patch) => onChange(terms.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
-  // Picking a term's Tentative Disb. Date while its OWN Actual Disb. Date is
+  const handleRemove = (idx) => { if (limits.length > 1) onChange(limits.filter((_, i) => i !== idx)); };
+  const updateLimit = (idx, patch) => onChange(limits.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  // A brief, self-dismissing toast — same pattern as SanctionFormModal's own
+  // centerToast — for the one case below that needs to tell the reviewer
+  // something just happened as a side effect of what they typed, not block
+  // them with a confirm click first.
+  const [amountToast, setAmountToast] = useState('');
+  useEffect(() => {
+    if (!amountToast) return undefined;
+    const t = setTimeout(() => setAmountToast(''), 4000);
+    return () => clearTimeout(t);
+  }, [amountToast]);
+  // Editing a limit's own Amount after it already has Tranches invalidates
+  // whatever those Tranches added up to — they were set against the OLD
+  // Amount, and the running total/"must not exceed" check one level down
+  // has no way to know the reviewer intends to redo them for the new figure.
+  // Clear them immediately, right on the edit that invalidates them, rather
+  // than leaving stale Tranches silently over- or under-allocated — and say
+  // so via the toast above, since this happens on a keystroke, not a button
+  // the reviewer explicitly clicked.
+  const handleAmountChange = (idx, value) => {
+    const tranches = limits[idx].tranches || [];
+    if (tranches.length > 0) {
+      const limitName = limits[idx].limitLabel || getSanctionLimitLabel(idx);
+      setAmountToast(
+        `Changing the Amount for ${limitName} cleared its ${tranches.length} `
+        + `tranche${tranches.length > 1 ? 's' : ''} — add tranches again for the new amount.`,
+      );
+      updateLimit(idx, { facilityLimitAmount: value, tranches: [] });
+    } else {
+      updateLimit(idx, { facilityLimitAmount: value });
+    }
+  };
+  // Picking a limit's Tentative Disb. Date while its OWN Actual Disb. Date is
   // still blank also seeds Actual with that same date — same rule the
-  // sanction-level Tentative/Actual pair used to apply, now per term (see
-  // withDerivedTerm1's own comment on where that pair moved to).
-  const setTentative = (idx) => (iso) => updateTerm(
-    idx, terms[idx]?.actualDisbursementDate ? { tentativeDisbursementDate: iso } : { tentativeDisbursementDate: iso, actualDisbursementDate: iso },
+  // sanction-level Tentative/Actual pair used to apply, now per limit (see
+  // withDerivedLimit1's own comment on where that pair moved to).
+  const setTentative = (idx) => (iso) => updateLimit(
+    idx, limits[idx]?.actualDisbursementDate ? { tentativeDisbursementDate: iso } : { tentativeDisbursementDate: iso, actualDisbursementDate: iso },
   );
 
+  // Tranching: splits one limit's own Amount into any number of disbursement
+  // portions, each with its own dates — optional (an empty list means the
+  // whole limit is still disbursed as a single lump sum). Expanded state is
+  // purely local UI, not part of the saved `limits` shape.
+  const [expanded, setExpanded] = useState(() => new Set());
+  const toggleExpanded = (idx) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(idx)) next.delete(idx); else next.add(idx);
+    return next;
+  });
+  // A limit's tranches can never add up to more than that limit's own
+  // Amount — this is the ceiling every tranche amount (new or edited) is
+  // capped against, computed fresh off whatever the other tranches (and the
+  // limit itself) currently hold, never a stale snapshot.
+  const remainingForTranche = (idx, excludeTIdx) => {
+    const limitAmt = numFrom(limits[idx].facilityLimitAmount);
+    const usedByOthers = (limits[idx].tranches || []).reduce(
+      (t, tr, i) => (i === excludeTIdx ? t : t + numFrom(tr.trancheAmount)), 0,
+    );
+    return Math.max(limitAmt - usedByOthers, 0);
+  };
+  // New tranche defaults to whatever's still unallocated — the full limit
+  // Amount for the first tranche (so a reviewer who only ever adds one
+  // tranche sees it pre-filled with the whole amount, not a blank box), and
+  // whatever's left after that for every one after it. If nothing's left,
+  // it starts blank and the reviewer must free up room on an earlier
+  // tranche first, same as the error banner already prompts for.
+  const handleAddTranche = (idx) => {
+    const remaining = remainingForTranche(idx, -1);
+    updateLimit(idx, {
+      tranches: [...(limits[idx].tranches || []), {
+        trancheAmount: remaining > 0 ? remaining.toFixed(2) : '',
+        tentativeDisbursementDate: '', actualDisbursementDate: '',
+      }],
+    });
+  };
+  const handleRemoveTranche = (idx, tIdx) => updateLimit(idx, {
+    tranches: (limits[idx].tranches || []).filter((_, i) => i !== tIdx),
+  });
+  const updateTranche = (idx, tIdx, patch) => updateLimit(idx, {
+    tranches: (limits[idx].tranches || []).map((tr, i) => (i === tIdx ? { ...tr, ...patch } : tr)),
+  });
+  // Same cap applied while typing — a value that would push this tranche's
+  // own amount past what's left of the limit is clamped down to exactly
+  // what's left, rather than accepted and only flagged after the fact.
+  const updateTrancheAmount = (idx, tIdx, rawValue) => {
+    const parsed = numFrom(rawValue);
+    const max = remainingForTranche(idx, tIdx);
+    const clamped = rawValue !== '' && parsed > max ? max.toFixed(2) : rawValue;
+    updateTranche(idx, tIdx, { trancheAmount: clamped });
+  };
+
   return (
-    <div className="br-terms-card">
-      <div className="br-terms-head">
+    <div className="br-limits-card">
+      <div className="br-limits-head">
         <div>
-          <span className="br-terms-title-row">
-            <h4 className="br-terms-title">Limit Terms</h4>
+          <span className="br-limits-title-row">
+            <h4 className="br-limits-title">Limits</h4>
             <span className="br-info-wrap" ref={hintRef}>
               <button
                 type="button"
                 className="br-info-btn"
                 onClick={() => setShowHint((v) => !v)}
-                aria-label="Limit Terms rules"
+                aria-label="Limits rules"
                 aria-expanded={showHint}
               >
                 <BsInfoCircle size={14} aria-hidden="true" />
               </button>
               {showHint && (
                 <div className="br-info-popover br-info-popover-wide" role="tooltip">
-                  <ul className="br-terms-info-list">
-                    <li>When you add a new term, the term amounts are automatically divided equally. You can edit the amount for each term.</li>
-                    <li>The sum of all term limits must be equal to the overall limit (100%).</li>
-                    <li>Disbursement for all terms must be completed on or before the day before the COD date
+                  <ul className="br-limits-info-list">
+                    <li>When you add a new limit, it defaults to whatever's left of the overall Limit — every existing limit's own amount is left untouched. Edit any amount as needed.</li>
+                    <li>The sum of all limits must be equal to the overall limit (100%).</li>
+                    <li>Disbursement for all limits must be completed on or before the day before the COD date
                       (e.g., if COD is 01-02-2027, latest disbursement date is 31-01-2027).</li>
-                    <li>Each term will have its own repayment schedule, generated based on the Actual Disb. Date.</li>
+                    <li>Each limit will have its own repayment schedule, generated based on the Actual Disb. Date.</li>
                   </ul>
                 </div>
               )}
             </span>
           </span>
         </div>
-        <button type="button" className="br-btn br-btn-primary br-btn-sm" onClick={handleAdd}>
-          <Plus size={14} aria-hidden="true" /> Add Term
-        </button>
+        <div className="br-limits-head-right">
+          {/* Sanction Date + 6 months (see deriveSanction's sanctionValidTill),
+              same figure the Derived Values section shows further down — this
+              doesn't depend on Tentative/Actual Disb. Date at all, so it's
+              already known the moment a sanction letter is imported and
+              shouldn't wait on either date being picked in the table below. */}
+          <span className="br-limits-valid-till">
+            Sanction Valid: <strong>{sanctionValidFrom || '—'}</strong> – <strong>{sanctionValidTill || '—'}</strong>
+          </span>
+          <button type="button" className="br-btn br-btn-primary br-btn-sm" onClick={handleAdd}>
+            <Plus size={14} aria-hidden="true" /> Add Limit
+          </button>
+        </div>
       </div>
 
-      {terms.length > 0 && (
+      {limits.length > 0 && (
         <div className="br-table-wrap br-scroll-body">
-          <table className="br-table-list br-terms-table">
+          <table className="br-table-list br-limits-table">
+            {/* Fixed proportional widths (table-layout: fixed, see CSS) —
+                sized off each column's actual content (a short amount/%
+                figure needs far less room than the longest Instrument
+                label), so every column fits on a normal-width screen
+                without .br-table-wrap's horizontal scroll kicking in. */}
+            <colgroup>
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '25%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '6%' }} />
+            </colgroup>
             <thead>
               <tr>
                 <th className="br-center">Limit</th>
@@ -498,66 +596,178 @@ const SanctionTermsCard = ({ terms, limitAmount, onChange, minDate, maxDate }) =
               </tr>
             </thead>
             <tbody>
-              {terms.map((term, i) => {
-                const pct = limit > 0 ? (numFrom(term.termLimit) / limit) * 100 : 0;
+              {limits.map((l, i) => {
+                const pct = limit > 0 ? (numFrom(l.facilityLimitAmount) / limit) * 100 : 0;
                 // Prefer whatever the backend actually persisted for this row
-                // (SanctionTermWrapper.limitLabel) — falls back to the same
-                // formula computed locally for a term just added client-side
+                // (SanctionLimitWrapper.limitLabel) — falls back to the same
+                // formula computed locally for a limit just added client-side
                 // and not saved yet, or a record saved before this column
                 // existed and not yet backfilled.
-                const limitName = term.limitLabel || getSanctionLimitLabel(i);
+                const limitName = l.limitLabel || getSanctionLimitLabel(i);
+                const tranches = l.tranches || [];
+                const isOpen = expanded.has(i);
+                const trancheTotal = tranches.reduce((t, tr) => t + numFrom(tr.trancheAmount), 0);
+                const trancheLimit = numFrom(l.facilityLimitAmount);
+                // Disbursement can happen in stages — a lender may release
+                // less than the full limit across one, two, or more
+                // tranches, with more added later, so the total is never
+                // required to equal the limit exactly. It must simply never
+                // exceed it (remainingForTranche/updateTrancheAmount above
+                // already keep a single edit from typing past this, but the
+                // running total is still checked here for the case where
+                // the limit's own Amount is reduced after tranches exist).
+                const trancheExceeds = trancheTotal - trancheLimit > 0.01;
                 return (
-                  <tr key={i}>
-                    <td className="br-center">{limitName}</td>
-                    <td>
-                      {/* Pre-filled with an equal split when the term is added
-                          (see handleAdd), but a plain editable amount from
-                          then on — % of Limit (next column) recalculates
-                          live off whatever the reviewer types here. */}
-                      <div className="br-input-group">
-                        <span className="br-input-prefix" aria-hidden="true">Rs.</span>
-                        <input
-                          type="text" className="br-input" value={stripCrUnit(term.termLimit)}
-                          onChange={(e) => updateTerm(i, { termLimit: stripCrUnit(e.target.value) })}
+                  <React.Fragment key={i}>
+                    <tr>
+                      <td className="br-center">
+                        {/* Unlike the read-only Limits tables (LimitsCard,
+                            DisbursementScheduleSection), this one stays
+                            clickable even with zero tranches yet — expanding
+                            is how a reviewer gets to the "Add Tranche"
+                            button for the FIRST tranche on this limit. */}
+                        <button
+                          type="button" className="br-limit-name-toggle"
+                          onClick={() => toggleExpanded(i)}
+                          aria-label={`${isOpen ? 'Hide' : 'Show'} tranches for ${limitName}`}
+                          aria-expanded={isOpen}
+                          title="Tranches"
+                        >
+                          {isOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+                          <span className="br-limit-name-text">{limitName}</span>
+                        </button>
+                      </td>
+                      <td>
+                        {/* Pre-filled with an equal split when the limit is added
+                            (see handleAdd), but a plain editable amount from
+                            then on — % of Limit (next column) recalculates
+                            live off whatever the reviewer types here. */}
+                        <div className="br-input-group">
+                          <span className="br-input-prefix" aria-hidden="true">Rs.</span>
+                          <input
+                            type="text" className="br-input" value={stripCrUnit(l.facilityLimitAmount)}
+                            onChange={(e) => handleAmountChange(i, stripCrUnit(e.target.value))}
+                          />
+                        </div>
+                      </td>
+                      <td>
+                        <select
+                          className="br-input" value={l.facilityType || ''}
+                          onChange={(e) => updateLimit(i, { facilityType: e.target.value })}
+                        >
+                          {FACILITY_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </td>
+                      <td className="br-right">
+                        <input type="text" className="br-input br-input-readonly" readOnly value={`${pct.toFixed(2)}%`} />
+                      </td>
+                      <td>
+                        <SanctionDatePicker
+                          value={toIsoDate(l.tentativeDisbursementDate)}
+                          onChange={setTentative(i)}
                         />
-                      </div>
-                    </td>
-                    <td>
-                      <select
-                        className="br-input" value={term.facilityType || ''}
-                        onChange={(e) => updateTerm(i, { facilityType: e.target.value })}
-                      >
-                        {FACILITY_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </td>
-                    <td className="br-right">
-                      <input type="text" className="br-input br-input-readonly" readOnly value={`${pct.toFixed(2)}%`} />
-                    </td>
-                    <td>
-                      <SanctionDatePicker
-                        value={toIsoDate(term.tentativeDisbursementDate)}
-                        onChange={setTentative(i)}
-                      />
-                    </td>
-                    <td>
-                      <SanctionDatePicker
-                        value={toIsoDate(term.actualDisbursementDate)}
-                        onChange={(iso) => updateTerm(i, { actualDisbursementDate: iso })}
-                        minDate={minDate}
-                        maxDate={maxDate}
-                      />
-                    </td>
-                    <td className="br-center">
-                      <button
-                        type="button" className="br-icon-btn br-terms-delete"
-                        onClick={() => handleRemove(i)} aria-label={`Delete ${limitName}`}
-                        disabled={terms.length <= 1}
-                        title={terms.length <= 1 ? 'At least one term is required' : undefined}
-                      >
-                        <Trash2 size={16} aria-hidden="true" />
-                      </button>
-                    </td>
-                  </tr>
+                      </td>
+                      <td>
+                        <SanctionDatePicker
+                          value={toIsoDate(l.actualDisbursementDate)}
+                          onChange={(iso) => updateLimit(i, { actualDisbursementDate: iso })}
+                          minDate={minDate}
+                          maxDate={maxDate}
+                        />
+                      </td>
+                      <td className="br-center">
+                        <button
+                          type="button" className="br-icon-btn br-limits-delete"
+                          onClick={() => handleRemove(i)} aria-label={`Delete ${limitName}`}
+                          disabled={limits.length <= 1}
+                          title={limits.length <= 1 ? 'At least one limit is required' : undefined}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="br-tranches-row">
+                        <td colSpan={6}>
+                          <div className="br-tranches-panel">
+                            <div className="br-tranches-head">
+                              <span className="br-tranches-title">Tranches for {limitName}</span>
+                              <button
+                                type="button" className="br-btn br-btn-sm"
+                                onClick={() => handleAddTranche(i)}
+                              >
+                                <Plus size={14} aria-hidden="true" /> Add Tranche
+                              </button>
+                            </div>
+                            {tranches.length > 0 ? (
+                              <>
+                                <table className="br-table-list br-tranches-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Tranche</th>
+                                      <th className="br-right">Amount Rs. Cr's</th>
+                                      <th className="br-center">Tentative Disb. Date</th>
+                                      <th className="br-center">Actual Disb. Date</th>
+                                      <th className="br-center">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {tranches.map((tr, tIdx) => (
+                                      <tr key={tIdx}>
+                                        <td>Tranche {tIdx + 1}</td>
+                                        <td>
+                                          <div className="br-input-group">
+                                            <span className="br-input-prefix" aria-hidden="true">Rs.</span>
+                                            <input
+                                              type="text" className="br-input" value={stripCrUnit(tr.trancheAmount)}
+                                              onChange={(e) => updateTrancheAmount(i, tIdx, stripCrUnit(e.target.value))}
+                                            />
+                                          </div>
+                                        </td>
+                                        <td>
+                                          <SanctionDatePicker
+                                            value={toIsoDate(tr.tentativeDisbursementDate)}
+                                            onChange={(iso) => updateTranche(i, tIdx, tr.actualDisbursementDate
+                                              ? { tentativeDisbursementDate: iso }
+                                              : { tentativeDisbursementDate: iso, actualDisbursementDate: iso })}
+                                          />
+                                        </td>
+                                        <td>
+                                          <SanctionDatePicker
+                                            value={toIsoDate(tr.actualDisbursementDate)}
+                                            onChange={(iso) => updateTranche(i, tIdx, { actualDisbursementDate: iso })}
+                                            minDate={minDate}
+                                            maxDate={maxDate}
+                                          />
+                                        </td>
+                                        <td className="br-center">
+                                          <button
+                                            type="button" className="br-icon-btn br-limits-delete"
+                                            onClick={() => handleRemoveTranche(i, tIdx)}
+                                            aria-label={`Delete Tranche ${tIdx + 1}`}
+                                          >
+                                            <Trash2 size={16} aria-hidden="true" />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                                <div className={`br-tranches-total ${trancheExceeds ? 'br-tone-warn' : 'br-tone-ok'}`}>
+                                  Tranche total: Rs. {trancheTotal.toFixed(2)} Cr of Rs. {trancheLimit.toFixed(2)} Cr
+                                  {trancheExceeds
+                                    ? ' — exceeds this limit\'s Amount'
+                                    : ` (Rs. ${Math.max(trancheLimit - trancheTotal, 0).toFixed(2)} Cr remaining)`}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="br-tranches-empty">No tranches added — this limit is disbursed as a single lump sum.</div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -565,29 +775,33 @@ const SanctionTermsCard = ({ terms, limitAmount, onChange, minDate, maxDate }) =
         </div>
       )}
 
-      {terms.length > 0 && (
-        <div className="br-terms-summary">
-          <div className="br-terms-summary-tile">
-            <span className="br-terms-summary-label">Total Term Limit</span>
-            <span className="br-terms-summary-value">Rs. {total.toFixed(2)} Cr</span>
+      {limits.length > 0 && (
+        <div className="br-limits-summary">
+          <div className="br-limits-summary-tile">
+            <span className="br-limits-summary-label">Total Limit Amount</span>
+            <span className="br-limits-summary-value">Rs. {total.toFixed(2)} Cr</span>
           </div>
-          <div className="br-terms-summary-tile">
-            <span className="br-terms-summary-label">Total Percentage</span>
-            <span className={`br-terms-summary-value ${balanced ? 'br-tone-ok' : 'br-tone-warn'}`}>
+          <div className="br-limits-summary-tile">
+            <span className="br-limits-summary-label">Total Percentage</span>
+            <span className={`br-limits-summary-value ${balanced ? 'br-tone-ok' : 'br-tone-warn'}`}>
               {(limit > 0 ? (total / limit) * 100 : 0).toFixed(2)}%
             </span>
           </div>
-          <div className="br-terms-summary-tile">
-            <span className="br-terms-summary-label">Overall Limit</span>
-            <span className="br-terms-summary-value">Rs. {limit.toFixed(2)} Cr</span>
+          <div className="br-limits-summary-tile">
+            <span className="br-limits-summary-label">Overall Limit</span>
+            <span className="br-limits-summary-value">Rs. {limit.toFixed(2)} Cr</span>
           </div>
-          <div className="br-terms-summary-tile">
-            <span className="br-terms-summary-label">Remaining Limit</span>
-            <span className={`br-terms-summary-value ${balanced ? 'br-tone-ok' : 'br-tone-warn'}`}>
+          <div className="br-limits-summary-tile">
+            <span className="br-limits-summary-label">Remaining Limit</span>
+            <span className={`br-limits-summary-value ${balanced ? 'br-tone-ok' : 'br-tone-warn'}`}>
               Rs. {remaining.toFixed(2)} Cr
             </span>
           </div>
         </div>
+      )}
+      {amountToast && createPortal(
+        <div className="br-limits-toast" role="alert">{amountToast}</div>,
+        document.body,
       )}
     </div>
   );
@@ -653,18 +867,15 @@ const SanctionFormModal = ({
   // already vanished by the time anyone read it, leaving the same blank
   // form with no visible reason Save wasn't going through.
   const [error, setError] = useState('');
-  // A Sanction Terms validation failure (Term 1's Actual Disb. Date missing,
-  // terms not summing to the Limit, a COD violation) is only shown at the
+  // A Sanction Limits validation failure (Limit 1's Actual Disb. Date missing,
+  // limits not summing to the Limit, a COD violation) is only shown at the
   // moment Save is actually clicked — not as a persistent banner the reviewer
-  // sees by default while still filling the form in — via this brief,
-  // center-of-screen, self-dismissing toast rather than the ordinary `error`
-  // banner. See centerToastMessage below and its own portal render.
+  // sees by default while still filling the form in — via this center-of-
+  // screen toast rather than the ordinary `error` banner. Stays up until the
+  // reviewer dismisses it themselves (its own × button) — long enough to add
+  // up what needs fixing (e.g. exactly how much a Limit is over/under by)
+  // outlasted a fixed auto-dismiss timer. See its own portal render below.
   const [centerToast, setCenterToast] = useState('');
-  useEffect(() => {
-    if (!centerToast) return undefined;
-    const t = setTimeout(() => setCenterToast(''), 3000);
-    return () => clearTimeout(t);
-  }, [centerToast]);
   const [previewUrl, setPreviewUrl] = useState('');
   const [attached, setAttached] = useState(null);   // File chosen in this form
   const [reading, setReading] = useState(false);
@@ -688,10 +899,10 @@ const SanctionFormModal = ({
   const { activeId: activeSectionId, setSectionRef, jumpTo: jumpToSection } = useSectionNav(
     NAV_SECTION_IDS, { rootRef: sectionBodyRef },
   );
-  // Which Sanction Term's own repayment schedule the Repayment Schedule tab
-  // shows — one at a time, picked from a dropdown, rather than every term's
+  // Which Sanction Limit's own repayment schedule the Repayment Schedule tab
+  // shows — one at a time, picked from a dropdown, rather than every limit's
   // schedule stacked one below the other.
-  const [selectedTermIndex, setSelectedTermIndex] = useState(0);
+  const [selectedLimitIndex, setSelectedLimitIndex] = useState(0);
   const [savedSanctionId, setSavedSanctionId] = useState(initial?.id || null);
 
   useEffect(() => {
@@ -736,19 +947,31 @@ const SanctionFormModal = ({
     // Not a flat FIELDS scalar (see the EMPTY comment above), so the
     // FIELDS.forEach loop above never copies it — only a genuinely saved
     // sanction (edit mode, or reopening after this session's own earlier
-    // save) has any; a freshly parsed letter never states Terms itself
+    // save) has any; a freshly parsed letter never states Limits itself
     // (extraction is unchanged — this is a reviewer-only construct), so
-    // `initial.terms` is simply absent there and this defaults to [].
-    // termLimit arrives from the backend as SanctionValueParser.formatCrore's
+    // `initial.limits` is simply absent there and this defaults to [].
+    // facilityLimitAmount arrives from the backend as SanctionValueParser.formatCrore's
     // own output ("₹135.02 Cr") — stripped here the same way every other
     // money field already is (normalizeMoneyValue/stripRs above), so it
     // reads as a plain "135.02" in the input, same shape numFrom/handleSave's
     // own withRs expect. Left un-stripped, the leading "₹" made every
-    // numFrom() parse of a reloaded term's amount come back NaN → 0 — the
-    // Total Term Limit / % of Limit / Total Percentage tiles all silently
+    // numFrom() parse of a reloaded limit's amount come back NaN → 0 — the
+    // Total Limit Amount / % of Limit / Total Percentage tiles all silently
     // read 0.00 despite real values sitting in every row.
-    next.terms = Array.isArray(initial.terms)
-      ? initial.terms.map((t) => ({ ...t, termLimit: stripRs(t.termLimit) }))
+    next.limits = Array.isArray(initial.limits)
+      ? initial.limits.map((l) => ({
+        ...l,
+        facilityLimitAmount: stripRs(l.facilityLimitAmount),
+        // Same un-prefixing as facilityLimitAmount just above — each
+        // tranche's own trancheAmount arrives from the backend as
+        // SanctionValueParser.formatCrore's output ("₹100.61 Cr") too, and
+        // left un-stripped, the leading "₹" made numFrom's parseFloat come
+        // back NaN → 0 for every reloaded tranche, so the Tranche total
+        // tile read 0.00 despite a real amount sitting right there in the box.
+        tranches: Array.isArray(l.tranches)
+          ? l.tranches.map((tr) => ({ ...tr, trancheAmount: stripRs(tr.trancheAmount) }))
+          : [],
+      }))
       : [];
     // A freshly (re)loaded record's dsraAmount/israAmount/actualCod are the
     // letter's own printed figures (or a previous session's override) — not
@@ -760,7 +983,7 @@ const SanctionFormModal = ({
     autoRepaymentStartRef.current = null;
     autoRepaymentEndRef.current = null;
     autoScheduledCodRef.current = null;
-    setForm(withDerivedTerm1(
+    setForm(withDerivedLimit1(
       withDerivedLimit(withDerivedMoratorium(next)),
       initial.tentativeDisbursementDate, initial.disbursementDate, initial.repaymentProfileJson,
     ));
@@ -800,7 +1023,7 @@ const SanctionFormModal = ({
           }
         });
         setStatedRoiPct(parsed.roiPct != null ? String(parsed.roiPct) : '');
-        setForm(withDerivedTerm1(
+        setForm(withDerivedLimit1(
           withDerivedLimit(withDerivedMoratorium(next)),
           parsed.tentativeDisbursementDate, parsed.disbursementDate, parsed.repaymentProfileJson,
         ));
@@ -837,21 +1060,21 @@ const SanctionFormModal = ({
     return () => URL.revokeObjectURL(url);
   }, [documentFile]);
 
-  // Term 1 is now where Tentative/Actual Disb. Date are actually typed (see
-  // SanctionTermsCard below) — but deriveSanction, resolveRepaymentWindow,
+  // Limit 1 is now where Tentative/Actual Disb. Date are actually typed (see
+  // SanctionLimitsCard below) — but deriveSanction, resolveRepaymentWindow,
   // the "Updates as you type" panel, and the save payload all still read
   // `form.disbursementDate`/`form.tentativeDisbursementDate` directly, by
   // design (see the EMPTY comment above): keeping those two plain form keys
-  // mirrored from Term 1 means every one of those keeps working completely
-  // unchanged, rather than needing to learn about Sanction Terms itself.
+  // mirrored from Limit 1 means every one of those keeps working completely
+  // unchanged, rather than needing to learn about Sanction Limits itself.
   useEffect(() => {
-    const term1 = (form.terms || [])[0];
-    const nextActual = term1?.actualDisbursementDate || '';
-    const nextTentative = term1?.tentativeDisbursementDate || '';
+    const limit1 = (form.limits || [])[0];
+    const nextActual = limit1?.actualDisbursementDate || '';
+    const nextTentative = limit1?.tentativeDisbursementDate || '';
     if (nextActual === form.disbursementDate && nextTentative === form.tentativeDisbursementDate) return;
     setForm((f) => ({ ...f, disbursementDate: nextActual, tentativeDisbursementDate: nextTentative }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.terms]);
+  }, [form.limits]);
 
   const derived = useMemo(
     () => deriveSanction({ ...form, roiPct: statedRoiPct }),
@@ -866,27 +1089,27 @@ const SanctionFormModal = ({
     [form, statedRoiPct],
   );
 
-  // One schedule per Sanction Term, each computed by the exact same
+  // One schedule per Sanction Limit, each computed by the exact same
   // deriveRepaymentSchedule this file already uses for the whole-sanction
-  // case above — reused as-is, just fed a per-term override of
+  // case above — reused as-is, just fed a per-limit override of
   // disbursementDate/debtAmount/repaymentProfileJson, with
   // repaymentStartDate/repaymentEndDate cleared so they're freshly resolved
-  // from THIS term's own Actual Disb. Date rather than inherited from the
+  // from THIS limit's own Actual Disb. Date rather than inherited from the
   // parent sanction's own dates. Every other input (ROI, tenor, moratorium
-  // treatment, frequency) is the parent sanction's own — Sanction Terms
-  // carry none of their own. Each term's own repaymentProfileJson (blank =
+  // treatment, frequency) is the parent sanction's own — Sanction Limits
+  // carry none of their own. Each limit's own repaymentProfileJson (blank =
   // no override yet, same equal-split default as before) is what makes the
-  // percentage editable per term, same as the sanction-level schedule
+  // percentage editable per limit, same as the sanction-level schedule
   // always was.
-  const termScheduleViews = useMemo(
-    () => (form.terms || []).map((term) => deriveRepaymentSchedule({
+  const limitScheduleViews = useMemo(
+    () => (form.limits || []).map((l) => deriveRepaymentSchedule({
       ...form,
       roiPct: statedRoiPct,
-      disbursementDate: term.actualDisbursementDate,
-      debtAmount: term.termLimit,
+      disbursementDate: l.actualDisbursementDate,
+      debtAmount: l.facilityLimitAmount,
       repaymentStartDate: '',
       repaymentEndDate: '',
-      repaymentProfileJson: term.repaymentProfileJson || '',
+      repaymentProfileJson: l.repaymentProfileJson || '',
     })),
     [form, statedRoiPct],
   );
@@ -897,27 +1120,27 @@ const SanctionFormModal = ({
   // visible and Save is blocked the moment it's true rather than only
   // after a failed Save click:
   //
-  // 1. The final amortizing term (RepaymentScheduleTab computes it as
-  //    100 - sum of every other term) has gone negative — the terms
+  // 1. The final amortizing period (RepaymentScheduleTab computes it as
+  //    100 - sum of every other period) has gone negative — the periods
   //    before it were over-allocated past 100%. This is what an edit
   //    produces the instant it becomes invalid.
   // 2. The whole schedule simply doesn't sum to exactly 100%, with the
-  //    final term still positive — this can't happen from an edit made
+  //    final period still positive — this can't happen from an edit made
   //    this session (the residual math guarantees exactly 100 whenever
   //    it runs), but a sanction can carry a *stored* percentage profile
   //    from an earlier save whose length still matches the current
   //    schedule yet whose values were never actually valid.
   //
-  // Neither ever changes how many terms exist — buildQuarterEndSchedule
+  // Neither ever changes how many limits exist — buildQuarterEndSchedule
   // sizes the schedule purely from the repayment dates/frequency, never
   // from the percentage profile — this only ever flags an invalid split
-  // among the terms that already exist.
-  // Checked once per Sanction Term now (each has its own independently
-  // editable repayment-percentage profile — see termScheduleViews above),
+  // among the periods that already exist.
+  // Checked once per Sanction Limit now (each has its own independently
+  // editable repayment-percentage profile — see limitScheduleViews above),
   // falling back to the single whole-sanction scheduleView only for the
-  // (now defensive-only — withDerivedTerm1 always seeds Term 1) zero-terms
+  // (now defensive-only — withDerivedLimit1 always seeds Limit 1) zero-limits
   // case, same as the Repayment Schedule tab's own render does.
-  const perScheduleViews = (form.terms || []).length ? termScheduleViews : [scheduleView];
+  const perScheduleViews = (form.limits || []).length ? limitScheduleViews : [scheduleView];
   const repaymentPctError = perScheduleViews.reduce((msg, view, idx) => {
     if (msg) return msg;
     const amortSchedule = view.schedule.filter((p) => p.repaymentPct !== undefined);
@@ -926,43 +1149,46 @@ const SanctionFormModal = ({
     const totalAmortPct = amortSchedule.reduce((t, p) => t + (p.repaymentPct || 0), 0);
     const label = perScheduleViews.length > 1 ? `${getSanctionLimitLabel(idx)}: ` : '';
     return finalAmortPeriod.repaymentPct < 0
-      ? `${label}Total repayment percentage cannot exceed 100%. Please adjust the repayment percentage in one or more existing terms so that the total is exactly 100%.`
+      ? `${label}Total repayment percentage cannot exceed 100%. Please adjust the repayment percentage in one or more existing limits so that the total is exactly 100%.`
       : Math.abs(100 - totalAmortPct) >= 0.01
-        ? `${label}Total repayment percentage must equal exactly 100%. Current total: ${Math.round(totalAmortPct * 100) / 100}%. Please adjust the repayment percentage in one or more existing terms so that the total is exactly 100%.`
+        ? `${label}Total repayment percentage must equal exactly 100%. Current total: ${Math.round(totalAmortPct * 100) / 100}%. Please adjust the repayment percentage in one or more existing limits so that the total is exactly 100%.`
         : '';
   }, '');
 
-  // Sanction Terms (Product section): same "computed live, blocks Save"
-  // pattern as repaymentPctError above. Every term's own Actual Disb. Date
-  // is required — not just Term 1's — since each one anchors that term's
-  // own repayment schedule; Term 1's was what "Disbursement date is
-  // required" used to mean at the sanction level before Sanction Terms
-  // existed (see withDerivedTerm1), now generalized to whichever term (or
-  // terms) still need it. Not living in `missingRequired` since
+  // Sanction Limits (Product section): same "computed live, blocks Save"
+  // pattern as repaymentPctError above. Every limit's own Actual Disb. Date
+  // is required — not just Limit 1's — since each one anchors that limit's
+  // own repayment schedule; Limit 1's was what "Disbursement date is
+  // required" used to mean at the sanction level before Sanction Limits
+  // existed (see withDerivedLimit1), now generalized to whichever limit (or
+  // limits) still need it. Not living in `missingRequired` since
   // disbursementDate is no longer a FIELDS scalar at all (see
-  // sanctionFields.js). An empty terms list shouldn't normally happen
-  // (withDerivedTerm1 always seeds Term 1), but is guarded defensively
+  // sanctionFields.js). An empty limits list shouldn't normally happen
+  // (withDerivedLimit1 always seeds Limit 1), but is guarded defensively
   // rather than assumed away.
-  const termsTotal = (form.terms || []).reduce(
-    (t, term) => t + (parseFloat(String(term.termLimit ?? '').replace(/,/g, '')) || 0), 0,
+  const limitsTotal = (form.limits || []).reduce(
+    (t, l) => t + (parseFloat(String(l.facilityLimitAmount ?? '').replace(/,/g, '')) || 0), 0,
   );
-  const termsLimit = parseFloat(String(form.limitAmount ?? '').replace(/,/g, '')) || 0;
-  const termsMissingActual = (form.terms || []).findIndex((term) => !term.actualDisbursementDate);
-  const termsCodViolation = (form.terms || []).find((term) => {
-    if (!term.actualDisbursementDate || !form.scheduledCod) return false;
-    const disb = parseDate(term.actualDisbursementDate);
+  const limitsSum = parseFloat(String(form.limitAmount ?? '').replace(/,/g, '')) || 0;
+  const limitsMissingInstrument = (form.limits || []).findIndex((l) => !l.facilityType);
+  const limitsMissingActual = (form.limits || []).findIndex((l) => !l.actualDisbursementDate);
+  const limitsCodViolation = (form.limits || []).find((l) => {
+    if (!l.actualDisbursementDate || !form.scheduledCod) return false;
+    const disb = parseDate(l.actualDisbursementDate);
     const cod = parseDate(form.scheduledCod);
     return disb && cod && disb.getTime() >= cod.getTime();
   });
-  const sanctionTermsError = !(form.terms || []).length
-    ? 'At least one Sanction Term is required.'
-    : termsMissingActual !== -1
-      ? `${getSanctionLimitLabel(termsMissingActual)} Actual Disb. Date is required.`
-      : termsCodViolation
-        ? `Each Sanction Term's Actual Disb. Date must fall before the Scheduled COD date (${form.scheduledCod}).`
-        : Math.abs(termsTotal - termsLimit) >= 0.01
-          ? `The Limit Terms must add up to the Limit (₹${termsLimit.toFixed(2)} Cr). Current total: ₹${termsTotal.toFixed(2)} Cr.`
-          : '';
+  const sanctionLimitsError = !(form.limits || []).length
+    ? 'At least one Sanction Limit is required.'
+    : Math.abs(limitsTotal - limitsSum) >= 0.01
+      ? `The Limits must add up to the Limit (₹${limitsSum.toFixed(2)} Cr). Current total: ₹${limitsTotal.toFixed(2)} Cr.`
+      : limitsMissingInstrument !== -1
+        ? `${getSanctionLimitLabel(limitsMissingInstrument)} Instrument is required.`
+        : limitsMissingActual !== -1
+          ? `${getSanctionLimitLabel(limitsMissingActual)} Actual Disb. Date is required.`
+          : limitsCodViolation
+            ? `Each Sanction Limit's Actual Disb. Date must fall before the Scheduled COD date (${form.scheduledCod}).`
+            : '';
 
   // Project Cost = Debt (the sanctioned amount) + Equity, so any one of
   // Debt / Equity / Debt % / Equity % that the letter left blank follows
@@ -1142,14 +1368,14 @@ const SanctionFormModal = ({
     // being edited alike — a partially-edited profile is fine to look at
     // live, but never to save, since it would silently under- or
     // over-repay the loan. repaymentPctError (computed live off the same
-    // scheduleView, see above — covers both a negative final term and a
+    // scheduleView, see above — covers both a negative final period and a
     // stored profile that simply doesn't sum to 100) already has its own
     // persistent banner and disabled Save button, so this is purely a
     // defensive backstop, not the normal way a reviewer encounters it.
     if (repaymentPctError) return;
-    // Sanction Terms must add up to the Limit and clear COD — same "computed
+    // Sanction Limits must add up to the Limit and clear COD — same "computed
     // live, block Save" contract as repaymentPctError just above.
-    if (sanctionTermsError) { setCenterToast(sanctionTermsError); return; }
+    if (sanctionLimitsError) { setCenterToast(sanctionLimitsError); return; }
     setSaving(true);
     try {
       // The sanction payload, built once regardless of which path below
@@ -1173,7 +1399,7 @@ const SanctionFormModal = ({
         }), {}),
         // Neither is a FIELDS scalar any more (see the EMPTY comment above)
         // — sent alongside the rest by hand. disbursementDate/
-        // tentativeDisbursementDate are kept in sync from Term 1 (see the
+        // tentativeDisbursementDate are kept in sync from Limit 1 (see the
         // sync effect above), so the backend's existing required/date-range
         // check on disbursementDate keeps working completely unchanged.
         disbursementDate: form.disbursementDate,
@@ -1181,7 +1407,11 @@ const SanctionFormModal = ({
         // Same "Rs." shape every other money value on this form already
         // gets from withRs, so the backend's SanctionValueParser parses it
         // identically.
-        terms: (form.terms || []).map((t) => ({ ...t, termLimit: withRs(t.termLimit) })),
+        limits: (form.limits || []).map((l) => ({
+          ...l,
+          facilityLimitAmount: withRs(l.facilityLimitAmount),
+          tranches: (l.tranches || []).map((tr) => ({ ...tr, trancheAmount: withRs(tr.trancheAmount) })),
+        })),
         status: mode === 'import' ? 'IMPORTED' : (initial?.status || 'DRAFT'),
         source: mode === 'import' ? 'IMPORTED' : (initial?.source || 'MANUAL'),
         extractionEngine: engine || initial?.extractionEngine || null,
@@ -1368,7 +1598,20 @@ const SanctionFormModal = ({
     <div className="br-modal-backdrop" onMouseDown={handleCancel}>
       {reading && <CrmPreloader text="Reading sanction letter…" />}
       {centerToast && createPortal(
-        <div className="br-center-toast" role="alert">{centerToast}</div>,
+        // React bubbles a portal's events through its OWN component tree,
+        // not the DOM tree it's actually rendered into — so without this,
+        // a mousedown here still reaches the backdrop's onMouseDown={handleCancel}
+        // above (its real ancestor in the React tree, document.body in the
+        // DOM) and closes the whole modal instead of just dismissing this.
+        <div className="br-center-toast" role="alert" onMouseDown={(e) => e.stopPropagation()}>
+          <span>{centerToast}</span>
+          <button
+            type="button" className="br-center-toast-close"
+            onClick={() => setCenterToast('')} aria-label="Dismiss"
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>,
         document.body,
       )}
       {/* Wide in every mode now: thirty-odd fields in a single narrow column
@@ -1477,39 +1720,39 @@ const SanctionFormModal = ({
         )}
 
         {activeTab === 'schedule' && (mode !== 'create' || savedSanctionId) ? (
-          (form.terms || []).length > 0 ? (
-            <div className="br-term-schedule-body">
+          (form.limits || []).length > 0 ? (
+            <div className="br-limit-schedule-body">
               {(() => {
-                const i = Math.min(selectedTermIndex, form.terms.length - 1);
-                const term = form.terms[i];
+                const i = Math.min(selectedLimitIndex, form.limits.length - 1);
+                const l = form.limits[i];
                 return (
-                  <div className="br-term-schedule-section">
-                    <div className="br-term-schedule-heading">
-                      {form.terms.length > 1 && (
+                  <div className="br-limit-schedule-section">
+                    <div className="br-limit-schedule-heading">
+                      {form.limits.length > 1 && (
                         <select
-                          className="br-input br-term-schedule-select"
+                          className="br-input br-limit-schedule-select"
                           value={i}
-                          onChange={(e) => setSelectedTermIndex(Number(e.target.value))}
+                          onChange={(e) => setSelectedLimitIndex(Number(e.target.value))}
                         >
-                          {form.terms.map((t, idx) => (
+                          {form.limits.map((l2, idx) => (
                             <option key={idx} value={idx}>
-                              {t.limitLabel || getSanctionLimitLabel(idx)}
+                              {l2.limitLabel || getSanctionLimitLabel(idx)}
                             </option>
                           ))}
                         </select>
                       )}
-                      <span className="br-term-schedule-sub">
-                        {term.termLimit ? `Rs. ${term.termLimit} Cr` : '—'}
+                      <span className="br-limit-schedule-sub">
+                        {l.facilityLimitAmount ? `Rs. ${l.facilityLimitAmount} Cr` : '—'}
                         {' · Actual Disb. Date: '}
-                        {formatDate(parseDate(term.actualDisbursementDate)) || '—'}
+                        {formatDate(parseDate(l.actualDisbursementDate)) || '—'}
                       </span>
                     </div>
                     <RepaymentScheduleTab
-                      view={termScheduleViews[i]}
-                      form={{ ...form, disbursementDate: term.actualDisbursementDate, debtAmount: term.termLimit }}
+                      view={limitScheduleViews[i]}
+                      form={{ ...form, disbursementDate: l.actualDisbursementDate, debtAmount: l.facilityLimitAmount }}
                       onProfileChange={(json) => setForm((f) => ({
                         ...f,
-                        terms: f.terms.map((t, idx) => (idx === i ? { ...t, repaymentProfileJson: json } : t)),
+                        limits: f.limits.map((l2, idx) => (idx === i ? { ...l2, repaymentProfileJson: json } : l2)),
                       }))}
                       tableHeading={null}
                     />
@@ -1669,7 +1912,7 @@ const SanctionFormModal = ({
                         ) : f.kind === 'date' ? (
                           // The min/max validity-window constraint that used
                           // to apply here for `disbursementDate` now lives on
-                          // SanctionTermsCard's own Actual Disb. Date column
+                          // SanctionLimitsCard's own Actual Disb. Date column
                           // instead — that field no longer renders through
                           // this generic loop at all (see sanctionFields.js).
                           <SanctionDatePicker
@@ -1710,17 +1953,19 @@ const SanctionFormModal = ({
                   </div>
                 )}
 
-                {sec.group === 'Limit Terms' && (
-                  <SanctionTermsCard
-                    terms={form.terms || []}
+                {sec.group === 'Limits' && (
+                  <SanctionLimitsCard
+                    limits={form.limits || []}
                     limitAmount={form.limitAmount}
-                    onChange={(terms) => setForm((f) => ({ ...f, terms }))}
+                    onChange={(limits) => setForm((f) => ({ ...f, limits }))}
                     // Same constraint the sanction-level Actual Disb. Date
                     // field used to carry (min = Sanction Date, max = the
                     // date the sanction lapses) — now applied to every
-                    // term's own Actual Disb. Date column.
+                    // limit's own Actual Disb. Date column.
                     minDate={toIsoDate(form.sanctionDate)}
                     maxDate={derived.sanctionValidTillIso || ''}
+                    sanctionValidFrom={formatDate(parseDate(form.sanctionDate))}
+                    sanctionValidTill={derived.sanctionValidTill}
                   />
                 )}
 
