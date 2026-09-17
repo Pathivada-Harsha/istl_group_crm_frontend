@@ -47,6 +47,7 @@ import ProjectDetailPage from "./components/projects/ProjectDetailPage.js";
 import Tenders from "./Pages/Tenders.js";
 import OrdersInLine from "./Pages/OrdersInLine.js"; // PROVISIONAL — temporary register, see file header
 import BorrowerRegistry from "./Pages/BorrowerRegistry.js";
+import BorrowerComparison from "./Pages/BorrowerComparison.js";
 import BorrowerMasterData from "./Pages/BorrowerMasterData.js";
 import BorrowerDetail from "./components/borrowers/BorrowerDetail.js";
 import GroupDetail from "./components/borrowers/GroupDetail.js";
@@ -273,6 +274,12 @@ function AppShell({ hideShell }) {
               from a link that also matches the index path. */}
           <Route path="/lender/borrowers" element={
             <ProtectedRoute><BorrowerRegistry /></ProtectedRoute>
+          } />
+
+          {/* Standalone comparison module — must also come before ":id" below
+              for the same reason as the list route's own comment. */}
+          <Route path="/lender/borrowers/compare" element={
+            <ProtectedRoute><BorrowerComparison /></ProtectedRoute>
           } />
 
           <Route path="/lender/borrower-master-data" element={

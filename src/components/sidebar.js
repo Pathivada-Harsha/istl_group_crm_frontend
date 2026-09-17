@@ -262,6 +262,16 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           // from the document icon above.
           icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
         },
+        {
+          name: 'Borrower Comparison',
+          path: '/lender/borrowers/compare',
+          // Standalone, read-only module — same permission as the registry
+          // it's reached from, not a new one, since it shows nothing a user
+          // couldn't already see one sanction at a time on that page.
+          permission: 'LENDER_BORROWERS',
+          // Two side-by-side columns being compared.
+          icon: 'M9 3v18M15 3v18M4 7h5M4 17h5M15 7h5M15 17h5',
+        },
       ],
     },
     {
