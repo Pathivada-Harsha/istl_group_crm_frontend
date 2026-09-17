@@ -56,13 +56,25 @@ const BOARD_COLUMNS = [
 ];
 
 
+const dayOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
 const isResurfaced = (lead) => {
   if (lead.telecallerStatus !== "NOT_RESPONDED" || !lead.telecallerStatusUpdatedAt) return false;
   const d = parseBackendDate(lead.telecallerStatusUpdatedAt);
-  return !!d && !isNaN(d) && (Date.now() - d.getTime()) > 24 * 60 * 60 * 1000;
+  return !!d && !isNaN(d) && dayOnly(d) < dayOnly(new Date());
 };
 
-const dayOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+// "Yesterday" / "2 days ago" / null for a lead marked earlier than today —
+// null means it's from today, i.e. not stale yet.
+const relativeDayLabel = (dateStr) => {
+  const d = parseBackendDate(dateStr);
+  if (!d || isNaN(d)) return null;
+  const diffDays = Math.round((dayOnly(new Date()) - dayOnly(d)) / 86400000);
+  if (diffDays <= 0) return null;
+  if (diffDays === 1) return "Yesterday";
+  return `${diffDays} days ago`;
+};
+
 const isKivDueToday = (lead) => {
   if (lead.telecallerStatus !== "KEEP_IN_VIEW" || !lead.kivReminderDate) return false;
   const d = parseBackendDate(lead.kivReminderDate);
@@ -1240,7 +1252,14 @@ export default function TelecallerLeadsPage() {
               <div className="tc-board-col-body">
                 {(() => {
                   const colLeads = col.key === "NOT_RESPONDED"
-                    ? [...boardData[col.key]].sort((a,b) => { const ar=isResurfaced(a),br=isResurfaced(b); if(ar===br)return 0; return ar?1:-1; })
+                    ? [...boardData[col.key]].sort((a,b) => {
+                        const ar=isResurfaced(a), br=isResurfaced(b);
+                        if (ar!==br) return ar?1:-1;
+                        // Within each bucket (fresh / resurfaced), latest-marked first.
+                        const ta=parseBackendDate(a.telecallerStatusUpdatedAt), tb=parseBackendDate(b.telecallerStatusUpdatedAt);
+                        const na=ta&&!isNaN(ta)?ta.getTime():0, nb=tb&&!isNaN(tb)?tb.getTime():0;
+                        return nb-na;
+                      })
                     : col.key === "KEEP_IN_VIEW"
                     ? [...boardData[col.key]].sort((a,b) => { const ad=isKivDueToday(a),bd=isKivDueToday(b); if(ad===bd)return kivDueSort(a,b); return ad?-1:1; })
                     : boardData[col.key];
@@ -1929,7 +1948,11 @@ function BoardCard({ lead, onDragStart, onDragEnd, onDetail, onStatus, onEdit, c
         </div>
       </div>
       <span className="tc-board-card-code">{lead.leadCode}</span>
-      {resurfaced && <div className="tc-board-resurfaced-tag">⚡ Resurfaced</div>}
+      {resurfaced && (
+        <div className="tc-board-resurfaced-tag">
+          ⚡ Resurfaced{lead.telecallerStatusUpdatedAt ? ` — ${relativeDayLabel(lead.telecallerStatusUpdatedAt)}` : ""}
+        </div>
+      )}
       <div className="tc-board-card-contact"><span>📞 {lead.phone}</span></div>
       {lead.city && <div className="tc-board-card-loc">📍 {[lead.city, lead.state].filter(Boolean).join(", ")}</div>}
       {(lead.groupName || lead.subGroupName) && (
@@ -1939,9 +1962,6 @@ function BoardCard({ lead, onDragStart, onDragEnd, onDetail, onStatus, onEdit, c
       )}
       <div className="tc-board-card-meta">
         <span className="tc-board-card-date">{formatDate(lead.createdAt)}</span>
-        {resurfaced && lead.telecallerStatusUpdatedAt && (
-          <span className="tc-board-resurfaced-since">set {formatDateTime(lead.telecallerStatusUpdatedAt)}</span>
-        )}
       </div>
       <div className="tc-board-card-actions" onClick={e => e.stopPropagation()}>
         <button className="tc-board-card-btn tc-board-card-btn--status" onClick={onStatus}>Status</button>
@@ -1980,6 +2000,13 @@ function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
         <div style={{margin:"4px 0 2px",display:"flex",alignItems:"center",gap:5}}>
           <span style={{fontSize:11,fontWeight:600,color:"#7c3aed",background:"#f5f3ff",border:"1.5px solid #e9d5ff",borderRadius:20,padding:"2px 10px",display:"inline-flex",alignItems:"center",gap:4}}>
             👁 KIV · Call back by {new Date(lead.kivReminderDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})}
+          </span>
+        </div>
+      )}
+      {isResurfaced(lead) && (
+        <div style={{margin:"4px 0 2px",display:"flex",alignItems:"center",gap:5}}>
+          <span style={{fontSize:11,fontWeight:600,color:"#d97706",background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:20,padding:"2px 10px",display:"inline-flex",alignItems:"center",gap:4}}>
+            ⚡ Resurfaced — {relativeDayLabel(lead.telecallerStatusUpdatedAt)}
           </span>
         </div>
       )}
