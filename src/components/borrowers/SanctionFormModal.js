@@ -19,10 +19,11 @@ import { useAuth } from '../../hooks/useAuth';
 import CrmPreloader from '../preLoader';
 import {
   deriveSanction, deriveRepaymentSchedule, parseDate, parsePct, parseMoneyCrore, formatCrore,
-  parseMoratoriumMonths, resolveRepaymentWindow, formatDate,
+  parseMoratoriumMonths, resolveRepaymentWindow, formatDate, earliestActualTrancheDate, earliestTrancheDate,
 } from './sanctionDerive';
 import SanctionCompareModal from './SanctionCompareModal';
 import RepaymentScheduleTab from './RepaymentScheduleTab';
+import { displayName } from './displayName';
 import TechnologyGroupDropdowns from './TechnologyGroupDropdowns';
 import {
   SANCTION_FIELDS as FIELDS, sanctionFieldGroups, FACILITY_TYPE_OPTIONS, getSanctionLimitLabel,
@@ -30,7 +31,9 @@ import {
 import { BORROWER_IMPORT_KEYS, CIN_REGEX } from './borrowerFields';
 import { resolveHierarchyGroupId } from './HierarchyPicker';
 import { useSectionNav } from './useSectionNav';
-import { statusLabel, sourceLabel, FieldInfoHint } from './SanctionOverviewPanel';
+import {
+  statusLabel, sourceLabel, FieldInfoHint, RepaymentCalculationInfo,
+} from './SanctionOverviewPanel';
 import '../../pages-css/BorrowerRegistry.css';
 import '../../pages-css/SanctionRedesign.css';
 
@@ -661,20 +664,43 @@ const SanctionLimitsCard = ({ limits, limitAmount, onChange, minDate, maxDate, s
                       <td className="br-right">
                         <input type="text" className="br-input br-input-readonly" readOnly value={`${pct.toFixed(2)}%`} />
                       </td>
-                      <td>
-                        <SanctionDatePicker
-                          value={toIsoDate(l.tentativeDisbursementDate)}
-                          onChange={setTentative(i)}
-                        />
-                      </td>
-                      <td>
-                        <SanctionDatePicker
-                          value={toIsoDate(l.actualDisbursementDate)}
-                          onChange={(iso) => updateLimit(i, { actualDisbursementDate: iso })}
-                          minDate={minDate}
-                          maxDate={maxDate}
-                        />
-                      </td>
+                      {tranches.length > 0 ? (
+                        <>
+                          {/* Tranches own the dates: shown read-only (the earliest
+                              of each), never typed or required here. */}
+                          <td>
+                            <input
+                              type="text" className="br-input br-input-readonly" readOnly
+                              value={formatDate(parseDate(l.tentativeDisbursementDate)) || '—'}
+                              title="Taken from this limit's tranches"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text" className="br-input br-input-readonly" readOnly
+                              value={formatDate(parseDate(l.actualDisbursementDate)) || '—'}
+                              title="Taken from this limit's tranches"
+                            />
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td>
+                            <SanctionDatePicker
+                              value={toIsoDate(l.tentativeDisbursementDate)}
+                              onChange={setTentative(i)}
+                            />
+                          </td>
+                          <td>
+                            <SanctionDatePicker
+                              value={toIsoDate(l.actualDisbursementDate)}
+                              onChange={(iso) => updateLimit(i, { actualDisbursementDate: iso })}
+                              minDate={minDate}
+                              maxDate={maxDate}
+                            />
+                          </td>
+                        </>
+                      )}
                       <td className="br-center">
                         <button
                           type="button" className="br-icon-btn br-limits-delete"
@@ -701,58 +727,60 @@ const SanctionLimitsCard = ({ limits, limitAmount, onChange, minDate, maxDate, s
                             </div>
                             {tranches.length > 0 ? (
                               <>
-                                <table className="br-table-list br-tranches-table">
-                                  <thead>
-                                    <tr>
-                                      <th>Tranche</th>
-                                      <th className="br-right">Amount Rs. Cr's</th>
-                                      <th className="br-center">Tentative Disb. Date</th>
-                                      <th className="br-center">Actual Disb. Date</th>
-                                      <th className="br-center">Actions</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {tranches.map((tr, tIdx) => (
-                                      <tr key={tIdx}>
-                                        <td>Tranche {tIdx + 1}</td>
-                                        <td>
-                                          <div className="br-input-group">
-                                            <span className="br-input-prefix" aria-hidden="true">Rs.</span>
-                                            <input
-                                              type="text" className="br-input" value={stripCrUnit(tr.trancheAmount)}
-                                              onChange={(e) => updateTrancheAmount(i, tIdx, stripCrUnit(e.target.value))}
-                                            />
-                                          </div>
-                                        </td>
-                                        <td>
-                                          <SanctionDatePicker
-                                            value={toIsoDate(tr.tentativeDisbursementDate)}
-                                            onChange={(iso) => updateTranche(i, tIdx, tr.actualDisbursementDate
-                                              ? { tentativeDisbursementDate: iso }
-                                              : { tentativeDisbursementDate: iso, actualDisbursementDate: iso })}
-                                          />
-                                        </td>
-                                        <td>
-                                          <SanctionDatePicker
-                                            value={toIsoDate(tr.actualDisbursementDate)}
-                                            onChange={(iso) => updateTranche(i, tIdx, { actualDisbursementDate: iso })}
-                                            minDate={minDate}
-                                            maxDate={maxDate}
-                                          />
-                                        </td>
-                                        <td className="br-center">
-                                          <button
-                                            type="button" className="br-icon-btn br-limits-delete"
-                                            onClick={() => handleRemoveTranche(i, tIdx)}
-                                            aria-label={`Delete Tranche ${tIdx + 1}`}
-                                          >
-                                            <Trash2 size={16} aria-hidden="true" />
-                                          </button>
-                                        </td>
+                                <div className="br-tranches-scroll">
+                                  <table className="br-table-list br-tranches-table">
+                                    <thead>
+                                      <tr>
+                                        <th>Tranche</th>
+                                        <th className="br-right">Amount Rs. Cr's</th>
+                                        <th className="br-center">Tentative Disb. Date</th>
+                                        <th className="br-center">Actual Disb. Date</th>
+                                        <th className="br-center">Actions</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                    </thead>
+                                    <tbody>
+                                      {tranches.map((tr, tIdx) => (
+                                        <tr key={tIdx}>
+                                          <td>Tranche {tIdx + 1}</td>
+                                          <td>
+                                            <div className="br-input-group">
+                                              <span className="br-input-prefix" aria-hidden="true">Rs.</span>
+                                              <input
+                                                type="text" className="br-input" value={stripCrUnit(tr.trancheAmount)}
+                                                onChange={(e) => updateTrancheAmount(i, tIdx, stripCrUnit(e.target.value))}
+                                              />
+                                            </div>
+                                          </td>
+                                          <td>
+                                            <SanctionDatePicker
+                                              value={toIsoDate(tr.tentativeDisbursementDate)}
+                                              onChange={(iso) => updateTranche(i, tIdx, tr.actualDisbursementDate
+                                                ? { tentativeDisbursementDate: iso }
+                                                : { tentativeDisbursementDate: iso, actualDisbursementDate: iso })}
+                                            />
+                                          </td>
+                                          <td>
+                                            <SanctionDatePicker
+                                              value={toIsoDate(tr.actualDisbursementDate)}
+                                              onChange={(iso) => updateTranche(i, tIdx, { actualDisbursementDate: iso })}
+                                              minDate={minDate}
+                                              maxDate={maxDate}
+                                            />
+                                          </td>
+                                          <td className="br-center">
+                                            <button
+                                              type="button" className="br-icon-btn br-limits-delete"
+                                              onClick={() => handleRemoveTranche(i, tIdx)}
+                                              aria-label={`Delete Tranche ${tIdx + 1}`}
+                                            >
+                                              <Trash2 size={16} aria-hidden="true" />
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                                 <div className={`br-tranches-total ${trancheExceeds ? 'br-tone-warn' : 'br-tone-ok'}`}>
                                   Tranche total: Rs. {trancheTotal.toFixed(2)} Cr of Rs. {trancheLimit.toFixed(2)} Cr
                                   {trancheExceeds
@@ -1067,6 +1095,30 @@ const SanctionFormModal = ({
   // design (see the EMPTY comment above): keeping those two plain form keys
   // mirrored from Limit 1 means every one of those keeps working completely
   // unchanged, rather than needing to learn about Sanction Limits itself.
+  // A limit that has tranches takes its Tentative/Actual Disb. Date from
+  // those tranches (the earliest of each) — the limit's own two dates are
+  // neither typed nor required for it, and the repayment schedule never reads
+  // them once tranches exist. Keeping them mirrored here means every other
+  // reader of a limit's dates (the Limits tables, the sanction-level
+  // Disbursement Date below, the backend) sees the same tranche-derived values
+  // instead of a stale or blank one. Only writes when something differs.
+  useEffect(() => {
+    const limits = form.limits || [];
+    let changed = false;
+    const next = limits.map((l) => {
+      const tranches = l.tranches || [];
+      if (!tranches.length) return l;
+      const actual = toIsoDate(earliestTrancheDate(tranches, 'actualDisbursementDate')) || '';
+      const tentative = toIsoDate(earliestTrancheDate(tranches, 'tentativeDisbursementDate')) || '';
+      if ((toIsoDate(l.actualDisbursementDate) || '') === actual
+          && (toIsoDate(l.tentativeDisbursementDate) || '') === tentative) return l;
+      changed = true;
+      return { ...l, actualDisbursementDate: actual, tentativeDisbursementDate: tentative };
+    });
+    if (changed) setForm((f) => ({ ...f, limits: next }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.limits]);
+
   useEffect(() => {
     const limit1 = (form.limits || [])[0];
     const nextActual = limit1?.actualDisbursementDate || '';
@@ -1110,6 +1162,9 @@ const SanctionFormModal = ({
       repaymentStartDate: '',
       repaymentEndDate: '',
       repaymentProfileJson: l.repaymentProfileJson || '',
+      // A limit with tranches is anchored and priced off them inside
+      // deriveRepaymentSchedule; one without keeps its own date/amount.
+      tranches: l.tranches || [],
     })),
     [form, statedRoiPct],
   );
@@ -1171,7 +1226,11 @@ const SanctionFormModal = ({
   );
   const limitsSum = parseFloat(String(form.limitAmount ?? '').replace(/,/g, '')) || 0;
   const limitsMissingInstrument = (form.limits || []).findIndex((l) => !l.facilityType);
-  const limitsMissingActual = (form.limits || []).findIndex((l) => !l.actualDisbursementDate);
+  // A limit with tranches has no date of its own to enter — its dates come
+  // from the tranches — so only a limit WITHOUT tranches must have one.
+  const limitsMissingActual = (form.limits || []).findIndex(
+    (l) => !l.actualDisbursementDate && !(l.tranches || []).length,
+  );
   // The date-picker's own min/max (see SanctionLimitsCard's maxDate prop
   // below) only ever stops a NEW pick past Sanction Valid Till — it can't
   // undo a value that arrived already out of range (an imported letter's
@@ -1190,6 +1249,47 @@ const SanctionFormModal = ({
     const cod = parseDate(form.scheduledCod);
     return disb && cod && disb.getTime() >= cod.getTime();
   });
+  // Same backstop as limitsValidTillViolation above, one level down: a
+  // Tranche's own SanctionDatePicker already carries the same maxDate
+  // (Sanction Valid Till), but that only stops a NEW out-of-range pick —
+  // it can't undo an already-stored date (an imported letter's raw parsed
+  // value, or one typed in before the Sanction Date changed underneath it).
+  // Unlike Limits, Tranches had no save-blocking check for this at all
+  // before now.
+  const tranchesValidTillViolation = (form.limits || []).flatMap(
+    (l, lIdx) => (l.tranches || []).map((t, tIdx) => ({ l, lIdx, t, tIdx })),
+  ).find(({ t }) => {
+    if (!t.actualDisbursementDate || !derived.sanctionValidTill) return false;
+    const disb = parseDate(t.actualDisbursementDate);
+    const validTill = parseDate(derived.sanctionValidTill);
+    return disb && validTill && disb.getTime() > validTill.getTime();
+  });
+  // A tranche drawn after the moratorium has ended can't be repaid by the
+  // Repayment % profile (which is applied to what was disbursed by Moratorium
+  // End), so it is rejected here and again in BorrowerService. Moratorium End
+  // is worked out the same way the schedule does — from the limit's earliest
+  // tranche Actual Disb. Date — so this can never disagree with the table.
+  const trancheAfterMoratorium = (() => {
+    for (let lIdx = 0; lIdx < (form.limits || []).length; lIdx += 1) {
+      const tranches = form.limits[lIdx].tranches || [];
+      const anchor = earliestActualTrancheDate(tranches);
+      if (anchor) {
+        const { moratoriumEnd } = resolveRepaymentWindow({
+          ...form, disbursementDate: anchor, repaymentStartDate: '', repaymentEndDate: '',
+        });
+        if (moratoriumEnd) {
+          for (let tIdx = 0; tIdx < tranches.length; tIdx += 1) {
+            const d = parseDate(tranches[tIdx].actualDisbursementDate);
+            if (d && d.getTime() > moratoriumEnd.getTime()) {
+              return { lIdx, tIdx, moratoriumEndDisplay: (formatDate(moratoriumEnd) || '').replace(/ /g, '-') };
+            }
+          }
+        }
+      }
+    }
+    return null;
+  })();
+  const validTillDisplay = (derived.sanctionValidTill || '').replace(/ /g, '-');
   const sanctionLimitsError = !(form.limits || []).length
     ? 'At least one Sanction Limit is required.'
     : Math.abs(limitsTotal - limitsSum) >= 0.01
@@ -1199,10 +1299,14 @@ const SanctionFormModal = ({
         : limitsMissingActual !== -1
           ? `${getSanctionLimitLabel(limitsMissingActual)} Actual Disb. Date is required.`
           : limitsValidTillViolation
-            ? `Each Sanction Limit's Actual Disb. Date must fall on or before the Sanction Valid Till date (${derived.sanctionValidTill}).`
+            ? `Actual Disbursement Date cannot be later than the Sanction Valid End Date (${validTillDisplay}).`
             : limitsCodViolation
               ? `Each Sanction Limit's Actual Disb. Date must fall before the Scheduled COD date (${form.scheduledCod}).`
-              : '';
+              : tranchesValidTillViolation
+                ? `${getSanctionLimitLabel(tranchesValidTillViolation.lIdx)} Tranche ${tranchesValidTillViolation.tIdx + 1}: Actual Disbursement Date cannot be later than the Sanction Valid End Date (${validTillDisplay}).`
+                : trancheAfterMoratorium
+                  ? `${getSanctionLimitLabel(trancheAfterMoratorium.lIdx)} Tranche ${trancheAfterMoratorium.tIdx + 1}: Actual Disbursement Date cannot be later than the Moratorium End Date (${trancheAfterMoratorium.moratoriumEndDisplay}), since repayment principal is based on the amount disbursed by then.`
+                  : '';
 
   // Project Cost = Debt (the sanctioned amount) + Equity, so any one of
   // Debt / Equity / Debt % / Equity % that the letter left blank follows
@@ -1675,7 +1779,7 @@ const SanctionFormModal = ({
               )}
               {isGroupTarget && (
                 <p className="br-modal-sub">
-                  Associated with: <strong>{displayGroupName}</strong>
+                  Associated with: <strong>{displayName(displayGroupName)}</strong>
                   {' — '}{displayGroupType === 'SUB_GROUP' ? 'Sub Group' : 'Parent Group'}
                   {pending?.kind === 'GROUP' && !groupTarget?.groupId && ' (new)'}
                 </p>
@@ -1761,15 +1865,27 @@ const SanctionFormModal = ({
                         {formatDate(parseDate(l.actualDisbursementDate)) || '—'}
                       </span>
                     </div>
+                    {(l.tranches || []).length > 0 && (
+                      <div className="br-limit-schedule-title-row">
+                        <h3 className="br-tranche-panel-heading">Repayment Schedule (Combined for Entire Limit)</h3>
+                        <FieldInfoHint text="This is one combined repayment schedule for the entire limit. Individual tranche disbursements are shown separately in the disbursement columns, while interest, principal repayment, debt service and closing balance are calculated/displayed at the combined limit level." />
+                      </div>
+                    )}
                     <RepaymentScheduleTab
                       view={limitScheduleViews[i]}
-                      form={{ ...form, disbursementDate: l.actualDisbursementDate, debtAmount: l.facilityLimitAmount }}
+                      form={{
+                        ...form,
+                        disbursementDate: l.actualDisbursementDate,
+                        debtAmount: l.facilityLimitAmount,
+                        tranches: l.tranches || [],
+                      }}
                       onProfileChange={(json) => setForm((f) => ({
                         ...f,
                         limits: f.limits.map((l2, idx) => (idx === i ? { ...l2, repaymentProfileJson: json } : l2)),
                       }))}
                       tableHeading={null}
                     />
+                    {(l.tranches || []).length > 0 && <RepaymentCalculationInfo />}
                   </div>
                 );
               })()}

@@ -46,6 +46,7 @@ import { deriveRepaymentSchedule, buildLimitScheduleViews } from './sanctionDeri
 import { TypeBadge } from './GroupDetail';
 import '../../pages-css/BorrowerRegistry.css';
 import '../../pages-css/BorrowerRegistryPremium.css';
+import { displayName } from './displayName';
 
 // Documents live inside the Sanction Letters tab now (each row carries its own
 // View/Download/Attach actions) rather than as a tab of their own —
@@ -54,7 +55,7 @@ const TABS = [
   { key: 'overview', label: 'Overview', icon: Building2 },
   { key: 'letters', label: 'Sanction Letters', icon: FileText },
   { key: 'schedule', label: 'Repayment Schedule', icon: CalendarClock },
-  { key: 'disbursement', label: 'Disbursement Schedule', icon: Wallet },
+  { key: 'disbursement', label: 'Disbursement Overview', icon: Wallet },
 ];
 const TAB_KEYS = new Set(TABS.map((t) => t.key));
 
@@ -365,7 +366,7 @@ const BorrowerDetail = () => {
   // registry. The explicit "Lender · Borrower Registry" breadcrumb link
   // always goes to the registry regardless — that's the deliberate escape
   // hatch back to Level 1.
-  const backLabel = borrower?.parentGroupId ? `Back to ${borrower.parentGroupName}` : 'Back to Registry';
+  const backLabel = borrower?.parentGroupId ? `Back to ${displayName(borrower.parentGroupName)}` : 'Back to Registry';
   const goBack = useCallback(() => {
     if (!borrower?.parentGroupId) { navigate('/lender/borrowers'); return; }
     const base = `/lender/borrowers/group/${borrower.parentGroupId}`;
@@ -633,7 +634,7 @@ const BorrowerDetail = () => {
     // land there, never on the flat Registry. A Sub Group's own back
     // target (its Parent Group, with this Sub Group's panel opened) is
     // unchanged.
-    const groupBackLabel = group.parentGroupId ? `Back to ${group.parentGroupName}` : `Back to ${group.groupName}`;
+    const groupBackLabel = group.parentGroupId ? `Back to ${displayName(group.parentGroupName)}` : `Back to ${displayName(group.groupName)}`;
     const groupGoBack = () => {
       if (!group.parentGroupId) { navigate(`/lender/borrowers/group/${group.id}`); return; }
       navigate(`/lender/borrowers/group/${group.parentGroupId}?openSubGroup=${group.id}`);
@@ -684,15 +685,15 @@ const BorrowerDetail = () => {
                     type="button" className="brx-crumb-link"
                     onClick={() => navigate(`/lender/borrowers/group/${group.parentGroupId}`)}
                   >
-                    {group.parentGroupName}
+                    {displayName(group.parentGroupName)}
                   </button>
                 </>
               )}
               <span className="brx-crumb-sep">›</span>
-              <span className="brx-crumb-current">{group.groupName}</span>
+              <span className="brx-crumb-current">{displayName(group.groupName)}</span>
             </div>
             <h1 className="br-title">
-              {group.groupName}
+              {displayName(group.groupName)}
               <span className="br-badge" style={{ marginLeft: 10, verticalAlign: 'middle' }}>
                 <TypeBadge label={kind} />
               </span>
@@ -963,9 +964,9 @@ const BorrowerDetail = () => {
                     type="button" className="brx-crumb-link"
                     onClick={() => navigate(`/lender/borrowers/group/${borrower.parentGroupId}`)}
                   >
-                    {borrower.parentGroupName}
+                    {displayName(borrower.parentGroupName)}
                   </button>
-                ) : <span>{borrower.parentGroupName}</span>}
+                ) : <span>{displayName(borrower.parentGroupName)}</span>}
               </>
             )}
             {borrower.subGroupName && (
@@ -982,16 +983,16 @@ const BorrowerDetail = () => {
                       `/lender/borrowers/group/${borrower.parentGroupId}?openSubGroup=${borrower.subGroupId}`,
                     )}
                   >
-                    {borrower.subGroupName}
+                    {displayName(borrower.subGroupName)}
                   </button>
-                ) : <span>{borrower.subGroupName}</span>}
+                ) : <span>{displayName(borrower.subGroupName)}</span>}
               </>
             )}
             <ChevronRight size={12} className="brx-crumb-sep" aria-hidden="true" />
             <span className="brx-crumb-current">Borrower Details</span>
           </div>
           <h1 className="br-title">
-            {borrower.borrowerName}
+            {displayName(borrower.borrowerName)}
             {borrower.companyType && borrower.companyType !== 'Standalone' && (
               <span className="br-badge" style={{ marginLeft: 10, verticalAlign: 'middle' }}>
                 {borrower.companyType}
@@ -1190,7 +1191,7 @@ const BorrowerDetail = () => {
                   : 'No letter is attached to this sanction.'}
               </p>
               <p className="br-muted br-confirm-note">
-                {borrower.borrowerName} stays on the registry. The record is archived rather
+                {displayName(borrower.borrowerName)} stays on the registry. The record is archived rather
                 than erased, so this reference number becomes free to import again.
               </p>
             </div>
@@ -1251,7 +1252,7 @@ const BorrowerDetail = () => {
               <div>
                 <h3 className="br-modal-title">Change organization</h3>
                 <p className="br-modal-sub">
-                  Moving {borrower.borrowerName}
+                  Moving {displayName(borrower.borrowerName)}
                   {active && <> (<span className="brx-ref-highlight">{active.refNo}</span>)</>}
                   {' '}between groups never touches its sanctions,
                   documents or repayment schedules.

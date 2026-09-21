@@ -22,6 +22,7 @@ import React, { useState } from 'react';
 import { Users, Lock, Eye, Trash2, Filter, ArrowUpDown } from 'lucide-react';
 import Pagination from './Pagination';
 import SanctionStatusBadge from './SanctionStatusBadge';
+import { displayName } from './displayName';
 
 const TYPE_BADGE_CLASS = {
   'Parent Group': 'brx-badge-purple',
@@ -38,7 +39,7 @@ const TypeBadge = ({ label }) => (
 // A row's own sortable name/amount, regardless of whether it's a group or a
 // standalone company row — lets the tab/filter/sort logic below treat both
 // kinds as one list instead of branching everywhere.
-const rowName = (r) => (r.kind === 'group' ? r.groupName : r.borrowerName);
+const rowName = (r) => (r.kind === 'group' ? displayName(r.groupName) : displayName(r.borrowerName));
 const rowAmount = (r) => parseFloat(String(r.totalSanctionedAmount || '').replace(/[^0-9.-]/g, '')) || 0;
 
 const HierarchyTree = ({
@@ -173,10 +174,10 @@ const HierarchyTree = ({
                       <Users size={13} />
                     </span>
                     <button
-                      type="button" className="brx-ref-link" title={r.groupName}
+                      type="button" className="brx-ref-link" title={displayName(r.groupName)}
                       onClick={() => onSelectGroup(r.id)}
                     >
-                      <strong>{r.groupName}</strong>
+                      <strong>{displayName(r.groupName)}</strong>
                     </button>
                   </span>
                 </td>
@@ -193,14 +194,14 @@ const HierarchyTree = ({
                   <div className="brx-row-actions">
                     <button
                       type="button" className="brx-icon-btn"
-                      title={`View ${r.groupName}`} aria-label={`View ${r.groupName}`}
+                      title={`View ${displayName(r.groupName)}`} aria-label={`View ${displayName(r.groupName)}`}
                       onClick={() => onViewGroup(r.id)}
                     >
                       <Eye size={15} aria-hidden="true" />
                     </button>
                     <button
                       type="button" className="brx-icon-btn brx-icon-danger"
-                      title={`Delete ${r.groupName}`} aria-label={`Delete ${r.groupName}`}
+                      title={`Delete ${displayName(r.groupName)}`} aria-label={`Delete ${displayName(r.groupName)}`}
                       onClick={() => onDeleteGroup(r)}
                     >
                       <Trash2 size={15} aria-hidden="true" />
@@ -217,10 +218,10 @@ const HierarchyTree = ({
                       <Lock size={12} />
                     </span>
                     <button
-                      type="button" className="brx-ref-link" title={r.borrowerName}
+                      type="button" className="brx-ref-link" title={displayName(r.borrowerName)}
                       onClick={() => onSelectCompany(r.id)}
                     >
-                      {r.borrowerName}
+                      {displayName(r.borrowerName)}
                     </button>
                   </span>
                 </td>
@@ -242,14 +243,14 @@ const HierarchyTree = ({
                   <div className="brx-row-actions">
                     <button
                       type="button" className="brx-icon-btn"
-                      title={`View ${r.borrowerName}`} aria-label={`View ${r.borrowerName}`}
+                      title={`View ${displayName(r.borrowerName)}`} aria-label={`View ${displayName(r.borrowerName)}`}
                       onClick={() => onSelectCompany(r.id)}
                     >
                       <Eye size={15} aria-hidden="true" />
                     </button>
                     <button
                       type="button" className="brx-icon-btn brx-icon-danger"
-                      title={`Delete ${r.borrowerName}`} aria-label={`Delete ${r.borrowerName}`}
+                      title={`Delete ${displayName(r.borrowerName)}`} aria-label={`Delete ${displayName(r.borrowerName)}`}
                       onClick={() => onDeleteCompany(r)}
                     >
                       <Trash2 size={15} aria-hidden="true" />

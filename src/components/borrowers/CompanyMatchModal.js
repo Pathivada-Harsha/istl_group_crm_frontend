@@ -38,6 +38,7 @@ import { X, Check, Building2, AlertTriangle } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
 import { BORROWER_IMPORT_KEYS, toCin } from './borrowerFields';
 import HierarchyPicker, { EMPTY_HIERARCHY } from './HierarchyPicker';
+import { displayName } from './displayName';
 import '../../pages-css/BorrowerRegistry.css';
 
 // Same-shape, lighter-weight normalizers than the backend's own (which the
@@ -319,7 +320,7 @@ const CompanyMatchModal = ({
             <div className="br-viewer-title-text">
               <h3 className="br-modal-title">Confirm company</h3>
               {parsed?.borrowerName && (
-                <p className="br-modal-sub">The letter names <strong>{parsed.borrowerName}</strong>.</p>
+                <p className="br-modal-sub">The letter names <strong>{displayName(parsed.borrowerName)}</strong>.</p>
               )}
             </div>
           </div>
@@ -359,7 +360,7 @@ const CompanyMatchModal = ({
             <fieldset className="br-fieldset">
               <legend className="br-fieldset-legend">Matched Company</legend>
               <p className="br-match-sub" style={{ marginBottom: 10 }}>
-                <strong>{candidates[0].borrowerName}</strong>
+                <strong>{displayName(candidates[0].borrowerName)}</strong>
                 {candidates[0].cin ? ` · CIN ${candidates[0].cin}` : ''}
               </p>
               <span className="br-field-label">How do you want to proceed?</span>

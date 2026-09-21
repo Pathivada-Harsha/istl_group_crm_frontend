@@ -567,6 +567,34 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
   .br-limits-summary { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ── Disbursement / Tranche Details panel (above the combined Repayment
+   Schedule table, in the Sanction Letter Detailed View and the Add/Edit/
+   Review Sanction modal) — same summary-tile look as the Disbursement
+   Schedule tab's own .br-limits-summary, just re-scoped to one Limit. ── */
+.br-tranche-panel-heading {
+  margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--ct-111827, #111827);
+}
+.br-limit-schedule-title-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+}
+.br-limit-schedule-title-row .br-tranche-panel-heading { margin-bottom: 0; }
+.br-tranche-panel { margin-bottom: 18px; }
+.br-tranche-panel-table th, .br-tranche-panel-table td { white-space: nowrap; padding: 8px 12px; }
+
+/* ── "How the calculation works" toggle (RepaymentCalculationInfo) — sits
+   under the combined repayment table, same disclosure-link visual weight
+   as .br-link elsewhere on this page. ── */
+.br-calc-info { margin-top: 10px; }
+.br-calc-info-toggle { display: inline-flex; align-items: center; gap: 5px; }
+.br-calc-info-panel {
+  margin-top: 8px; padding: 12px 14px; background: var(--c-f8fafc, #f8fafc);
+  border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 6px; font-size: 12.5px;
+  color: var(--ct-374151, #374151); max-width: 720px;
+}
+.br-calc-info-heading { display: block; margin-bottom: 6px; font-size: 12.5px; color: var(--ct-111827, #111827); }
+.br-calc-info-panel ol { margin: 0; padding-left: 18px; }
+.br-calc-info-panel li + li { margin-top: 5px; }
+
 /* ── Tranches (nested under each Limit row) ──────────────────────────────── */
 .br-tranches-row td { background: var(--c-ffffff, #fff); padding: 10px 16px 14px 40px; }
 .br-tranches-panel {
@@ -1124,6 +1152,61 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
    than support it. */
 .br-schedule-row-repayment,
 .br-schedule-row-repayment td { background: var(--c-f0fdf4, #f0fdf4); }
+
+/* Per-tranche accent for the Disbursement column group's dynamic sub-columns
+   (Tranche 1..N). Deliberately a left-edge accent, not a fill, on BOTH the
+   header and body cells — a body-cell background here would compete with
+   (and on the higher-specificity `.br-schedule-row-* td` rules above, simply
+   lose to) the moratorium/split/repayment row tints those rows already
+   carry, which is exactly the "must not conflict" requirement this is
+   satisfying. Only the header `<th>` additionally gets a light fill, since
+   the header row has no competing row-state color of its own. Cycles via
+   `i % 8` (trancheColorClass in RepaymentScheduleTab.js) so any tranche
+   count stays readable rather than running out of colors. */
+.br-tranche-col-0 { box-shadow: inset 2px 0 0 var(--ct-3b82f6, #3b82f6); }
+.br-tranche-col-1 { box-shadow: inset 2px 0 0 var(--ct-16a34a, #16a34a); }
+.br-tranche-col-2 { box-shadow: inset 2px 0 0 var(--ct-f97316, #f97316); }
+.br-tranche-col-3 { box-shadow: inset 2px 0 0 var(--ct-a855f7, #a855f7); }
+.br-tranche-col-4 { box-shadow: inset 2px 0 0 var(--ct-ec4899, #ec4899); }
+.br-tranche-col-5 { box-shadow: inset 2px 0 0 var(--ct-14b8a6, #14b8a6); }
+.br-tranche-col-6 { box-shadow: inset 2px 0 0 var(--ct-6366f1, #6366f1); }
+.br-tranche-col-7 { box-shadow: inset 2px 0 0 var(--ct-64748b, #64748b); }
+th.br-tranche-col-0 { background: var(--c-eff6ff, #eff6ff); }
+th.br-tranche-col-1 { background: var(--c-f0fdf4, #f0fdf4); }
+th.br-tranche-col-2 { background: var(--c-fff7ed, #fff7ed); }
+th.br-tranche-col-3 { background: var(--c-faf5ff, #faf5ff); }
+th.br-tranche-col-4 { background: var(--c-fdf2f8, #fdf2f8); }
+th.br-tranche-col-5 { background: var(--c-f0fdfa, #f0fdfa); }
+th.br-tranche-col-6 { background: var(--c-eef2ff, #eef2ff); }
+th.br-tranche-col-7 { background: var(--c-f8fafc, #f8fafc); }
+[data-theme="dark"] th.br-tranche-col-0 { background: rgba(59, 130, 246, .16); }
+[data-theme="dark"] th.br-tranche-col-1 { background: rgba(22, 163, 74, .16); }
+[data-theme="dark"] th.br-tranche-col-2 { background: rgba(249, 115, 22, .16); }
+[data-theme="dark"] th.br-tranche-col-3 { background: rgba(168, 85, 247, .16); }
+[data-theme="dark"] th.br-tranche-col-4 { background: rgba(236, 72, 153, .16); }
+[data-theme="dark"] th.br-tranche-col-5 { background: rgba(20, 184, 166, .16); }
+[data-theme="dark"] th.br-tranche-col-6 { background: rgba(99, 102, 241, .16); }
+[data-theme="dark"] th.br-tranche-col-7 { background: rgba(100, 116, 139, .16); }
+/* The grouped "Disbursement" header cell spanning the tranche sub-columns
+   + Total Disb. — centered like the other header text, no color of its own
+   (the sub-columns beneath already carry their own accents). */
+.br-schedule-disb-group-head { text-align: center; }
+
+/* Small colour-dot legend used by the Disbursement/Tranche Details panel
+   (SanctionOverviewPanel.js) so each tranche's row there visually matches
+   its column accent in the table below — same 8-color cycle, same class
+   names, just rendered as a small filled circle instead of a cell accent. */
+.br-tranche-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.br-tranche-dot.br-tranche-col-0 { background: var(--ct-3b82f6, #3b82f6); box-shadow: none; }
+.br-tranche-dot.br-tranche-col-1 { background: var(--ct-16a34a, #16a34a); box-shadow: none; }
+.br-tranche-dot.br-tranche-col-2 { background: var(--ct-f97316, #f97316); box-shadow: none; }
+.br-tranche-dot.br-tranche-col-3 { background: var(--ct-a855f7, #a855f7); box-shadow: none; }
+.br-tranche-dot.br-tranche-col-4 { background: var(--ct-ec4899, #ec4899); box-shadow: none; }
+.br-tranche-dot.br-tranche-col-5 { background: var(--ct-14b8a6, #14b8a6); box-shadow: none; }
+.br-tranche-dot.br-tranche-col-6 { background: var(--ct-6366f1, #6366f1); box-shadow: none; }
+.br-tranche-dot.br-tranche-col-7 { background: var(--ct-64748b, #64748b); box-shadow: none; }
 
 /* Tints the "Repayment (P+I)" icon in the top-of-table legend, matching
    the row backgrounds below via the same currentColor lucide icons already
@@ -2094,3 +2177,125 @@ thead .br-serial { color: var(--ct-6b7280, #6b7280); }
   .br-btn, .br-back, .br-row-click, .br-input { transition: none; }
   .bmd-action-btn { transition: none; }
 }
+/* ── Disbursement Schedule tab (LimitDisbursementView in SanctionOverviewPanel.js)
+   — summary cards, tranche table, donut, timeline. Everything is prefixed
+   .br-disbx- so none of it can touch another screen. ──────────────────────── */
+.br-disbx { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
+.br-disbx-picker { margin-bottom: 10px; }
+.br-disbx-subhead { margin: 22px 0 0; font-size: 13px; font-weight: 700; color: var(--ct-111827, #111827); }
+
+.br-disbx-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.br-disbx-card {
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 16px;
+  background: var(--c-white, #ffffff); border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.br-disbx-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 42px; height: 42px; border-radius: 10px;
+}
+.br-disbx-icon-blue { background: #dbeafe; color: #2563eb; }
+.br-disbx-icon-indigo { background: #e0e7ff; color: #4f46e5; }
+.br-disbx-icon-green { background: #dcfce7; color: #16a34a; }
+.br-disbx-icon-amber { background: #ffedd5; color: #ea580c; }
+.br-disbx-icon-teal { background: #ccfbf1; color: #0d9488; }
+.br-disbx-card-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.br-disbx-card-label { font-size: 12px; color: var(--ct-6b7280, #6b7280); }
+.br-disbx-card-value {
+  font-size: 16px; font-weight: 700; color: var(--ct-111827, #111827); white-space: nowrap;
+}
+.br-disbx-limit-name { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; max-width: 100%; }
+.br-disbx-facility-badge {
+  align-self: flex-start; padding: 1px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 600;
+  background: #dbeafe; color: #1d4ed8;
+}
+
+.br-disbx-main { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 14px; align-items: stretch; }
+.br-disbx-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.br-disbx-donut-block { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
+.br-disbx-tl-block { flex: 0 0 auto; padding-top: 14px; border-top: 1px solid var(--c-e5e7eb, #e5e7eb); }
+.br-disbx-panel {
+  min-width: 0; padding: 14px 16px; background: var(--c-white, #ffffff);
+  border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 10px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.br-disbx-panel-title { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: var(--ct-111827, #111827); }
+.br-disbx-panel-sub { font-weight: 500; color: var(--ct-374151, #374151); }
+
+.br-disbx-table-wrap { overflow-x: auto; border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 8px; }
+.br-disbx-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.br-disbx-table th {
+  padding: 9px 8px; text-align: left; font-size: 10px; font-weight: 600; letter-spacing: .03em;
+  text-transform: uppercase; white-space: normal; line-height: 1.25; color: var(--ct-6b7280, #6b7280);
+  background: var(--c-f8fafc, #f8fafc); border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+.br-disbx-table td {
+  padding: 10px 8px; white-space: nowrap; color: var(--ct-111827, #111827);
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+}
+.br-disbx-table th.br-right, .br-disbx-table td.br-right { text-align: right; }
+.br-disbx-table th.br-center, .br-disbx-table td.br-center { text-align: center; }
+.br-disbx-table tfoot td {
+  font-weight: 700; background: var(--c-eff6ff, #eff6ff); border-bottom: 0;
+  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+
+.br-disbx-donut-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 20px; }
+.br-disbx-donut { position: relative; width: 112px; height: 112px; flex-shrink: 0; }
+.br-disbx-donut-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; pointer-events: none; text-align: center;
+}
+.br-disbx-donut-center strong { font-size: 14px; color: var(--ct-111827, #111827); }
+.br-disbx-donut-center span { font-size: 10px; color: var(--ct-6b7280, #6b7280); }
+.br-disbx-legend { flex: 1 1 150px; min-width: 150px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; font-size: 13px; }
+.br-disbx-legend li { display: flex; align-items: center; gap: 8px; }
+.br-disbx-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.br-disbx-legend-label { color: var(--ct-374151, #374151); }
+.br-disbx-legend-value { margin-left: auto; font-weight: 700; color: var(--ct-111827, #111827); white-space: nowrap; }
+.br-disbx-legend-total { padding-top: 8px; border-top: 1px solid var(--c-e5e7eb, #e5e7eb); }
+.br-disbx-legend-total .br-disbx-legend-label { padding-left: 17px; }
+
+.br-disbx-timeline {
+  display: flex; margin: 0; padding: 0 0 4px; list-style: none; overflow-x: auto; scrollbar-width: thin;
+}
+.br-disbx-tl-item {
+  position: relative; flex: 1 0 116px; display: flex; flex-direction: column; align-items: center;
+  gap: 2px; padding-top: 22px; text-align: center; font-size: 12px; color: var(--ct-374151, #374151);
+}
+.br-disbx-tl-item::before {
+  content: ''; position: absolute; top: 6px; left: -50%; right: 50%; height: 2px; background: #16a34a;
+}
+.br-disbx-tl-item:first-child::before { display: none; }
+.br-disbx-tl-item.is-pending::before { background: none; border-top: 2px dashed #f59e0b; height: 0; }
+.br-disbx-tl-dot {
+  position: absolute; top: 0; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
+  background: #16a34a; border: 2px solid #16a34a; z-index: 1;
+}
+.br-disbx-tl-item.is-pending .br-disbx-tl-dot { background: var(--c-white, #ffffff); border-color: #f59e0b; }
+.br-disbx-tl-name { color: var(--ct-111827, #111827); font-size: 13px; }
+.br-disbx-tl-amount { font-weight: 600; color: var(--ct-111827, #111827); white-space: nowrap; }
+.br-disbx-tl-pending { color: #c2410c; font-weight: 600; }
+
+@media (max-width: 1100px) {
+  .br-disbx-main { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* One block per limit under "All limits overview" (multi-limit sanctions). */
+.br-disbx-subhead-top { margin-top: 4px; }
+.br-disbx-limit + .br-disbx-limit { margin-top: 26px; padding-top: 18px; border-top: 1px dashed var(--c-e5e7eb, #e5e7eb); }
+.br-disbx-limit-heading { margin: 10px 0 8px; font-size: 14px; font-weight: 700; color: var(--ct-111827, #111827); }
+
+/* Fixed-height, internally scrolling area for the per-limit blocks (2+ limits). */
+.br-disbx-limits-scroll {
+  max-height: 640px; overflow-y: auto; overflow-x: hidden; padding-right: 6px;
+  scrollbar-width: thin; border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 10px; padding: 14px;
+}
+
+/* Many tranches: the tranche tables keep a fixed height and scroll inside
+   themselves (header, and the Total row on the Disbursement Overview, stay
+   pinned) instead of stretching the page. */
+.br-tranches-scroll { max-height: 264px; overflow-y: auto; scrollbar-width: thin; }
+.br-tranches-scroll thead th { position: sticky; top: 0; z-index: 2; background: var(--c-f8fafc, #f8fafc); }
+.br-disbx-table-wrap { max-height: 300px; overflow-y: auto; }
+.br-disbx-table thead th { position: sticky; top: 0; z-index: 2; }
+.br-disbx-table tfoot td { position: sticky; bottom: 0; z-index: 2; }
