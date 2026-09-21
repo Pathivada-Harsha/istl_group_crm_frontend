@@ -55,6 +55,11 @@ const useThemeVersion = () => {
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
+// Uploads are stored as a BLOB on the bill row and leave billFilePath null, so the
+// presence of a document must never be tested on billFilePath alone — the backend
+// sends hasFile; billFilePath/billFileName only cover older rows.
+const billHasFile = (b) => !!(b && (b.hasFile || b.billFilePath || b.billFileName));
+
 // ── Date constants ────────────────────────────────────────────────────────────
 const _BR_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const _BR_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -2534,7 +2539,7 @@ const BillsManagementPage = () => {
               {/* File Upload */}
               <div className="bill-form-section">
                 <h3 className="bill-form-section-title">Bill Document</h3>
-                {editMode && formData.billFilePath && (
+                {editMode && billHasFile(formData) && (
                   <div className="bill-edit-existing-file">
                     <div className="bill-edit-existing-file-info">
                       <FileText size={16} />
@@ -2554,9 +2559,9 @@ const BillsManagementPage = () => {
                     </div>
                   </div>
                 )}
-                <div className="bill-form-field" style={{ marginTop: editMode && formData.billFilePath ? 10 : 0 }}>
+                <div className="bill-form-field" style={{ marginTop: editMode && billHasFile(formData) ? 10 : 0 }}>
                   <label className="bill-form-label">
-                    {editMode && formData.billFilePath ? 'Replace Document (PDF, PNG, JPG - Max 10MB)' : 'Upload Bill (PDF, PNG, JPG - Max 10MB)'}
+                    {editMode && billHasFile(formData) ? 'Replace Document (PDF, PNG, JPG - Max 10MB)' : 'Upload Bill (PDF, PNG, JPG - Max 10MB)'}
                   </label>
                   <input
                     className="bill-form-file-input"
@@ -2567,7 +2572,7 @@ const BillsManagementPage = () => {
                   {selectedFile && (
                     <p className="bill-form-file-selected">✓ {selectedFile.name} selected</p>
                   )}
-                  {editMode && !formData.billFilePath && !selectedFile && (
+                  {editMode && !billHasFile(formData) && !selectedFile && (
                     <p className="bill-form-file-hint">No document uploaded yet.</p>
                   )}
                 </div>
@@ -2781,7 +2786,7 @@ const BillsManagementPage = () => {
               </div>
 
               {/* Bill Document */}
-              {selectedBill.billFilePath && (
+              {billHasFile(selectedBill) && (
                 <div className="procurement-bills-received-drawer-section">
                   <h3>Bill Document</h3>
                   <div className="procurement-bills-received-attachments">
@@ -2856,7 +2861,7 @@ const BillsManagementPage = () => {
                     <CheckCircle size={14} /> Auto-paid from warehouse stock — no payment action needed
                   </div>
                 )}
-                {selectedBill.billFilePath && (
+                {billHasFile(selectedBill) && (
                   <button
                     className="procurement-bills-received-btn-secondary"
                     onClick={() => handleDownloadFile(selectedBill.id, selectedBill.billFileName)}
