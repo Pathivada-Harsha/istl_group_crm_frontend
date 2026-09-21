@@ -281,6 +281,30 @@ const borrowerApi = {
     const qs = new URLSearchParams({ borrowerId, lenderName, sanctionDate });
     return (await req(`/borrower/sanction/check-duplicate?${qs}`)).data || [];
   },
+
+  // ── Borrower Comparison (standalone, read-only module) ──────────────────
+
+  // The compare picker's own selection list — every sanction this user may
+  // see, already scoped server-side; search/filters are query params, not
+  // client-side re-filtering of a bigger payload.
+  compareSummary: async ({
+    search, lenderName, status, projectName, groupId,
+  } = {}) => {
+    const qs = new URLSearchParams();
+    if (search) qs.set('search', search);
+    if (lenderName) qs.set('lenderName', lenderName);
+    if (status) qs.set('status', status);
+    if (projectName) qs.set('projectName', projectName);
+    if (groupId) qs.set('groupId', groupId);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return (await req(`/borrower/compare/summary${suffix}`)).data || [];
+  },
+
+  // Full detail (limits/tranches/derived values) for the picked ids, in one
+  // batch call — any id the caller isn't allowed to see comes back silently
+  // omitted, never as an error.
+  compareSanctions: async (sanctionIds) =>
+    (await req('/borrower/compare', { method: 'POST', body: { sanctionIds } })).data || [],
 };
 
 export default borrowerApi;

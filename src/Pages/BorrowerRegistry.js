@@ -9,13 +9,14 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus, Upload, Search, Trash2, AlertTriangle,
   Users, FileCheck,
-  IndianRupee, Building2, X,
+  IndianRupee, Building2, X, GitCompare,
 } from 'lucide-react';
 import borrowerApi from '../services/borrowerApi';
 import CrmPreloader from '../components/preLoader';
 import BorrowerFormModal from '../components/borrowers/BorrowerFormModal';
 import SanctionFormModal from '../components/borrowers/SanctionFormModal';
 import CompanyMatchModal from '../components/borrowers/CompanyMatchModal';
+import SanctionComparePicker from '../components/borrowers/SanctionComparePicker';
 import HierarchyTree from '../components/borrowers/HierarchyTree';
 import HierarchyPicker, {
   EMPTY_HIERARCHY, hierarchyFromBorrower, resolveHierarchyGroupId,
@@ -45,6 +46,7 @@ const BorrowerRegistry = () => {
   }, [error]);
 
   const [addBorrower, setAddBorrower] = useState(false);
+  const [showCompareModal, setShowCompareModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);   // row awaiting confirmation
   const [deleting, setDeleting] = useState(false);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState(null); // Parent Group row awaiting confirmation
@@ -239,6 +241,13 @@ const BorrowerRegistry = () => {
           <button type="button" className="brx-btn" onClick={() => setAddBorrower(true)}>
             <Plus size={15} aria-hidden="true" />
             Add manually
+          </button>
+          {/* Standalone Borrower Comparison module — opens the sanction
+              picker in-place; navigation to /lender/borrowers/compare only
+              happens once the reviewer confirms a selection there. */}
+          <button type="button" className="brx-btn" onClick={() => setShowCompareModal(true)}>
+            <GitCompare size={15} aria-hidden="true" />
+            Compare Borrower
           </button>
           <button
             type="button"
@@ -483,6 +492,16 @@ const BorrowerRegistry = () => {
             // find it and click Add sanction — but leave it skippable, since a
             // borrower can legitimately exist before any facility does.
             if (saved?.id) setNewBorrower(saved);
+          }}
+        />
+      )}
+
+      {showCompareModal && (
+        <SanctionComparePicker
+          onClose={() => setShowCompareModal(false)}
+          onCompare={(sanctionIds) => {
+            setShowCompareModal(false);
+            navigate('/lender/borrowers/compare', { state: { sanctionIds } });
           }}
         />
       )}

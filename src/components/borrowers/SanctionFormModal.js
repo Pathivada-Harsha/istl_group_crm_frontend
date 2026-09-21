@@ -1172,6 +1172,18 @@ const SanctionFormModal = ({
   const limitsSum = parseFloat(String(form.limitAmount ?? '').replace(/,/g, '')) || 0;
   const limitsMissingInstrument = (form.limits || []).findIndex((l) => !l.facilityType);
   const limitsMissingActual = (form.limits || []).findIndex((l) => !l.actualDisbursementDate);
+  // The date-picker's own min/max (see SanctionLimitsCard's maxDate prop
+  // below) only ever stops a NEW pick past Sanction Valid Till — it can't
+  // undo a value that arrived already out of range (an imported letter's
+  // raw parsed date, or one typed in before the sanction date changed
+  // underneath it). Checked as a distinct save-blocking error for exactly
+  // that reason, same as the Scheduled COD check just below it.
+  const limitsValidTillViolation = (form.limits || []).find((l) => {
+    if (!l.actualDisbursementDate || !derived.sanctionValidTill) return false;
+    const disb = parseDate(l.actualDisbursementDate);
+    const validTill = parseDate(derived.sanctionValidTill);
+    return disb && validTill && disb.getTime() > validTill.getTime();
+  });
   const limitsCodViolation = (form.limits || []).find((l) => {
     if (!l.actualDisbursementDate || !form.scheduledCod) return false;
     const disb = parseDate(l.actualDisbursementDate);
@@ -1186,9 +1198,11 @@ const SanctionFormModal = ({
         ? `${getSanctionLimitLabel(limitsMissingInstrument)} Instrument is required.`
         : limitsMissingActual !== -1
           ? `${getSanctionLimitLabel(limitsMissingActual)} Actual Disb. Date is required.`
-          : limitsCodViolation
-            ? `Each Sanction Limit's Actual Disb. Date must fall before the Scheduled COD date (${form.scheduledCod}).`
-            : '';
+          : limitsValidTillViolation
+            ? `Each Sanction Limit's Actual Disb. Date must fall on or before the Sanction Valid Till date (${derived.sanctionValidTill}).`
+            : limitsCodViolation
+              ? `Each Sanction Limit's Actual Disb. Date must fall before the Scheduled COD date (${form.scheduledCod}).`
+              : '';
 
   // Project Cost = Debt (the sanctioned amount) + Equity, so any one of
   // Debt / Equity / Debt % / Equity % that the letter left blank follows
