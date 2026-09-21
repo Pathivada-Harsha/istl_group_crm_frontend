@@ -21,6 +21,14 @@ import Pagination from './Pagination';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
+// Subtle, professional per-tranche accent — cycles for any tranche count so
+// a 9th tranche just repeats tranche 1's colour rather than breaking. Only
+// ever applied to header cells (a thin left accent + a very light tint),
+// never to body cells, so it can't compete with the moratorium/split/
+// repayment row backgrounds already used to shade the whole row.
+export const TRANCHE_COLOR_COUNT = 8;
+export const trancheColorClass = (idx) => `br-tranche-col-${idx % TRANCHE_COLOR_COUNT}`;
+
 const MORATORIUM_OPTIONS = FIELDS.find((f) => f.key === 'interestDuringMoratorium')?.options || [];
 export const moratoriumLabel = (value) =>
   MORATORIUM_OPTIONS.find((o) => o.value === value)?.label || value || '—';
@@ -154,18 +162,33 @@ export const buildScheduleData = (view, form) => {
   let alreadyCapitalized = false;
   let amortCount = 0;
   let termNo = 0;
+  // Running total of what has been disbursed through each row (tranche
+  // schedules only; display-only — the "Disbursed to Date" column).
+  let cumDisb = 0;
   const rows = schedule.map((p, i) => {
     // Same repaymentPct-based test as moratoriumPeriods above, not
     // principalDue > 0 — otherwise capitalizing at the first amortizing
     // period silently skips a row a reviewer has edited to 0%, folding the
     // moratorium interest in one period late instead.
     const isAmortizing = p.repaymentPct !== undefined;
-    if (capitalized && isAmortizing && !alreadyCapitalized) {
-      balance += moratoriumInterest;
-      alreadyCapitalized = true;
+    // A tranche-priced schedule (see buildTrancheAwareSchedule) already
+    // carries its own opening/closing — the balance there steps up on every
+    // tranche date, which this lump-sum walk can't reproduce — so those are
+    // used as-is. Everything else keeps the original reconstruction below.
+    const engineBalance = p.opening !== undefined;
+    let opening;
+    let closing;
+    if (engineBalance) {
+      opening = p.opening;
+      closing = p.closing;
+    } else {
+      if (capitalized && isAmortizing && !alreadyCapitalized) {
+        balance += moratoriumInterest;
+        alreadyCapitalized = true;
+      }
+      opening = balance;
+      closing = opening - p.principalDue;
     }
-    const opening = balance;
-    let closing = opening - p.principalDue;
     const last = i === schedule.length - 1;
     if (last && Math.abs(closing) < ZERO_EPSILON) closing = 0;
     balance = closing;
@@ -190,8 +213,10 @@ export const buildScheduleData = (view, form) => {
     // that date as its own `end`.
     const displayEnd = p.splitPart === 'moratorium' ? schedule[i + 1].end : p.end;
 
+    cumDisb += p.totalDisb || 0;
+
     return {
-      ...p, no, periodLabel, termNo, periodType, isFirstRow: i === 0, displayEnd, opening, closing, amortIndex,
+      ...p, no, periodLabel, termNo, periodType, isFirstRow: i === 0, displayEnd, opening, closing, amortIndex, cumDisb,
     };
   });
 
@@ -235,9 +260,16 @@ export const buildScheduleData = (view, form) => {
     : view.israIsContractual === false ? 'Not specified in sanction letter — showing calculated interest component of DSRA'
       : '—';
 
+  // The Limit's own tranches — absent/empty for an untranched limit or the
+  // whole-sanction fallback schedule, in which case the table keeps its
+  // single "Disbursement" column exactly as before. When present, each row
+  // already carries trancheDisb/totalDisb straight from the engine.
+  const tranches = view.tranches || form.tranches || [];
+
   return {
     schedule, debt, capitalized, moratoriumPeriods, moratoriumInterest,
-    moratoriumStart, moratoriumEnd, rows, amortCount, totalPct, pctValid, filledPct, contractualIsra, splitNotes,
+    moratoriumStart, moratoriumEnd, rows, amortCount, totalPct, pctValid, filledPct,
+    contractualIsra, splitNotes, tranches,
   };
 };
 
@@ -260,6 +292,17 @@ export const mergeSplitInterestRows = (rows) => {
     const r = rows[i];
     const next = rows[i + 1];
     if (r.periodType === 'split-moratorium' && next?.periodType === 'split-repayment') {
+      // trancheDisb/totalDisb merge the same way principal/interest do — a
+      // tranche disbursed during either leg's own dates still belongs to
+      // this one combined term. null+null stays null (nothing disbursed
+      // that term for that tranche), never coerced to a misleading ₹0.00.
+      const trancheDisb = r.trancheDisb || next.trancheDisb
+        ? (r.trancheDisb || next.trancheDisb).map((_, idx) => {
+          const a = r.trancheDisb ? r.trancheDisb[idx] : null;
+          const b = next.trancheDisb ? next.trancheDisb[idx] : null;
+          return a == null && b == null ? null : (a || 0) + (b || 0);
+        })
+        : undefined;
       merged.push({
         ...next,
         no: `${r.termNo}`,
@@ -270,6 +313,10 @@ export const mergeSplitInterestRows = (rows) => {
         isFirstRow: r.isFirstRow || next.isFirstRow,
         principalDue: r.principalDue + next.principalDue,
         interestDue: r.interestDue + next.interestDue,
+        ...(trancheDisb ? {
+          trancheDisb,
+          totalDisb: r.totalDisb == null && next.totalDisb == null ? null : (r.totalDisb || 0) + (next.totalDisb || 0),
+        } : {}),
       });
       i += 1;
     } else {
@@ -307,8 +354,9 @@ const RepaymentScheduleTab = ({
 }) => {
   const {
     debt, capitalized, moratoriumPeriods, moratoriumInterest, moratoriumStart, moratoriumEnd,
-    rows, amortCount, totalPct, pctValid, filledPct, contractualIsra, splitNotes,
+    rows, amortCount, totalPct, pctValid, filledPct, contractualIsra, splitNotes, tranches,
   } = buildScheduleData(view, form);
+  const hasTranches = tranches.length > 0;
 
   // Applies everywhere this component renders — the read-only Borrower
   // Detail view, the editable Sanction Form modal, and that modal's
@@ -501,20 +549,48 @@ const RepaymentScheduleTab = ({
           <div className="br-table-wrap br-scroll-body br-schedule-table-wrap">
             <table className="br-table-list br-schedule-table">
               <thead>
-                <tr>
-                  <th className="br-center">Period</th>
-                  <th className="br-center">Repayment Date</th>
-                  <th className="br-right">No. of Days</th>
-                  <th className="br-right">Loan Opening</th>
-                  <th className="br-right">Repayment %</th>
-                  <th className="br-right">Disbursement</th>
-                  <th className="br-right">Principal Repayment</th>
-                  <th className="br-right">Interest</th>
-                  <th className="br-right">Total Debt Service</th>
-                  <th className="br-right">Loan Closing</th>
-                  {showDsra && <th className="br-right">DSRA Amount</th>}
-                  {showIsra && <th className="br-right">ISRA Amount</th>}
-                </tr>
+                {hasTranches ? (
+                  <>
+                    <tr>
+                      <th className="br-center" rowSpan={2}>Period</th>
+                      <th className="br-center" rowSpan={2}>Repayment Date</th>
+                      <th className="br-right" rowSpan={2}>No. of Days</th>
+                      <th className="br-right" rowSpan={2}>Loan Opening</th>
+                      <th className="br-right" rowSpan={2}>Repayment %</th>
+                      <th className="br-center br-schedule-disb-group-head" colSpan={tranches.length + 2}>Disbursement</th>
+                      <th className="br-right" rowSpan={2}>Principal Repayment</th>
+                      <th className="br-right" rowSpan={2}>Interest</th>
+                      <th className="br-right" rowSpan={2}>Total Debt Service</th>
+                      <th className="br-right" rowSpan={2}>Loan Closing</th>
+                      {showDsra && <th className="br-right" rowSpan={2}>DSRA Amount</th>}
+                      {showIsra && <th className="br-right" rowSpan={2}>ISRA Amount</th>}
+                    </tr>
+                    <tr>
+                      {tranches.map((t, tIdx) => (
+                        <th key={t.id || tIdx} className={`br-right ${trancheColorClass(tIdx)}`}>
+                          {`Tranche ${tIdx + 1}`}
+                        </th>
+                      ))}
+                      <th className="br-right">Total Disb.</th>
+                      <th className="br-right">Disbursed to Date</th>
+                    </tr>
+                  </>
+                ) : (
+                  <tr>
+                    <th className="br-center">Period</th>
+                    <th className="br-center">Repayment Date</th>
+                    <th className="br-right">No. of Days</th>
+                    <th className="br-right">Loan Opening</th>
+                    <th className="br-right">Repayment %</th>
+                    <th className="br-right">Disbursement</th>
+                    <th className="br-right">Principal Repayment</th>
+                    <th className="br-right">Interest</th>
+                    <th className="br-right">Total Debt Service</th>
+                    <th className="br-right">Loan Closing</th>
+                    {showDsra && <th className="br-right">DSRA Amount</th>}
+                    {showIsra && <th className="br-right">ISRA Amount</th>}
+                  </tr>
+                )}
               </thead>
               <tbody>
                 {pageRows.map((r, idx) => {
@@ -558,7 +634,19 @@ const RepaymentScheduleTab = ({
                               />
                             )}
                       </td>
-                      <td className="br-right">{r.isFirstRow && debt !== null ? formatCrore(debt) : '—'}</td>
+                      {hasTranches ? (
+                        <>
+                          {tranches.map((t, tIdx) => (
+                            <td key={t.id || tIdx} className={`br-right ${trancheColorClass(tIdx)}`}>
+                              {r.trancheDisb && r.trancheDisb[tIdx] != null ? formatCrore(r.trancheDisb[tIdx]) : '—'}
+                            </td>
+                          ))}
+                          <td className="br-right">{r.totalDisb != null ? formatCrore(r.totalDisb) : '—'}</td>
+                          <td className="br-right">{formatCrore(r.cumDisb)}</td>
+                        </>
+                      ) : (
+                        <td className="br-right">{r.isFirstRow && debt !== null ? formatCrore(debt) : '—'}</td>
+                      )}
                       <td className="br-right">{formatCrore(r.principalDue)}</td>
                       <td className="br-right">{formatCrore(r.interestDue)}</td>
                       <td className="br-right">
@@ -610,7 +698,7 @@ const RepaymentScheduleTab = ({
                         ? `${Math.round(totalPct * 100) / 100}%`
                         : `${(Math.round(filledPct * 100) / 100).toFixed(2)}% / 100%`}
                     </td>
-                    <td colSpan={5 + (showDsra ? 1 : 0) + (showIsra ? 1 : 0)} />
+                    <td colSpan={4 + (hasTranches ? tranches.length + 2 : 1) + (showDsra ? 1 : 0) + (showIsra ? 1 : 0)} />
                   </tr>
                 </tfoot>
               )}

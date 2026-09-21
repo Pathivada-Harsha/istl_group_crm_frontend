@@ -15,6 +15,7 @@ import {
 import borrowerApi from '../../services/borrowerApi';
 import FilterSelect from '../Dropdowns/FilterSelect';
 import '../../pages-css/BorrowerComparison.css';
+import { displayName } from './displayName';
 
 const MIN_TO_COMPARE = 2;
 const MAX_TO_COMPARE = 20;
@@ -68,7 +69,7 @@ const SanctionComparePicker = ({ onClose, onCompare, initialSelectedIds = [] }) 
       if (r.subGroupId && !seen.has(r.subGroupId)) seen.set(r.subGroupId, r.subGroupName);
     });
     return [...seen.entries()]
-      .map(([value, label]) => ({ value: String(value), label }))
+      .map(([value, label]) => ({ value: String(value), label: displayName(label) }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [rows]);
   const statusOptions = useMemo(() => uniqueOptions(rows, 'status'), [rows]);
@@ -203,7 +204,7 @@ const SanctionComparePicker = ({ onClose, onCompare, initialSelectedIds = [] }) 
                         />
                       </td>
                       <td className="scp-num-col">{i + 1}</td>
-                      <td>{r.associatedWithName || '—'}</td>
+                      <td>{displayName(r.associatedWithName) || '—'}</td>
                       <td>{r.refNo || '—'}</td>
                       <td>{r.sanctionDate || '—'}</td>
                       <td className="scp-num">{r.sanctionedAmount || '—'}</td>

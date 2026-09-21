@@ -17,16 +17,18 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  FileText, Eye, Download, Paperclip, ChevronDown, ChevronUp, ChevronRight,
-  FileSpreadsheet, FileType2,
+  FileText, Eye, Download, Paperclip, ChevronDown, ChevronUp,
+  FileSpreadsheet, FileType2, Landmark, Wallet, Layers, Clock, Percent,
 } from 'lucide-react';
+import { PieChart, Pie, Cell } from 'recharts';
 import { BsInfoCircle } from 'react-icons/bs';
 import borrowerApi from '../../services/borrowerApi';
 import { useAuth } from '../../hooks/useAuth';
 import RepaymentScheduleTab from './RepaymentScheduleTab';
 import { SANCTION_FIELDS, getSanctionLimitLabel } from './sanctionFields';
-import { REPAYMENT_FREQUENCIES } from './sanctionDerive';
+import { REPAYMENT_FREQUENCIES, formatDate, parseDate } from './sanctionDerive';
 import { exportSchedulePDF, exportScheduleWord, exportScheduleExcel } from './scheduleExport';
+import { displayName } from './displayName';
 
 // Field/row keys that carry DSRA or ISRA detail — hidden from the read-only
 // Sanction Details / Derived Values cards for a user without the matching
@@ -224,7 +226,7 @@ export const buildDetailRows = (borrower, sanction, { hasDsraPermission = false,
   return DETAIL_FIELDS.map((f) => ({
     ...f,
     value: f.key === 'borrowerName'
-      ? (sanction[f.key] || borrower?.borrowerName)
+      ? displayName(sanction[f.key] || borrower?.borrowerName)
       : f.key === 'interestRateText'
         ? [sanction.roiPct, sanction.interestRateText].filter((v) => !isBlank(v)).join(' ')
         // Until a real Actual COD Date is entered, the planned date stands
@@ -407,6 +409,58 @@ export const DocumentCard = ({ sanction, onOpenDocument, onStartAttach, attachin
   );
 };
 
+const numFromDisb = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+// A Limit or Tranche counts as disbursed the moment its own Actual Disb.
+// Date is filled in — same "Actual = it happened" convention every other
+// Actual Disb. Date field on this page already carries, no extra check
+// against today's date.
+const disbStatus = (actualDate) => (actualDate ? 'Disbursed' : 'Pending');
+
+// Static explanatory copy, verified line-for-line against the actual
+// calculation engine (sanctionDerive.js's resolveRepaymentWindow /
+// buildQuarterEndSchedule) rather than invented — if the engine ever
+// changes, this text needs to change with it, not the other way around.
+const CALCULATION_STEPS = [
+  'All tranches belong to the same sanctioned Limit and share one combined repayment schedule — there is no separate schedule per tranche.',
+  "Each tranche's own Actual Disbursement Date is shown in its own column under Disbursement. A tranche with no Actual Disbursement Date yet is Pending: it adds nothing to the outstanding balance, the interest or Total Disb. until it is actually disbursed. Disbursed to Date is the running total of Total Disb. up to that period.",
+  "The schedule starts (moratorium start) on the earliest tranche's Actual Disbursement Date. Loan Opening is ₹0 in that first period.",
+  "Each tranche is added to the outstanding balance from its own Actual Disbursement Date. Closing Balance = Loan Opening + Total Disb. − Principal Repayment.",
+  'Interest in a moratorium period is the sum, over each stretch between tranche dates, of Outstanding Balance × ROI × Days ÷ 365. In a repayment period it is the average of Loan Opening and Loan Closing × ROI × Days ÷ 365.',
+  'Principal Repayment follows the Limit\'s Repayment % profile (or an automatic equal split), applied to the amount disbursed by the Moratorium End Date (plus capitalized moratorium interest, if applicable). A tranche cannot be dated after the Moratorium End Date.',
+  'Total Debt Service = Principal Repayment + Interest for that period.',
+  'DSRA and ISRA use the existing rolling-window calculation over these same combined schedule rows.',
+];
+
+/** "How the Calculation Works" — a click-to-reveal panel, same pattern as
+ * the section's own "About this section" info popover, just a longer
+ * numbered explanation rather than one sentence. Purely static text; no
+ * props needed since it describes the (unchanging) engine, not any one
+ * sanction's own figures. */
+export const RepaymentCalculationInfo = () => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="br-calc-info">
+      <button
+        type="button"
+        className="br-link br-calc-info-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <BsInfoCircle size={13} aria-hidden="true" />
+        {open ? 'Hide calculation details' : 'View Calculation Details'}
+      </button>
+      {open && (
+        <div className="br-calc-info-panel">
+          <strong className="br-calc-info-heading">How the calculation works</strong>
+          <ol>
+            {CALCULATION_STEPS.map((step) => <li key={step}>{step}</li>)}
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /**
  * The Repayment Schedule section — info popover, export menu, the full
  * instalment table. `scheduleView` is `deriveRepaymentSchedule(sanction)`,
@@ -437,13 +491,21 @@ export const RepaymentScheduleSection = ({
   const activeLimit = hasLimits ? limits[i] : null;
   const activeView = hasLimits ? limitScheduleViews[i] : scheduleView;
   const activeForm = hasLimits
-    ? { ...sanction, disbursementDate: activeLimit.actualDisbursementDate, debtAmount: activeLimit.facilityLimitAmount }
+    ? {
+      ...sanction,
+      disbursementDate: activeLimit.actualDisbursementDate,
+      debtAmount: activeLimit.facilityLimitAmount,
+      tranches: activeLimit.tranches || [],
+    }
     : sanction;
+  const activeHasTranches = hasLimits && (activeLimit.tranches || []).length > 0;
   return (
     <section className="br-card br-schedule-section">
       <header className="br-card-head br-schedule-section-head">
         <span className="br-dot br-dot-schedule" aria-hidden="true" />
-        <h2 className="br-card-title">Repayment schedule</h2>
+        <h2 className="br-card-title">
+          {activeHasTranches ? 'Repayment Schedule (Combined for Entire Limit)' : 'Repayment schedule'}
+        </h2>
         {expanded && limits.length > 1 && (
           <div className="br-limit-schedule-heading br-schedule-limit-picker">
             <select
@@ -471,9 +533,14 @@ export const RepaymentScheduleSection = ({
             <BsInfoCircle size={14} aria-hidden="true" />
           </button>
           {showInfo && (
-            <div className="br-info-popover" role="tooltip">
-              Computed from the sanction details, ROI, repayment frequency, moratorium
-              and DSRA/ISRA requirement recorded above — not a separate source of truth.
+            <div className="br-info-popover br-info-popover-wide" role="tooltip">
+              {activeHasTranches
+                ? 'This is one combined repayment schedule for the entire limit. Individual tranche '
+                  + 'disbursements are shown separately in the disbursement columns, while interest, '
+                  + 'principal repayment, debt service and closing balance are calculated/displayed at '
+                  + 'the combined limit level.'
+                : 'Computed from the sanction details, ROI, repayment frequency, moratorium '
+                  + 'and DSRA/ISRA requirement recorded above — not a separate source of truth.'}
             </div>
           )}
         </span>
@@ -495,18 +562,235 @@ export const RepaymentScheduleSection = ({
         </div>
       </header>
       {expanded && (
-        <RepaymentScheduleTab view={activeView} form={activeForm} readOnly paginated tableHeading={null} />
+        <>
+          <RepaymentScheduleTab view={activeView} form={activeForm} readOnly paginated tableHeading={null} />
+          {activeHasTranches && <RepaymentCalculationInfo />}
+        </>
       )}
     </section>
   );
 };
 
-const numFromDisb = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
-// A Limit or Tranche counts as disbursed the moment its own Actual Disb.
-// Date is filled in — same "Actual = it happened" convention every other
-// Actual Disb. Date field on this page already carries, no extra check
-// against today's date.
-const disbStatus = (actualDate) => (actualDate ? 'Disbursed' : 'Pending');
+const fmtCr = (n) => `₹ ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Cr`;
+const fmtPct = (n) => `${Number(n || 0).toFixed(2)}%`;
+// DD-MMM-YYYY, the date style the rest of the sanction views quote.
+const dashDate = (raw) => {
+  const d = parseDate(raw);
+  return d ? formatDate(d).replace(/ /g, '-') : null;
+};
+
+/**
+ * One limit's disbursement picture, in the exact shape the Disbursement
+ * Schedule tab draws it from — the same rules DisbursementScheduleSection has
+ * always used (a tranche is Disbursed once its Actual Disb. Date is filled in;
+ * a tranched limit counts only its disbursed tranches; Pending is what is
+ * left of the limit amount), just scoped to one limit. A limit with no
+ * tranches is one "Lump sum" row carrying its own amount and dates.
+ */
+const buildLimitDisbursement = (limit) => {
+  const limitAmt = numFromDisb(limit.facilityLimitAmount);
+  const tranches = limit.tranches || [];
+  const rows = tranches.length
+    ? tranches.map((tr, i) => ({
+      key: tr.id || i,
+      name: `Tranche ${i + 1}`,
+      amount: numFromDisb(tr.trancheAmount),
+      tentative: tr.tentativeDisbursementDate,
+      actual: tr.actualDisbursementDate,
+    }))
+    : [{
+      key: 'lump',
+      name: 'Lump sum',
+      amount: limitAmt,
+      tentative: limit.tentativeDisbursementDate,
+      actual: limit.actualDisbursementDate,
+    }];
+  rows.forEach((r) => {
+    r.status = disbStatus(r.actual);
+    r.pct = limitAmt > 0 ? (r.amount / limitAmt) * 100 : 0;
+  });
+  const disbursed = rows.reduce((t, r) => t + (r.actual ? r.amount : 0), 0);
+  const pending = Math.max(limitAmt - disbursed, 0);
+  const pctDisbursed = limitAmt > 0 ? (disbursed / limitAmt) * 100 : 0;
+  // Actual dates in date order first; Pending ones keep their own order after
+  // them, since they have no actual date to sort by.
+  const done = rows.filter((r) => r.actual)
+    .sort((a, b) => (parseDate(a.actual)?.getTime() || 0) - (parseDate(b.actual)?.getTime() || 0));
+  const timeline = [...done, ...rows.filter((r) => !r.actual)];
+  return {
+    limitAmt, rows, disbursed, pending, pctDisbursed, timeline,
+    totalAmount: rows.reduce((t, r) => t + r.amount, 0),
+    totalPct: rows.reduce((t, r) => t + r.pct, 0),
+    hasTranches: tranches.length > 0,
+  };
+};
+
+const DISB_GREEN = '#16a34a';
+const DISB_AMBER = '#f59e0b';
+
+/** The reference layout for one limit: summary cards, tranche table, donut, timeline. Display-only. */
+const LimitDisbursementView = ({ limit, index }) => {
+  const d = buildLimitDisbursement(limit);
+  const limitName = limit.limitLabel || getSanctionLimitLabel(index);
+  const isNonFund = /^non\s*fund/i.test(limitName);
+  const chartData = d.limitAmt > 0 && (d.disbursed > 0 || d.pending > 0)
+    ? [{ name: 'Disbursed', value: d.disbursed, fill: DISB_GREEN }, { name: 'Pending', value: d.pending, fill: DISB_AMBER }]
+    : [{ name: 'None', value: 1, fill: '#e5e7eb' }];
+  return (
+    <div className="br-disbx">
+      <div className="br-disbx-cards">
+        <div className="br-disbx-card">
+          <span className="br-disbx-icon br-disbx-icon-blue"><Landmark size={20} aria-hidden="true" /></span>
+          <div className="br-disbx-card-body">
+            <span className="br-disbx-card-label">Limit Name</span>
+            <span className="br-disbx-card-value br-disbx-limit-name" title={limit.facilityType || limitName}>
+              {limit.facilityType || limitName}
+            </span>
+            <span className="br-disbx-facility-badge">{isNonFund ? 'Non Fund Based' : 'Fund Based'}</span>
+          </div>
+        </div>
+        <div className="br-disbx-card">
+          <span className="br-disbx-icon br-disbx-icon-indigo"><Wallet size={20} aria-hidden="true" /></span>
+          <div className="br-disbx-card-body">
+            <span className="br-disbx-card-label">Sanctioned Amount</span>
+            <span className="br-disbx-card-value">{fmtCr(d.limitAmt)}</span>
+          </div>
+        </div>
+        <div className="br-disbx-card">
+          <span className="br-disbx-icon br-disbx-icon-green"><Layers size={20} aria-hidden="true" /></span>
+          <div className="br-disbx-card-body">
+            <span className="br-disbx-card-label">Total Disbursed</span>
+            <span className="br-disbx-card-value">{fmtCr(d.disbursed)}</span>
+          </div>
+        </div>
+        <div className="br-disbx-card">
+          <span className="br-disbx-icon br-disbx-icon-amber"><Clock size={20} aria-hidden="true" /></span>
+          <div className="br-disbx-card-body">
+            <span className="br-disbx-card-label">Total Pending</span>
+            <span className="br-disbx-card-value">{fmtCr(d.pending)}</span>
+          </div>
+        </div>
+        <div className="br-disbx-card">
+          <span className="br-disbx-icon br-disbx-icon-teal"><Percent size={20} aria-hidden="true" /></span>
+          <div className="br-disbx-card-body">
+            <span className="br-disbx-card-label">Disbursed %</span>
+            <span className="br-disbx-card-value">{fmtPct(d.pctDisbursed)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="br-disbx-main">
+        <section className="br-disbx-panel">
+          <h3 className="br-disbx-panel-title">
+            1. Disbursement / Tranche Details
+            <span className="br-disbx-panel-sub">
+              {d.hasTranches ? ` (${d.rows.length} Tranche${d.rows.length === 1 ? '' : 's'})` : ' (no tranches — disbursed as a single amount)'}
+            </span>
+          </h3>
+          <div className="br-disbx-table-wrap">
+            <table className="br-disbx-table">
+              <thead>
+                <tr>
+                  <th>Tranche</th>
+                  <th className="br-right">Amount (₹ Cr)</th>
+                  <th className="br-center">Tentative Disb. Date</th>
+                  <th className="br-center">Actual Disb. Date</th>
+                  <th className="br-center">Status</th>
+                  <th className="br-right">% of Limit</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.rows.map((r) => (
+                  <tr key={r.key}>
+                    <td>{r.name}</td>
+                    <td className="br-right">{fmtCr(r.amount)}</td>
+                    <td className="br-center">{dashDate(r.tentative) || '—'}</td>
+                    <td className="br-center">{dashDate(r.actual) || '—'}</td>
+                    <td className="br-center">
+                      <span className={`brx-type-badge ${r.status === 'Disbursed' ? 'brx-badge-green' : 'brx-badge-orange'}`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="br-right">{fmtPct(r.pct)}</td>
+                    <td>—</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td className="br-right">{fmtCr(d.totalAmount)}</td>
+                  <td />
+                  <td />
+                  <td />
+                  <td className="br-right">{fmtPct(d.totalPct)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+
+        <section className="br-disbx-panel br-disbx-side">
+          <div className="br-disbx-donut-block">
+            <div className="br-disbx-donut-row">
+              <div className="br-disbx-donut">
+                <PieChart width={112} height={112}>
+                  <Pie
+                    data={chartData} dataKey="value" innerRadius={38} outerRadius={53}
+                    startAngle={90} endAngle={-270} stroke="none" isAnimationActive={false}
+                  >
+                    {chartData.map((c) => <Cell key={c.name} fill={c.fill} />)}
+                  </Pie>
+                </PieChart>
+                <div className="br-disbx-donut-center">
+                  <strong>{fmtPct(d.pctDisbursed)}</strong>
+                  <span>Disbursed</span>
+                </div>
+              </div>
+              <ul className="br-disbx-legend">
+                <li>
+                  <span className="br-disbx-dot" style={{ background: DISB_GREEN }} aria-hidden="true" />
+                  <span className="br-disbx-legend-label">Disbursed</span>
+                  <span className="br-disbx-legend-value">{fmtCr(d.disbursed)}</span>
+                </li>
+                <li>
+                  <span className="br-disbx-dot" style={{ background: DISB_AMBER }} aria-hidden="true" />
+                  <span className="br-disbx-legend-label">Pending</span>
+                  <span className="br-disbx-legend-value">{fmtCr(d.pending)}</span>
+                </li>
+                <li className="br-disbx-legend-total">
+                  <span className="br-disbx-legend-label">Total</span>
+                  <span className="br-disbx-legend-value">{fmtCr(d.limitAmt)}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="br-disbx-tl-block">
+            <h3 className="br-disbx-panel-title">Disbursement Timeline</h3>
+            <ol className="br-disbx-timeline">
+              {d.timeline.map((r) => {
+                const pendingRow = !r.actual;
+                const when = dashDate(r.actual) || dashDate(r.tentative);
+                return (
+                  <li key={r.key} className={`br-disbx-tl-item${pendingRow ? ' is-pending' : ''}`}>
+                    <span className="br-disbx-tl-dot" aria-hidden="true" />
+                    <span className="br-disbx-tl-date">{when || '—'}</span>
+                    <strong className="br-disbx-tl-name">{r.name}</strong>
+                    <span className="br-disbx-tl-amount">{fmtCr(r.amount)}</span>
+                    {pendingRow && <span className="br-disbx-tl-pending">(Pending)</span>}
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+};
 
 /**
  * Disbursement Schedule tab — separate from RepaymentScheduleSection above
@@ -519,12 +803,6 @@ const disbStatus = (actualDate) => (actualDate ? 'Disbursed' : 'Pending');
  */
 export const DisbursementScheduleSection = ({ sanction }) => {
   const [showInfo, setShowInfo] = useState(false);
-  const [expandedLimits, setExpandedLimits] = useState(() => new Set());
-  const toggleLimit = (idx) => setExpandedLimits((prev) => {
-    const next = new Set(prev);
-    if (next.has(idx)) next.delete(idx); else next.add(idx);
-    return next;
-  });
 
   if (!sanction) {
     return (
@@ -535,30 +813,12 @@ export const DisbursementScheduleSection = ({ sanction }) => {
   }
 
   const limits = sanction.limits || [];
-  const overallLimit = numFromDisb(sanction.limitAmount);
-  // A tranched Limit counts only its own disbursed Tranches toward the
-  // total — not its full amount — since it can be partially drawn; an
-  // untranched Limit counts its full amount once its own Actual Disb. Date
-  // is filled in.
-  let totalDisbursed = 0;
-  limits.forEach((l) => {
-    const tranches = l.tranches || [];
-    if (tranches.length > 0) {
-      tranches.forEach((tr) => {
-        if (tr.actualDisbursementDate) totalDisbursed += numFromDisb(tr.trancheAmount);
-      });
-    } else if (l.actualDisbursementDate) {
-      totalDisbursed += numFromDisb(l.facilityLimitAmount);
-    }
-  });
-  const totalPending = Math.max(overallLimit - totalDisbursed, 0);
-  const pctDisbursed = overallLimit > 0 ? (totalDisbursed / overallLimit) * 100 : 0;
 
   return (
     <section className="br-card br-disb-section">
       <header className="br-card-head">
         <span className="br-dot br-dot-schedule" aria-hidden="true" />
-        <h2 className="br-card-title">Disbursement schedule</h2>
+        <h2 className="br-card-title">Disbursement overview</h2>
         <span className="br-schedule-header-spacer" aria-hidden="true" />
         <span className="br-info-wrap">
           <button
@@ -585,141 +845,18 @@ export const DisbursementScheduleSection = ({ sanction }) => {
         <p className="br-muted br-pad">No Limits recorded for this sanction yet.</p>
       ) : (
         <>
-          <div className="br-limits-summary">
-            <div className="br-limits-summary-tile">
-              <span className="br-limits-summary-label">Total Sanction Limit</span>
-              <span className="br-limits-summary-value">Rs. {overallLimit.toFixed(2)} Cr</span>
-            </div>
-            <div className="br-limits-summary-tile">
-              <span className="br-limits-summary-label">Total Disbursed</span>
-              <span className="br-limits-summary-value br-tone-ok">Rs. {totalDisbursed.toFixed(2)} Cr</span>
-            </div>
-            <div className="br-limits-summary-tile">
-              <span className="br-limits-summary-label">Total Pending</span>
-              <span className="br-limits-summary-value br-tone-warn">Rs. {totalPending.toFixed(2)} Cr</span>
-            </div>
-            <div className="br-limits-summary-tile">
-              <span className="br-limits-summary-label">% Disbursed</span>
-              <span className="br-limits-summary-value">{pctDisbursed.toFixed(2)}%</span>
-            </div>
-          </div>
-
-          <div className="br-table-wrap">
-            <table className="br-table-list br-disb-table">
-              <thead>
-                <tr>
-                  <th className="br-center">Limit</th>
-                  <th className="br-right">Amount Rs. Cr's</th>
-                  <th>Instrument</th>
-                  <th className="br-right">Pending Rs. Cr's</th>
-                  <th className="br-center">Tentative Disb. Date</th>
-                  <th className="br-center">Actual Disb. Date</th>
-                  <th className="br-center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {limits.map((l, i) => {
-                  const limitName = l.limitLabel || getSanctionLimitLabel(i);
-                  const tranches = l.tranches || [];
-                  const hasTranches = tranches.length > 0;
-                  const disbursedCount = tranches.filter((tr) => tr.actualDisbursementDate).length;
-                  const isOpen = expandedLimits.has(i);
-                  const status = disbStatus(l.actualDisbursementDate);
-                  const limitAmt = numFromDisb(l.facilityLimitAmount);
-                  // Same "a tranched limit counts only its disbursed
-                  // tranches" rule the sanction-wide Total Pending tile
-                  // above already uses, just scoped to this one row.
-                  const disbursedAmt = hasTranches
-                    ? tranches.reduce((t, tr) => t + (tr.actualDisbursementDate ? numFromDisb(tr.trancheAmount) : 0), 0)
-                    : (l.actualDisbursementDate ? limitAmt : 0);
-                  const pendingAmt = Math.max(limitAmt - disbursedAmt, 0);
-                  return (
-                    <React.Fragment key={i}>
-                      <tr>
-                        <td className="br-center">
-                          {hasTranches ? (
-                            <button
-                              type="button" className="br-limit-name-toggle"
-                              onClick={() => toggleLimit(i)}
-                              aria-label={`${isOpen ? 'Hide' : 'Show'} tranches for ${limitName}`}
-                              aria-expanded={isOpen}
-                              title="Tranches"
-                            >
-                              {isOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
-                              {limitName}
-                            </button>
-                          ) : limitName}
-                        </td>
-                        <td className="br-right">{l.facilityLimitAmount || '—'}</td>
-                        <td>{l.facilityType || '—'}</td>
-                        <td className="br-right">
-                          <span className={pendingAmt > 0 ? 'br-tone-warn' : 'br-tone-ok'}>
-                            Rs. {pendingAmt.toFixed(2)} Cr
-                          </span>
-                        </td>
-                        <td className="br-center">{l.tentativeDisbursementDate || '—'}</td>
-                        <td className="br-center">{l.actualDisbursementDate || '—'}</td>
-                        <td className="br-center">
-                          {hasTranches ? (
-                            <span className={`brx-type-badge ${disbursedCount === tranches.length ? 'brx-badge-green' : 'brx-badge-orange'}`}>
-                              {disbursedCount} of {tranches.length} tranches disbursed
-                            </span>
-                          ) : (
-                            <span className={`brx-type-badge ${status === 'Disbursed' ? 'brx-badge-green' : 'brx-badge-orange'}`}>
-                              {status}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                      {isOpen && hasTranches && (
-                        <tr className="br-tranches-row">
-                          <td colSpan={7}>
-                            <div className="br-tranches-panel">
-                              <div className="br-tranches-head">
-                                <span className="br-tranches-title">Tranches for {limitName}</span>
-                              </div>
-                              <table className="br-table-list br-tranches-table">
-                                <thead>
-                                  <tr>
-                                    <th>Tranche</th>
-                                    <th className="br-right">Amount Rs. Cr's</th>
-                                    <th className="br-center">Tentative Disb. Date</th>
-                                    <th className="br-center">Actual Disb. Date</th>
-                                    <th className="br-center">Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {tranches.map((tr, tIdx) => {
-                                    const trStatus = disbStatus(tr.actualDisbursementDate);
-                                    return (
-                                      <tr key={tIdx}>
-                                        <td>Tranche {tIdx + 1}</td>
-                                        <td className="br-right">{tr.trancheAmount || '—'}</td>
-                                        <td className="br-center">{tr.tentativeDisbursementDate || '—'}</td>
-                                        <td className="br-center">{tr.actualDisbursementDate || '—'}</td>
-                                        <td className="br-center">
-                                          <span className={`brx-type-badge ${trStatus === 'Disbursed' ? 'brx-badge-green' : 'brx-badge-orange'}`}>
-                                            {trStatus}
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className={limits.length > 1 ? 'br-disbx-limits-scroll' : undefined}>
+            {limits.map((l, i) => (
+              <div key={l.id || i} className="br-disbx-limit">
+                {limits.length > 1 && (
+                  <h4 className="br-disbx-limit-heading">{l.limitLabel || getSanctionLimitLabel(i)}</h4>
+                )}
+                <LimitDisbursementView limit={l} index={i} />
+              </div>
+            ))}
           </div>
         </>
       )}
     </section>
   );
 };
-
