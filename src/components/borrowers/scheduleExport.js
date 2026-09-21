@@ -17,7 +17,12 @@ import { buildScheduleData, mergeSplitInterestRows, frequencyLabel, moratoriumLa
 // Word's COL_WIDTHS is a percentage per column, summing to 100 — kept next
 // to each column here so hiding DSRA/ISRA (see getColumns) can drop both
 // the header and its width together, then renormalize the rest back to
-// 100 instead of leaving Word's table short of full width.
+// 100 instead of leaving Word's table short of full width. The single
+// "Disbursement" entry is replaced at export time (see disbursementColumns)
+// by "Tranche 1"..."Tranche N" + "Total Disb." whenever the schedule being
+// exported has tranches — same dynamic-column rule the on-screen table
+// uses (RepaymentScheduleTab.js), so an export can never show fewer or more
+// tranche columns than what's on screen.
 const ALL_COLUMNS = [
   { key: 'No.', width: 4 },
   { key: 'Repayment Date', width: 9 },
@@ -34,13 +39,25 @@ const ALL_COLUMNS = [
   { key: 'ISRA Amount', width: 9, permission: 'showIsra' },
 ];
 
+const disbursementColumns = (trancheCount) => (trancheCount > 0
+  ? [
+    ...Array.from({ length: trancheCount }, (_, i) => ({ key: `Tranche ${i + 1}`, width: 7 })),
+    { key: 'Total Disb.', width: 8 },
+    { key: 'Disbursed to Date', width: 8 },
+  ]
+  : [{ key: 'Disbursement', width: 8 }]);
+
 // perm = { showDsra, showIsra, showDetailedInterest } — same permission
 // flags the on-screen table uses (RepaymentScheduleTab.js), passed down
 // from the caller (SanctionOverviewPanel.js's ScheduleExportMenu), so an
 // export can never contain a column or a split-interest row the table
-// itself is hiding from that user.
-const getColumns = (perm) => {
-  const cols = ALL_COLUMNS.filter((c) => !c.permission || perm[c.permission]);
+// itself is hiding from that user. trancheCount (view.tranches?.length,
+// 0 for an untranched limit or the whole-sanction fallback schedule) swaps
+// the single "Disbursement" column for the dynamic tranche columns.
+const getColumns = (perm, trancheCount = 0) => {
+  const base = ALL_COLUMNS.filter((c) => !c.permission || perm[c.permission]);
+  const disbIdx = base.findIndex((c) => c.key === 'Disbursement');
+  const cols = [...base.slice(0, disbIdx), ...disbursementColumns(trancheCount), ...base.slice(disbIdx + 1)];
   const widthSum = cols.reduce((t, c) => t + c.width, 0);
   return {
     headers: cols.map((c) => c.key),
@@ -59,12 +76,17 @@ const money = (n, rsafe) => {
 };
 
 const buildRows = (view, form, rsafe, perm, headers) => {
-  const { rows: allRows, debt } = buildScheduleData(view, form);
+  // rows already carry trancheDisb/totalDisb per period — buildScheduleData
+  // (RepaymentScheduleTab.js) computes that once and the on-screen table
+  // reads it directly; reusing the same rows here (rather than re-deriving
+  // tranche placement a second time) is what guarantees an export can never
+  // show a different tranche breakdown than what's on screen.
+  const { rows: allRows, debt, tranches } = buildScheduleData(view, form);
   const rows = perm.showDetailedInterest ? allRows : mergeSplitInterestRows(allRows);
+  const hasTranches = tranches.length > 0;
   return rows.map((r) => {
     const days = Math.round((r.end.getTime() - r.start.getTime()) / 86400000);
     const pct = r.amortIndex === null ? '—' : `${(Math.round(r.repaymentPct * 100) / 100).toFixed(2)}%`;
-    const disbursement = r.isFirstRow && debt !== null ? debt : null;
     const dsra = r.amortIndex !== null && view.dsraByPeriod ? view.dsraByPeriod[r.amortIndex] : view.dsraAmount;
     const isra = r.amortIndex !== null && view.israByPeriod ? view.israByPeriod[r.amortIndex] : view.israAmount;
     const record = {
@@ -74,7 +96,6 @@ const buildRows = (view, form, rsafe, perm, headers) => {
       Period: r.periodLabel,
       'Loan Opening': money(r.opening, rsafe),
       'Repayment %': pct,
-      Disbursement: money(disbursement, rsafe),
       'Principal Repayment': money(r.principalDue, rsafe),
       Interest: money(r.interestDue, rsafe),
       'Total Debt Service': money(r.principalDue + r.interestDue, rsafe),
@@ -82,6 +103,16 @@ const buildRows = (view, form, rsafe, perm, headers) => {
       'DSRA Amount': money(dsra, rsafe),
       'ISRA Amount': money(isra, rsafe),
     };
+    if (hasTranches) {
+      tranches.forEach((t, tIdx) => {
+        record[`Tranche ${tIdx + 1}`] = r.trancheDisb && r.trancheDisb[tIdx] != null
+          ? money(r.trancheDisb[tIdx], rsafe) : '—';
+      });
+      record['Total Disb.'] = r.totalDisb != null ? money(r.totalDisb, rsafe) : '—';
+      record['Disbursed to Date'] = money(r.cumDisb, rsafe);
+    } else {
+      record.Disbursement = money(r.isFirstRow && debt !== null ? debt : null, rsafe);
+    }
     return headers.reduce((o, h) => ({ ...o, [h]: record[h] }), {});
   });
 };
@@ -102,6 +133,8 @@ const buildSummary = (view, form, rsafe) => {
   ];
 };
 
+const trancheCountOf = (view, form) => (view.tranches || form.tranches || []).length;
+
 const fileBase = (meta = {}) => [meta.borrowerName, meta.refNo, 'Repayment Schedule']
   .filter(Boolean).join(' - ')
   .replace(/[\\/:*?"<>|]+/g, '-');
@@ -111,7 +144,7 @@ const reportTitle = (meta = {}) => ['Repayment Schedule', meta.borrowerName, met
 
 // ── Excel ────────────────────────────────────────────────────────────────
 export const exportScheduleExcel = (view, form, meta = {}, perm = {}) => {
-  const { headers } = getColumns(perm);
+  const { headers } = getColumns(perm, trancheCountOf(view, form));
   const summary = buildSummary(view, form, false);
   const rows = buildRows(view, form, false, perm, headers);
   if (!rows.length) return;
@@ -163,7 +196,7 @@ export const exportScheduleExcel = (view, form, meta = {}, perm = {}) => {
 
 // ── PDF (A4) ─────────────────────────────────────────────────────────────
 export const exportSchedulePDF = (view, form, meta = {}, perm = {}) => {
-  const { headers: HEADERS } = getColumns(perm);
+  const { headers: HEADERS } = getColumns(perm, trancheCountOf(view, form));
   const summary = buildSummary(view, form, true);
   const rows = buildRows(view, form, true, perm, HEADERS);
   if (!rows.length) return;
@@ -251,7 +284,7 @@ const BORDERS = {
 };
 
 export const exportScheduleWord = async (view, form, meta = {}, perm = {}) => {
-  const { headers: HEADERS, wordWidths: COL_WIDTHS } = getColumns(perm);
+  const { headers: HEADERS, wordWidths: COL_WIDTHS } = getColumns(perm, trancheCountOf(view, form));
   const summary = buildSummary(view, form, true);
   const rows = buildRows(view, form, true, perm, HEADERS);
   if (!rows.length) return;

@@ -76,26 +76,28 @@ const LimitsCard = ({ limits, limit }) => {
                             <div className="br-tranches-head">
                               <span className="br-tranches-title">Tranches for {limitName}</span>
                             </div>
-                            <table className="br-table-list br-tranches-table">
-                              <thead>
-                                <tr>
-                                  <th>Tranche</th>
-                                  <th className="br-right">Amount Rs. Cr's</th>
-                                  <th className="br-center">Tentative Disb. Date</th>
-                                  <th className="br-center">Actual Disb. Date</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {tranches.map((tr, tIdx) => (
-                                  <tr key={tIdx}>
-                                    <td>Tranche {tIdx + 1}</td>
-                                    <td className="br-right">{tr.trancheAmount || '—'}</td>
-                                    <td className="br-center">{tr.tentativeDisbursementDate || '—'}</td>
-                                    <td className="br-center">{tr.actualDisbursementDate || '—'}</td>
+                            <div className="br-tranches-scroll">
+                              <table className="br-table-list br-tranches-table">
+                                <thead>
+                                  <tr>
+                                    <th>Tranche</th>
+                                    <th className="br-right">Amount Rs. Cr's</th>
+                                    <th className="br-center">Tentative Disb. Date</th>
+                                    <th className="br-center">Actual Disb. Date</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {tranches.map((tr, tIdx) => (
+                                    <tr key={tIdx}>
+                                      <td>Tranche {tIdx + 1}</td>
+                                      <td className="br-right">{tr.trancheAmount || '—'}</td>
+                                      <td className="br-center">{tr.tentativeDisbursementDate || '—'}</td>
+                                      <td className="br-center">{tr.actualDisbursementDate || '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         </td>
                       </tr>

@@ -41,6 +41,7 @@ import useToast from '../../hooks/useToast';
 import ToastContainer from '../Notification_Toast/ToastContainer';
 import '../../pages-css/BorrowerRegistry.css';
 import '../../pages-css/BorrowerRegistryPremium.css';
+import { displayName } from './displayName';
 
 /**
  * Sums a list of already-formatted "₹X.XX Cr" sanction amounts back into one
@@ -91,10 +92,10 @@ const CompanyRow = ({ c, navigate, onDelete, onStatusChanged, hideDelete }) => {
       <span className="brx-tree-name-cell">
         {isGroupRow ? <Users size={15} aria-hidden="true" /> : <Building2 size={15} aria-hidden="true" />}
         <button
-          type="button" className="brx-ref-link" title={c.borrowerName}
+          type="button" className="brx-ref-link" title={displayName(c.borrowerName)}
           onClick={() => navigate(target)}
         >
-          {c.borrowerName}
+          {displayName(c.borrowerName)}
         </button>
       </span>
     </td>
@@ -116,7 +117,7 @@ const CompanyRow = ({ c, navigate, onDelete, onStatusChanged, hideDelete }) => {
       <div className="brx-row-actions">
         <button
           type="button" className="brx-icon-btn"
-          title={`View ${c.borrowerName}`} aria-label={`View ${c.borrowerName}`}
+          title={`View ${displayName(c.borrowerName)}`} aria-label={`View ${displayName(c.borrowerName)}`}
           onClick={() => navigate(target)}
         >
           <Eye size={15} aria-hidden="true" />
@@ -124,7 +125,7 @@ const CompanyRow = ({ c, navigate, onDelete, onStatusChanged, hideDelete }) => {
         {!rowHideDelete && (
           <button
             type="button" className="brx-icon-btn brx-icon-danger"
-            title={`Delete ${c.borrowerName}`} aria-label={`Delete ${c.borrowerName}`}
+            title={`Delete ${displayName(c.borrowerName)}`} aria-label={`Delete ${displayName(c.borrowerName)}`}
             onClick={onDelete}
           >
             <Trash2 size={15} aria-hidden="true" />
@@ -827,15 +828,15 @@ const GroupDetail = () => {
                   type="button" className="brx-crumb-link"
                   onClick={() => navigate(`/lender/borrowers/group/${group.parentGroupId}`)}
                 >
-                  {group.parentGroupName}
+                  {displayName(group.parentGroupName)}
                 </button>
               </>
             )}
             <span className="brx-crumb-sep">›</span>
-            <span className="brx-crumb-current">{group.groupName}</span>
+            <span className="brx-crumb-current">{displayName(group.groupName)}</span>
           </div>
           <h1 className="brx-title">
-            {group.groupName}
+            {displayName(group.groupName)}
             <span style={{ marginLeft: 10, verticalAlign: 'middle', display: 'inline-block' }}>
               <TypeBadge label={isParent ? 'Parent Group' : 'Sub Group'} />
             </span>
@@ -1004,7 +1005,7 @@ const GroupDetail = () => {
                 <AlertTriangle size={18} className="br-tone-warn" aria-hidden="true" />
                 <div className="br-viewer-title-text">
                   <h3 className="br-modal-title">Delete this borrower?</h3>
-                  <p className="br-modal-sub">{deleteTarget.borrowerName}</p>
+                  <p className="br-modal-sub">{displayName(deleteTarget.borrowerName)}</p>
                 </div>
               </div>
             </div>
@@ -1211,7 +1212,7 @@ const GroupDetail = () => {
                   <h3 className="br-modal-title">
                     Delete this {deleteGroupTargetIsParent ? 'Parent Group' : 'Sub Group'}?
                   </h3>
-                  <p className="br-modal-sub">{deleteGroupTarget.groupName}</p>
+                  <p className="br-modal-sub">{displayName(deleteGroupTarget.groupName)}</p>
                 </div>
               </div>
             </div>
@@ -1255,7 +1256,7 @@ const GroupDetail = () => {
                   >
                     <option value="">— Select a Parent Group —</option>
                     {parentGroupOptions.map((p) => (
-                      <option key={p.id} value={p.id}>{p.groupName}</option>
+                      <option key={p.id} value={p.id}>{displayName(p.groupName)}</option>
                     ))}
                   </select>
                 </label>
@@ -1308,7 +1309,7 @@ const GroupDetail = () => {
                   <h3 className="br-modal-title">Change organization</h3>
                   {orgTarget && (
                     <p className="br-modal-sub">
-                      {orgTarget.borrowerName}
+                      {displayName(orgTarget.borrowerName)}
                       {orgTarget.sanctions?.[0] && (
                         <> (<span className="brx-ref-highlight">{orgTarget.sanctions[0].refNo}</span>)</>
                       )}

@@ -443,8 +443,18 @@ export const parseRepaymentProfile = (json) => {
  */
 export const buildQuarterEndSchedule = (
   debtAmount, annualRoiPct, start, moratoriumEnd, repayEnd, period, capitalizeMoratoriumInterest,
-  repaymentPercents = null, isQuarterly = false,
+  repaymentPercents = null, isQuarterly = false, disbursements = null, trancheCount = 0,
 ) => {
+  // A limit with tranches is priced off each tranche's own Actual Disb.
+  // Date instead of one lump sum on one date — a separate path, so a limit
+  // without tranches (disbursements null/empty) runs the original code
+  // below completely untouched.
+  if (disbursements && disbursements.length) {
+    return buildTrancheAwareSchedule(
+      disbursements, annualRoiPct, start, moratoriumEnd, repayEnd, period,
+      capitalizeMoratoriumInterest, repaymentPercents, isQuarterly, trancheCount,
+    );
+  }
   const schedule = [];
   if (debtAmount === null || annualRoiPct === null || !start || !moratoriumEnd || !repayEnd
       || repayEnd.getTime() <= start.getTime()) {
@@ -539,6 +549,176 @@ export const buildQuarterEndSchedule = (
 
   return schedule;
 };
+
+/**
+ * The tranche-aware counterpart of the schedule above, used ONLY for a limit
+ * that has tranches with an Actual Disb. Date — everything else (a limit with
+ * no tranches, the whole-sanction fallback) never reaches this function and
+ * keeps running the original lump-sum code unchanged.
+ *
+ * Same Stage 1 period sequence, same moratorium/split/amortizing
+ * classification, same Repayment % profile (or equal 100/N split), same
+ * Actual/365 day count and same average-balance rule in repayment periods.
+ * What differs is only the balance interest is priced against: it is the sum
+ * of the tranches whose Actual Disb. Date has been reached, not the whole
+ * limit from day one. A moratorium period (or a split term's moratorium leg)
+ * is therefore priced segment by segment — every date a tranche lands inside
+ * it starts a new stretch — as Σ balance × ROI × days / 365. A pending
+ * tranche (no Actual Disb. Date) is simply never in `disbursements`, so it
+ * adds nothing until it is actually disbursed.
+ *
+ * The principal base is what has been disbursed by Moratorium End (plus
+ * capitalized moratorium interest, when applicable) — the Repayment %
+ * profile applies to that, exactly as it applied to the full limit before. A
+ * tranche dated after Moratorium End is rejected on save (SanctionFormModal
+ * and BorrowerService), since no fixed base could repay it.
+ *
+ * A tranche belongs to the period with start <= date < end, so one dated
+ * exactly on a period-end starts accruing in the NEXT period; one dated
+ * exactly on Moratorium End is attributed to the row that ends there, so the
+ * first repayment row opens already carrying it. Each row carries its own
+ * opening, closing, and per-tranche disbursement so no consumer has to
+ * rebuild the balance a second time.
+ *
+ * `disbursements` is [{ date: Date, amount: rupees, idx: tranche position }].
+ */
+const buildTrancheAwareSchedule = (
+  disbursements, annualRoiPct, start, moratoriumEnd, repayEnd, period,
+  capitalizeMoratoriumInterest, repaymentPercents, isQuarterly, trancheCount,
+) => {
+  const schedule = [];
+  if (annualRoiPct === null || !start || !moratoriumEnd || !repayEnd
+      || repayEnd.getTime() <= start.getTime()) {
+    return schedule;
+  }
+  const rate = annualRoiPct / 100;
+  const DAY = 86400000;
+  const daysBetween = (a, b) => Math.round((b.getTime() - a.getTime()) / DAY);
+  const disb = [...disbursements].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const balanceOn = (t) => disb.reduce((s, d) => (d.date.getTime() <= t ? s + d.amount : s), 0);
+
+  // Interest over [a, b) with the balance stepping up on every tranche date
+  // that falls strictly inside it.
+  const segmentInterest = (a, b) => {
+    const cuts = disb.map((d) => d.date.getTime()).filter((t) => t > a.getTime() && t < b.getTime());
+    const points = [...new Set([a.getTime(), ...cuts, b.getTime()])].sort((x, y) => x - y);
+    let total = 0;
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const days = Math.round((points[i + 1] - points[i]) / DAY);
+      total += (balanceOn(points[i]) * rate * days) / 365;
+    }
+    return total;
+  };
+
+  let cursor = start;
+  const periods = periodEndDates(start, repayEnd, period, isQuarterly).map((end) => {
+    const p = { start: cursor, end };
+    cursor = end;
+    return p;
+  });
+
+  const morEndT = moratoriumEnd.getTime();
+  const specs = [];
+  periods.forEach((p) => {
+    if (p.end.getTime() <= morEndT) {
+      specs.push({ start: p.start, end: p.end, kind: 'mor' });
+    } else if (p.start.getTime() < morEndT) {
+      specs.push({ start: p.start, end: moratoriumEnd, kind: 'mor', splitPart: 'moratorium' });
+      specs.push({ start: moratoriumEnd, end: p.end, kind: 'amort', splitPart: 'repayment' });
+    } else {
+      specs.push({ start: p.start, end: p.end, kind: 'amort' });
+    }
+  });
+
+  const capTotal = capitalizeMoratoriumInterest
+    ? specs.filter((s) => s.kind === 'mor').reduce((t, s) => t + round2(segmentInterest(s.start, s.end)), 0)
+    : 0;
+  const amortizingBaseAmount = balanceOn(morEndT) + capTotal;
+
+  const amortCount = specs.filter((s) => s.kind === 'amort').length;
+  const percents = (repaymentPercents && repaymentPercents.length === amortCount)
+    ? repaymentPercents : defaultRepaymentPercents(amortCount);
+
+  const placeIdx = (t) => {
+    if (t === morEndT && t > start.getTime()) {
+      for (let i = specs.length - 1; i >= 0; i -= 1) {
+        if (specs[i].kind === 'mor' && specs[i].end.getTime() === t) return i;
+      }
+    }
+    const i = specs.findIndex((s) => t >= s.start.getTime() && t < s.end.getTime());
+    if (i >= 0) return i;
+    return t < specs[0].start.getTime() ? 0 : specs.length - 1;
+  };
+  const assigned = specs.map(() => []);
+  disb.forEach((d) => assigned[placeIdx(d.date.getTime())].push(d));
+
+  let balance = 0;
+  let capitalized = false;
+  let amortIdx = 0;
+  specs.forEach((s, i) => {
+    const inRow = assigned[i];
+    const trancheDisb = new Array(trancheCount).fill(null);
+    inRow.forEach((d) => { trancheDisb[d.idx] = (trancheDisb[d.idx] || 0) + d.amount; });
+    const disbAmt = inRow.reduce((t, d) => t + d.amount, 0);
+    const common = {
+      start: s.start,
+      end: s.end,
+      trancheDisb,
+      totalDisb: inRow.length ? disbAmt : null,
+      ...(s.splitPart ? { splitPart: s.splitPart } : {}),
+    };
+    if (s.kind === 'mor') {
+      const opening = balance;
+      const closing = opening + disbAmt;
+      schedule.push({
+        ...common, principalDue: 0, interestDue: round2(segmentInterest(s.start, s.end)), opening, closing,
+      });
+      balance = closing;
+      return;
+    }
+    if (capitalizeMoratoriumInterest && !capitalized) {
+      balance += capTotal;
+      capitalized = true;
+    }
+    const opening = balance + disbAmt;
+    const pct = percents[amortIdx];
+    const principal = (amortizingBaseAmount * pct) / 100;
+    const closing = opening - principal;
+    const avgBalance = (opening + closing) / 2;
+    const interest = (avgBalance * rate * daysBetween(s.start, s.end)) / 365;
+    schedule.push({
+      ...common, principalDue: round2(principal), interestDue: round2(interest), repaymentPct: pct, opening, closing,
+    });
+    balance = closing;
+    amortIdx += 1;
+  });
+
+  return schedule;
+};
+
+/**
+ * A limit's tranches as engine input — only those with a parseable Actual
+ * Disb. Date and a positive amount; a Pending tranche is left out entirely,
+ * so it can never touch the balance, the interest, or the schedule anchor.
+ * `idx` is the tranche's own position in the limit (0-based), which is what
+ * the per-tranche disbursement columns are keyed by.
+ */
+export const buildTrancheDisbursements = (tranches) => (tranches || [])
+  .map((t, idx) => ({ date: parseDate(t.actualDisbursementDate), amount: parseMoneyCrore(t.trancheAmount), idx }))
+  .filter((d) => d.date && d.amount !== null && d.amount > 0);
+
+/** The earliest date in `field` among a limit's tranches (as its original string), or '' if none has one. */
+export const earliestTrancheDate = (tranches, field) => {
+  let best = null;
+  (tranches || []).forEach((t) => {
+    const d = parseDate(t[field]);
+    if (d && (!best || d.getTime() < best.d.getTime())) best = { d, raw: t[field] };
+  });
+  return best ? best.raw : '';
+};
+
+/** The earliest Actual Disb. Date among a limit's tranches, or '' if none has one. */
+export const earliestActualTrancheDate = (tranches) => earliestTrancheDate(tranches, 'actualDisbursementDate');
 
 /**
  * The interest-only (moratorium) leg of a schedule carries no principal and
@@ -846,7 +1026,16 @@ export const deriveSanction = (form) => {
  * independently, which could drift if one were ever edited without the
  * other; d.roi is now the single source of truth for both.
  */
-export const deriveRepaymentSchedule = (form) => {
+export const deriveRepaymentSchedule = (rawForm) => {
+  // A limit WITH tranches takes both its amount timing and its schedule
+  // anchor from those tranches: the earliest tranche Actual Disb. Date is
+  // the anchor (a Pending tranche never can be), whatever the limit's own
+  // Actual Disb. Date says. A limit WITHOUT tranches — and the whole-sanction
+  // fallback — keeps using its own date and amount, exactly as before.
+  const hasTranches = Array.isArray(rawForm.tranches) && rawForm.tranches.length > 0;
+  const form = hasTranches
+    ? { ...rawForm, disbursementDate: earliestActualTrancheDate(rawForm.tranches) }
+    : rawForm;
   const d = deriveSanction(form);
 
   const debt = parseMoneyCrore(form.debtAmount) ?? parseMoneyCrore(form.sanctionedAmount);
@@ -867,6 +1056,11 @@ export const deriveRepaymentSchedule = (form) => {
     scheduleMissing: [], ...d,
     repaymentStart: repaymentWindow.repaymentStart,
     repaymentEnd: repaymentWindow.repaymentEnd,
+    // Display-only — the per-limit tranche list, carried straight through so
+    // the table's disbursement-composition columns don't need a second trip
+    // back to the sanction/limit object. Never read by anything above that
+    // prices the schedule itself.
+    tranches: form.tranches || [],
   };
 
   // Named exactly like the on-screen field labels, in the order a reviewer
@@ -906,7 +1100,39 @@ export const deriveRepaymentSchedule = (form) => {
       debt, roi, repaymentWindow.moratoriumStart, repaymentWindow.moratoriumEnd, repaymentWindow.repaymentEnd,
       period, form.interestDuringMoratorium === 'CAPITALIZED',
       parseRepaymentProfile(form.repaymentProfileJson), form.repaymentFrequency === 'QUARTERLY',
+      hasTranches ? buildTrancheDisbursements(form.tranches) : null,
+      hasTranches ? form.tranches.length : 0,
     );
+
+    // deriveSanction above priced its DSRA/ISRA point figures off the
+    // lump-sum schedule. For a tranche-priced limit those must come from
+    // THIS schedule instead — same sumDebtService/sumInterest and same
+    // three-way ISRA rule as deriveSanction, just fed the tranche-aware rows
+    // — so the header figures can never disagree with the per-row DSRA/ISRA
+    // column and Min./Max. below.
+    if (hasTranches) {
+      out.dsraAmount = null;
+      out.israAmount = null;
+      out.israIsContractual = null;
+      const dsraText = String(form.dsra || '').trim();
+      const dsraN = parseReservePeriods(form.dsra);
+      if (dsraN !== null) {
+        out.dsraAmount = dsraN === 0 ? 'Nil' : formatCrore(sumDebtService(out.schedule, dsraN));
+      } else if (dsraText !== '') {
+        out.dsraAmount = 'Not Calculated';
+      }
+      const israText0 = String(form.isra || '').trim();
+      const israN = parseReservePeriods(form.isra);
+      if (israN !== null) {
+        out.israAmount = israN === 0 ? 'Nil' : formatCrore(sumInterest(out.schedule, israN));
+        out.israIsContractual = true;
+      } else if (israText0 !== '') {
+        out.israAmount = 'Not Calculated';
+      } else if (dsraN !== null) {
+        out.israAmount = dsraN === 0 ? 'Nil' : formatCrore(sumInterest(out.schedule, dsraN));
+        out.israIsContractual = false;
+      }
+    }
 
     // Min./Max. DSRA — the same rolling current+next-period reserve figure
     // dsraAmount already prices for the first period, computed at every
@@ -960,6 +1186,12 @@ export const deriveRepaymentSchedule = (form) => {
  * Repayment Schedule section on the Borrower/Group Detail pages
  * (SanctionOverviewPanel.js) — one calculation, not two copies that could
  * drift apart.
+ *
+ * A limit WITHOUT tranches is fed its own Actual Disb. Date and amount,
+ * exactly as before. A limit WITH tranches is handed its tranches instead —
+ * deriveRepaymentSchedule then anchors on the earliest tranche Actual Disb.
+ * Date and prices interest off each tranche's own date (the limit-level date
+ * is not used once tranches exist).
  */
 export const buildLimitScheduleViews = (sanctionLike) => (sanctionLike?.limits || []).map((l) => deriveRepaymentSchedule({
   ...sanctionLike,
@@ -968,6 +1200,7 @@ export const buildLimitScheduleViews = (sanctionLike) => (sanctionLike?.limits |
   repaymentStartDate: '',
   repaymentEndDate: '',
   repaymentProfileJson: l.repaymentProfileJson || '',
+  tranches: l.tranches || [],
 }));
 
 export default deriveSanction;

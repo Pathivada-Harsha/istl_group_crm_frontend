@@ -25,6 +25,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import '../pages-css/BorrowerRegistry.css';
 import '../pages-css/BorrowerRegistryPremium.css';
+import { displayName } from '../components/borrowers/displayName';
 
 const BorrowerRegistry = () => {
   const navigate = useNavigate();
@@ -141,7 +142,7 @@ const BorrowerRegistry = () => {
     if (!deleteTarget) return;
     setDeleting(true);
     setError('');
-    const name = deleteTarget.borrowerName;
+    const name = displayName(deleteTarget.borrowerName);
     try {
       await borrowerApi.remove(deleteTarget.id);
       setDeleteTarget(null);
@@ -170,7 +171,7 @@ const BorrowerRegistry = () => {
     if (!deleteGroupTarget) return;
     setDeletingGroup(true);
     setError('');
-    const name = deleteGroupTarget.groupName;
+    const name = displayName(deleteGroupTarget.groupName);
     try {
       await borrowerApi.deleteGroup(deleteGroupTarget.id);
       setDeleteGroupTarget(null);
@@ -220,7 +221,7 @@ const BorrowerRegistry = () => {
       });
       setOrgTarget(null);
       loadHierarchy();
-      showSuccess(`${orgTarget.borrowerName}'s organization was updated.`, 'Updated');
+      showSuccess(`${displayName(orgTarget.borrowerName)}'s organization was updated.`, 'Updated');
     } catch (e) {
       setOrgError(e.message || 'Could not update the organization');
     } finally {
@@ -327,7 +328,7 @@ const BorrowerRegistry = () => {
                 <AlertTriangle size={18} className="br-tone-warn" aria-hidden="true" />
                 <div className="br-viewer-title-text">
                   <h3 className="br-modal-title">Delete this borrower?</h3>
-                  <p className="br-modal-sub">{deleteTarget.borrowerName}</p>
+                  <p className="br-modal-sub">{displayName(deleteTarget.borrowerName)}</p>
                 </div>
               </div>
             </div>
@@ -392,7 +393,7 @@ const BorrowerRegistry = () => {
                 <AlertTriangle size={18} className="br-tone-warn" aria-hidden="true" />
                 <div className="br-viewer-title-text">
                   <h3 className="br-modal-title">Delete this Parent Group?</h3>
-                  <p className="br-modal-sub">{deleteGroupTarget.groupName}</p>
+                  <p className="br-modal-sub">{displayName(deleteGroupTarget.groupName)}</p>
                 </div>
               </div>
             </div>
@@ -444,7 +445,7 @@ const BorrowerRegistry = () => {
                   <h3 className="br-modal-title">Change organization</h3>
                   {orgTarget && (
                     <p className="br-modal-sub">
-                      {orgTarget.borrowerName}
+                      {displayName(orgTarget.borrowerName)}
                       {orgTarget.sanctions?.[0] && (
                         <> (<span className="brx-ref-highlight">{orgTarget.sanctions[0].refNo}</span>)</>
                       )}

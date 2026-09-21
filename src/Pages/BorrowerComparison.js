@@ -32,6 +32,7 @@ import Pagination from '../components/borrowers/Pagination';
 import CrmPreloader from '../components/preLoader';
 import { exportComparisonExcel } from '../components/borrowers/comparisonExport';
 import '../pages-css/BorrowerComparison.css';
+import { displayName } from '../components/borrowers/displayName';
 
 const MAX_LIMIT_COLUMNS = 6;
 const PAGE_SIZE = 5;
@@ -103,7 +104,7 @@ const buildComparisonModel = (sanctions, perms) => {
 
   // ── Field-driven sections ──
   if (sanctions.length) {
-    const firstRows = buildDetailRows({ borrowerName: sanctions[0].associatedWithName }, sanctions[0], perms);
+    const firstRows = buildDetailRows({ borrowerName: displayName(sanctions[0].associatedWithName) }, sanctions[0], perms);
     firstRows.forEach((f) => {
       const covenant = f.group === 'Conditions & Covenants';
       const sectionId = covenant
@@ -114,7 +115,7 @@ const buildComparisonModel = (sanctions, perms) => {
     });
   }
   sanctions.forEach((s) => {
-    const rows = buildDetailRows({ borrowerName: s.associatedWithName }, s, perms);
+    const rows = buildDetailRows({ borrowerName: displayName(s.associatedWithName) }, s, perms);
     rows.forEach((f) => { valuesBySanctionId[s.id][f.key] = f.value; });
   });
 
@@ -438,14 +439,14 @@ const BorrowerComparison = () => {
               <div key={s.id} className="cmp-chip">
                 <ChipIcon tone={chipTone(i)} />
                 <div className="cmp-chip-text">
-                  <span className="cmp-chip-name">{s.associatedWithName || '—'}</span>
+                  <span className="cmp-chip-name">{displayName(s.associatedWithName) || '—'}</span>
                   <span className="cmp-chip-sub">{s.refNo || '—'}</span>
                 </div>
                 <button
                   type="button"
                   className="cmp-chip-remove"
                   onClick={() => removeColumn(s.id)}
-                  aria-label={`Remove ${s.associatedWithName || 'this sanction'}`}
+                  aria-label={`Remove ${displayName(s.associatedWithName) || 'this sanction'}`}
                 >
                   <X size={13} aria-hidden="true" />
                 </button>
@@ -488,7 +489,7 @@ const BorrowerComparison = () => {
                           <th key={s.id} className="cmp-col-head">
                             <div className="cmp-col-head-inner">
                               <ChipIcon tone={chipTone((currentPage - 1) * PAGE_SIZE + i)} />
-                              <span className="cmp-col-head-name">{s.associatedWithName || '—'}</span>
+                              <span className="cmp-col-head-name">{displayName(s.associatedWithName) || '—'}</span>
                             </div>
                           </th>
                         ))}
@@ -529,7 +530,7 @@ const BorrowerComparison = () => {
                           <th key={s.id} className="cmp-col-head">
                             <div className="cmp-col-head-inner">
                               <ChipIcon tone={chipTone((currentPage - 1) * PAGE_SIZE + i)} />
-                              <span className="cmp-col-head-name">{s.associatedWithName || '—'}</span>
+                              <span className="cmp-col-head-name">{displayName(s.associatedWithName) || '—'}</span>
                             </div>
                           </th>
                         ))}
@@ -576,7 +577,7 @@ const BorrowerComparison = () => {
                                 <th className="cmp-sticky-col cmp-field-head">Field</th>
                                 {pageSanctions.map((s) => (
                                   <th key={s.id} className="cmp-col-head">
-                                    <span className="cmp-col-head-name">{s.associatedWithName || '—'}</span>
+                                    <span className="cmp-col-head-name">{displayName(s.associatedWithName) || '—'}</span>
                                   </th>
                                 ))}
                               </tr>
