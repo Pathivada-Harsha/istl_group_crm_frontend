@@ -392,7 +392,7 @@ const DraggableHeaderCell = ({ col, index, sortColumn, sortDirection, getSortIco
 );
 
 // ─── Proposal Form (inline in lead detail) ───────────────────────────────────
-const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, apiBase }) => {
+const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, apiBase, showSuccess, showError }) => {
   const [activeTab, setActiveTab] = useState('basic');
   const [saving, setSaving] = useState(false);
   const [customUnitInputs, setCustomUnitInputs] = useState({});
@@ -471,17 +471,26 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
     return { sub: sub.toFixed(2), tax: tax.toFixed(2), grand: grand.toFixed(2) };
   };
 
+  // The proposal write endpoints report a refusal in two different dialects:
+  // PUT /proposals/update/{id} answers 200 with { success:false, message }, while
+  // POST /proposals/{id}/upload-offline answers 403 with { error }. Reading only one
+  // of those keys is what turned "You don't have permission to edit this proposal"
+  // into a bare "Update failed". Read both, and survive a body that isn't JSON.
+  const readJson = async (res) => { try { return await res.json(); } catch { return null; } };
+  const failureMessage = (res, data, fallback) =>
+    data?.message || data?.error || (res.ok ? fallback : `${fallback} (${res.status})`);
+
   // Save for offline proposal: only update title + totalValue, then optionally replace PDF
   const handleSaveOffline = async () => {
-    if (!formData.title.trim()) { alert('Please enter a title'); return; }
+    if (!formData.title.trim()) { showError?.('Please enter a title'); return; }
     setSaving(true);
     try {
       const body = JSON.stringify({ title: formData.title.trim(), totalValue: parseFloat(formData.totalValue) || 0, status: formData.status || 'Draft' });
       const res = await fetch(`${apiBase}/proposals/update/${existingProposal.id}`, {
         method: 'PUT', headers, credentials: 'include', body,
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Update failed');
+      const data = await readJson(res);
+      if (!res.ok || !data?.success) throw new Error(failureMessage(res, data, 'Update failed'));
 
       // If a replacement PDF was chosen, upload it too
       if (offlineReplaceFile) {
@@ -493,17 +502,17 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
           headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
           body: form,
         });
-        const upData = await upRes.json();
-        if (!upData.success) throw new Error(upData.error || 'PDF replace failed');
+        const upData = await readJson(upRes);
+        if (!upRes.ok || !upData?.success) throw new Error(failureMessage(upRes, upData, 'PDF replace failed'));
       }
 
       onSaved(data.data || data.message);
-    } catch (e) { alert(e.message || 'Failed to save proposal'); }
+    } catch (e) { showError?.(e.message || 'Failed to save proposal'); }
     finally { setSaving(false); setOfflineReplacing(false); }
   };
 
   const handleSave = async () => {
-    if (!formData.title) { alert('Please fill in Title'); return; }
+    if (!formData.title) { showError?.('Please fill in Title'); return; }
     setSaving(true);
     try {
       // Solar carries no typed template — writing the defaults back would clobber
@@ -514,10 +523,10 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
       const url = existingProposal ? `${apiBase}/proposals/update/${existingProposal.id}` : `${apiBase}/proposals/create`;
       const method = existingProposal ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers, credentials: 'include', body });
-      const data = await res.json();
-      if (data.success) onSaved(data.data || data.message);
-      else alert(data.error || data.message || 'Failed to save proposal');
-    } catch (e) { alert('Failed to save proposal'); }
+      const data = await readJson(res);
+      if (res.ok && data?.success) onSaved(data.data || data.message);
+      else showError?.(failureMessage(res, data, 'Failed to save proposal'));
+    } catch (e) { showError?.('Failed to save proposal'); }
     finally { setSaving(false); }
   };
 
@@ -2120,6 +2129,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                 currentUser={currentUser}
                 apiBase={API_BASE_URL}
                 existingProposal={editingProposal}
+                showSuccess={showSuccess}
+                showError={showError}
                 onSaved={() => { setShowProposalForm(false); setEditingProposal(null); showSuccess(editingProposal ? 'Proposal updated!' : 'Proposal created!'); fetchProposals(); if (!editingProposal) markProposalSent(); else if (onLeadUpdated) onLeadUpdated(); }}
                 onCancel={() => { setShowProposalForm(false); setEditingProposal(null); }}
               />
