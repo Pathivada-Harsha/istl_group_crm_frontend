@@ -570,3 +570,65 @@
 @media (prefers-reduced-motion: reduce) {
   .brx-btn, .brx-input, .brx-row, .brx-stat, .brx-icon-btn { transition: none; }
 }
+
+/* ── Registry analytics strip (RegistryAnalytics.js) — between the KPI cards and
+   the table. Everything is prefixed .brx-an- and lives under .brx-registry. ── */
+.brx-registry .brx-an { margin-bottom: 22px; }
+.brx-registry .brx-an-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;
+}
+.brx-registry .brx-an-card {
+  min-width: 0; padding: 16px 20px 18px; background: var(--c-white, #ffffff);
+  border: 1px solid rgba(220, 228, 240, .85); border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(30, 70, 120, .08), 0 1px 3px rgba(30, 70, 120, .05);
+}
+.brx-registry .brx-an-card-green { background: linear-gradient(135deg, #ffffff 40%, #f0fdf4); }
+.brx-registry .brx-an-card-blue { background: linear-gradient(135deg, #ffffff 40%, #f0f7ff); }
+.brx-registry .brx-an-title {
+  display: flex; align-items: center; gap: 7px; margin: 0 0 14px;
+  font-size: 13.5px; font-weight: 700; color: var(--ct-111827, #111827);
+}
+.brx-registry .brx-an-empty { margin: 30px 0; text-align: center; font-size: 12.5px; color: var(--ct-6b7280, #6b7280); }
+
+.brx-registry .brx-an-donut-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 22px; }
+.brx-registry .brx-an-donut { position: relative; width: 96px; height: 96px; flex-shrink: 0; }
+.brx-registry .brx-an-donut-center {
+  /* Padding keeps the text column (66px) just inside the ring's own inner
+     hole (68px, from innerRadius=34 on a 96px chart) — a wider padding
+     would shrink the ring's own diameter reservation, a narrower one lets
+     text spill under the coloured ring itself. */
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 0 15px; text-align: center; pointer-events: none;
+}
+.brx-registry .brx-an-donut-center strong {
+  /* Font size is set inline per card (see centerFontSize in
+     RegistryAnalytics.js), scaled to the value's own length — this is only
+     the fallback for a value rendered without that inline style. */
+  max-width: 100%; font-size: 11px; line-height: 1.1; color: var(--ct-111827, #111827);
+  overflow-wrap: anywhere; word-break: break-word;
+}
+.brx-registry .brx-an-donut-center span { margin-top: 1px; font-size: 9px; color: var(--ct-374151, #374151); }
+.brx-registry .brx-an-legend {
+  flex: 1 1 150px; min-width: 150px; margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 12px; font-size: 12.5px;
+}
+.brx-registry .brx-an-legend li { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.brx-registry .brx-an-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.brx-registry .brx-an-legend-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ct-374151, #374151); }
+.brx-registry .brx-an-legend-value { flex-shrink: 0; font-weight: 600; color: var(--ct-111827, #111827); white-space: nowrap; }
+.brx-registry .brx-an-legend-value em { font-style: normal; font-weight: 500; color: var(--ct-6b7280, #6b7280); }
+
+.brx-registry .brx-an-rank { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.brx-registry .brx-an-rank li { display: grid; grid-template-columns: minmax(56px, 28%) minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 11px; }
+.brx-registry .brx-an-rank-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ct-374151, #374151); }
+.brx-registry .brx-an-rank-track { display: block; height: 7px; border-radius: 3px; background: var(--c-f1f5f9, #f1f5f9); overflow: hidden; }
+.brx-registry .brx-an-rank-bar { display: block; height: 100%; border-radius: 3px; background: #60a5fa; }
+.brx-registry .brx-an-rank-amount { font-weight: 600; color: var(--ct-111827, #111827); white-space: nowrap; text-align: right; }
+
+/* Four across only where each card has room for the ring beside its legend. */
+@media (min-width: 1480px) {
+  .brx-registry .brx-an-grid { grid-template-columns: 1fr 1fr 1.05fr 1.1fr; }
+}
+@media (max-width: 760px) {
+  .brx-registry .brx-an-grid { grid-template-columns: minmax(0, 1fr); }
+}

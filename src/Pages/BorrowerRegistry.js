@@ -18,6 +18,7 @@ import SanctionFormModal from '../components/borrowers/SanctionFormModal';
 import CompanyMatchModal from '../components/borrowers/CompanyMatchModal';
 import SanctionComparePicker from '../components/borrowers/SanctionComparePicker';
 import HierarchyTree from '../components/borrowers/HierarchyTree';
+import RegistryAnalytics from '../components/borrowers/RegistryAnalytics';
 import HierarchyPicker, {
   EMPTY_HIERARCHY, hierarchyFromBorrower, resolveHierarchyGroupId,
 } from '../components/borrowers/HierarchyPicker';
@@ -295,6 +296,11 @@ const BorrowerRegistry = () => {
         <Stat icon={FileCheck} tone="amber" label="Total Sanction Letters" value={hierarchyStats.sanctions} sub="Across all companies" />
         <Stat icon={IndianRupee} tone="green" label="Total Sanctioned Amount" value={hierarchyStats.sanctioned} sub="Across all groups" />
       </div>
+
+      <RegistryAnalytics
+        analytics={hierarchyData.stats?.analytics}
+        totalSanctionedLabel={hierarchyStats.sanctioned}
+      />
 
       <HierarchyTree
         data={hierarchyData}
