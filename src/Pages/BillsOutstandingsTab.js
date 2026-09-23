@@ -3,6 +3,7 @@ import { AlertCircle, Clock, ChevronDown, ChevronUp, RefreshCw, CheckCircle, Tre
 import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters';
 import { useAuth } from '../hooks/useAuth';
+import { roundOffOf } from '../utils/money';
 
 /* Inline-style theme mappers (dark mode) */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -172,7 +173,7 @@ export default function BillsOutstandingsTab() {
       XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
       // ── Sheet 2: Outstanding Bills ─────────────────────────────────────────
-      const billHeaders = ['Bill No.', 'Vendor', 'PO Reference', 'Bill Date', 'Due Date', 'Days Overdue', 'Ageing Bucket', 'Status', 'Bill Amount (₹)', 'Paid (₹)', 'Balance (₹)'];
+      const billHeaders = ['Bill No.', 'Vendor', 'PO Reference', 'Bill Date', 'Due Date', 'Days Overdue', 'Ageing Bucket', 'Status', 'Round Off (₹)', 'Bill Amount (₹)', 'Paid (₹)', 'Balance (₹)'];
       const billRows = bills.map(bill => {
         const days = calcDays(bill);
         return [
@@ -184,13 +185,16 @@ export default function BillsOutstandingsTab() {
           days === null ? '' : days <= 0 ? `In ${Math.abs(days)}d` : `${days}d`,
           getBucket(days),
           bill.status || 'Pending',
+          // Zero on a bill entered before the feature, so the column still sums
+          // correctly across a range spanning old and new records.
+          fmtN(roundOffOf(bill)),
           fmtN(bill.totalAmount),
           fmtN(bill.paidAmount),
           getBalanceN(bill),
         ];
       });
       const wsOutstanding = XLSX.utils.aoa_to_sheet([billHeaders, ...billRows]);
-      wsOutstanding['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 14 }];
+      wsOutstanding['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 14 }];
       XLSX.utils.book_append_sheet(wb, wsOutstanding, 'Outstanding Bills');
 
       // ── Sheet 3: Ageing Detail (per bucket) ───────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import {
   Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
@@ -17,6 +17,8 @@ import ToastContainer from './../components/Notification_Toast/ToastContainer.js
 import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
 import ConfirmationModal from '../components/ConfirmationModal';
+import TotalsSummary from '../components/TotalsSummary';
+import { computeDocTotals, lineTotal, validateRoundOff, roundOffOf, formatSignedMoney } from '../utils/money';
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -945,7 +947,11 @@ const BillsManagementPage = () => {
         unitPrice: 0,
         taxPercent: 18
       }],
-      notes: ''
+      notes: '',
+      // Empty means "not touched", so the preview keeps showing the automatic
+      // round-off as the lines change. It only freezes once the user types.
+      roundOff: '',
+      roundOffTouched: false
     });
 
     setModalGroupName(seedGroup);
@@ -1097,7 +1103,14 @@ const BillsManagementPage = () => {
         ...bill,
         billDate: bill.billDate ? bill.billDate.split('T')[0] : '',
         dueDate: bill.dueDate ? bill.dueDate.split('T')[0] : '',
-        items: enrichedItems
+        items: enrichedItems,
+        // A saved bill's round-off is an explicit decision, so editing starts
+        // from it and is treated as already touched — re-deriving it would throw
+        // away a figure someone entered to match the vendor's own total.
+        roundOff: bill.roundOff !== null && bill.roundOff !== undefined
+          ? Number(bill.roundOff).toFixed(2)
+          : '',
+        roundOffTouched: bill.roundOff !== null && bill.roundOff !== undefined
       });
 
       setShowDetailDrawer(false);
@@ -1217,6 +1230,15 @@ const BillsManagementPage = () => {
       }
     }
 
+    // Round off, checked again here and not only by the input's min/max — those
+    // are not enforced for a pasted or programmatically set value, and the server
+    // answers an out-of-band figure with a 400.
+    const roundOffCheck = validateRoundOff(billRoundOffValue);
+    if (!roundOffCheck.valid) {
+      showWarning(roundOffCheck.message);
+      return;
+    }
+
     setLoading(true);
     try {
       const method = editMode ? 'PUT' : 'POST';
@@ -1224,11 +1246,16 @@ const BillsManagementPage = () => {
         ? `${API_BASE_URL}/bills/${formData.id}`
         : `${API_BASE_URL}/bills`;
 
+      // roundOff is the only money field the server reads off this body; it
+      // recomputes the totals from the items and ignores anything else.
+      // roundOffTouched is a form-only flag and must not be sent.
+      const { roundOffTouched, ...billPayload } = formData;
+
       const response = await fetch(url, {
         method,
         headers: getAuthHeaders(),
         credentials: "include",
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...billPayload, roundOff: roundOffCheck.paise / 100 })
       });
 
       if (response.ok) {
@@ -1605,18 +1632,45 @@ const BillsManagementPage = () => {
     }
   };
 
-  // Calculate line total for an item
-  const calculateLineTotal = (item) => {
-    const subtotal = (item.quantity || 0) * (item.unitPrice || 0);
-    const tax = subtotal * ((item.taxPercent || 0) / 100);
-    return subtotal + tax;
+  // Calculate line total for an item — integer paise, so a per-row cell agrees
+  // with the server's own line arithmetic to the paisa.
+  const calculateLineTotal = (item) => lineTotal(item);
+
+  /*
+   * The user typing in the Round Off box.
+   *
+   * roundOffTouched is what stops their entry being overwritten: without it, the
+   * next keystroke in any quantity field would recompute the automatic value and
+   * silently discard the +0.99 they just entered to match the vendor's bill.
+   */
+  const handleRoundOffChange = (raw) => {
+    setFormData(prev => ({ ...prev, roundOff: raw, roundOffTouched: true }));
   };
 
-  // Calculate bill total
-  const calculateBillTotal = () => {
-    if (!formData || !formData.items) return 0;
-    return formData.items.reduce((total, item) => total + calculateLineTotal(item), 0);
-  };
+  /*
+   * The bill's money. A vendor bill is an INCOMING document: the round-off is
+   * pre-filled with the automatic value but the user may nudge it within a rupee
+   * to land on the figure the vendor actually printed, which is why this passes
+   * formData.roundOff as an override rather than just rounding.
+   *
+   * Returns the whole set now, not a single number — the form needs the subtotal
+   * and the tax separately to show the Round Off line honestly.
+   */
+  // Pulled out so the memo's dependency array is statically checkable.
+  const billItems = formData ? formData.items : null;
+  const billRoundOffInput = formData ? formData.roundOff : '';
+  const billRoundOffTouched = formData ? formData.roundOffTouched : false;
+
+  const billTotals = useMemo(
+    () => computeDocTotals(billItems || [],
+                           { roundOffOverride: billRoundOffTouched ? billRoundOffInput : null }),
+    [billItems, billRoundOffInput, billRoundOffTouched]
+  );
+
+  /** What the Round Off box shows: the user's entry, or the automatic value. */
+  const billRoundOffValue = billRoundOffTouched
+    ? billRoundOffInput
+    : (billTotals.autoRoundOff || 0).toFixed(2);
 
   // Close columns panel when clicking outside
   useEffect(() => {
@@ -2523,11 +2577,18 @@ const BillsManagementPage = () => {
                   </table>
                 </div>
 
-                {/* Bill Total */}
-                <div className="bill-form-total-row">
-                  <strong>Total Bill Amount:</strong>
-                  <span className="bill-form-total-amount">{formatCurrency(calculateBillTotal())}</span>
-                </div>
+                {/* Bill Total — editable round off, bounded to +/- 1.00 */}
+                <TotalsSummary
+                  editable
+                  subtotal={billTotals.subtotal}
+                  tax={billTotals.tax}
+                  exactTotal={billTotals.exactTotal}
+                  grandTotal={billTotals.grandTotal}
+                  roundOff={billRoundOffValue}
+                  autoRoundOff={billTotals.autoRoundOff}
+                  onRoundOffChange={handleRoundOffChange}
+                  labels={{ grandTotal: 'Total Bill Amount' }}
+                />
 
                 {editMode && formData.poId && (
                   <div className="bill-form-edit-warning">
@@ -2655,6 +2716,14 @@ const BillsManagementPage = () => {
                     <label>Bill Ref ID:</label>
                     <span>{selectedBill.billRefId || '—'}</span>
                   </div>
+                  {/* Only when there is a round-off, so a bill entered before the
+                      feature reads exactly as it always did. */}
+                  {roundOffOf(selectedBill) !== 0 && (
+                    <div className="procurement-bills-received-info-item">
+                      <label>Round Off:</label>
+                      <span>{formatSignedMoney(roundOffOf(selectedBill))}</span>
+                    </div>
+                  )}
                   <div className="procurement-bills-received-info-item">
                     <label>Total Amount:</label>
                     <span className="procurement-bills-received-amount-highlight">
@@ -2909,6 +2978,12 @@ const BillsManagementPage = () => {
                   <div className="procurement-bills-received-info-item">
                     <label>Project:</label>
                     <span>{selectedBill.projectId}</span>
+                  </div>
+                )}
+                {roundOffOf(selectedBill) !== 0 && (
+                  <div className="procurement-bills-received-info-item">
+                    <label>Round Off:</label>
+                    <span>{formatSignedMoney(roundOffOf(selectedBill))}</span>
                   </div>
                 )}
                 <div className="procurement-bills-received-info-item">

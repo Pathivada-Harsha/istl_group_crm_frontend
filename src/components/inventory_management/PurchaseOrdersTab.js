@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Eye, Edit2, Trash2 } from 'lucide-react';
+import { computeDocTotals } from '../../utils/money';
 import FilterSelect from '../Dropdowns/FilterSelect.js';
 import {
   PO_STATUS, BILL_STATUS, fmtCcy, fmt,
@@ -56,16 +57,18 @@ const normalizePO = po => ({
 });
 
 // ── PO line total helper ──────────────────────────────────────────────────────
+// Integer paise, so this fallback matches what the server would have stored.
 function poTotal(items) {
-  return items.reduce((s, it) => {
-    const sub = (Number(it.qty)||0) * (Number(it.rate)||0);
-    return s + sub + (sub * (Number(it.tax)||0) / 100);
-  }, 0);
+  return computeDocTotals(
+    (items || []).map(it => ({ quantity: it.qty, unitPrice: it.rate, taxPercent: it.tax }))
+  ).grandTotal;
 }
 
 
 function getPoMetrics(po, bills, payments) {
-  const total       = Number(po.totalValue) || poTotal(po.items);
+  // `!= null`, not `||`: a PO whose stored total is genuinely zero was treated as
+  // having no total at all and silently re-derived from its lines.
+  const total       = po.totalValue != null ? Number(po.totalValue) : poTotal(po.items);
   const linkedBills = bills.filter(b =>
     (po.id && b.poId && String(b.poId) === String(po.id)) ||
     (po.poNumber && b.poNumber && b.poNumber === po.poNumber)

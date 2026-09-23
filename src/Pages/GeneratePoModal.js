@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
+import { computeDocTotals, taxRowsByRate, lineSubtotalPaise, lineTaxPaise, toPaise, fromPaise, roundPaiseToRupee, formatMoney, formatSignedMoney } from '../utils/money';
 
 // ─── Dark theme helpers (mirror PurchaseOrders.js convention) ───────────────
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -288,18 +289,28 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
     return d.stampFileName;
   };
 
-  const subtotal = form.items.reduce((s, it) => s + num(it.qty) * num(it.pricePerUnit), 0);
-  const gstAmount = form.items.reduce((s, it) => s + num(it.qty) * num(it.pricePerUnit) * num(it.gstPercent) / 100, 0);
-  const adjTotal = form.adjustments.reduce((s, a) => s + num(a.amount), 0);
-  const grandTotal = subtotal + gstAmount + adjTotal;
+  /*
+   * The document's money, in integer paise so this preview shows exactly what the
+   * PDF will print — PurchaseOrderPdfService derives the same four figures from
+   * the line items it receives rather than trusting any total sent with them.
+   *
+   * Round off comes LAST, over subtotal + GST + adjustments: an adjustment is a
+   * deliberate change to what is payable, so it belongs inside the figure being
+   * rounded.
+   */
+  const poTotals = computeDocTotals(form.items.map(it => ({
+    quantity: it.qty, unitPrice: it.pricePerUnit, taxPercent: it.gstPercent,
+  })));
+  const subtotal = poTotals.subtotal;
+  const gstAmount = poTotals.tax;
+  const adjTotal = fromPaise(form.adjustments.reduce((s, a) => s + toPaise(a.amount), 0));
+  const exactTotal = fromPaise(poTotals.exactTotalPaise + toPaise(adjTotal));
+  const roundOff = fromPaise(roundPaiseToRupee(toPaise(exactTotal)) - toPaise(exactTotal));
+  const grandTotal = fromPaise(toPaise(exactTotal) + toPaise(roundOff));
   // Group GST by rate for the summary rows (one line per distinct rate present).
-  const gstGroups = {};
-  form.items.forEach(it => {
-    const pct = num(it.gstPercent);
-    if (pct <= 0) return;
-    gstGroups[pct] = (gstGroups[pct] || 0) + num(it.qty) * num(it.pricePerUnit) * pct / 100;
-  });
-  const gstRows = Object.keys(gstGroups).map(Number).sort((a, b) => a - b).map(pct => ({ pct, amount: gstGroups[pct] }));
+  const gstRows = taxRowsByRate(form.items.map(it => ({
+    quantity: it.qty, unitPrice: it.pricePerUnit, taxPercent: it.gstPercent,
+  }))).filter(r => r.ratePercent > 0).map(r => ({ pct: r.ratePercent, amount: r.amount }));
 
   const generate = async () => {
     if (!form.vendorName.trim()) { showError('Vendor name is required'); return; }
@@ -331,9 +342,17 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
         shipToName: form.shipToName, shipToAddress: form.shipToAddress, shipToPhone: form.shipToPhone,
         items: form.items.filter(it => (it.description || '').trim()).map((it, i) => ({
           sNo: i + 1, description: it.description, unit: it.unit || 'Nos',
-          qty: num(it.qty), pricePerUnit: num(it.pricePerUnit), amount: num(it.qty) * num(it.pricePerUnit),
-          gstPercent: num(it.gstPercent), gstAmount: num(it.qty) * num(it.pricePerUnit) * num(it.gstPercent) / 100,
+          // Per-line figures in integer paise, so the server's own recomputation
+          // of the summary block lands on exactly these numbers.
+          qty: num(it.qty), pricePerUnit: num(it.pricePerUnit),
+          amount: fromPaise(lineSubtotalPaise({ quantity: it.qty, unitPrice: it.pricePerUnit })),
+          gstPercent: num(it.gstPercent),
+          gstAmount: fromPaise(lineTaxPaise(
+            lineSubtotalPaise({ quantity: it.qty, unitPrice: it.pricePerUnit }), it.gstPercent)),
         })),
+        // gstAmount and totalAmount are still sent for backward compatibility with
+        // documents generated before this change, but the PDF no longer prints
+        // them: it derives the whole summary block from the line items above.
         gstPercent: null, gstAmount, totalAmount: grandTotal,
         adjustments: form.adjustments.filter(a => (a.label || '').trim() || a.amount).map(a => ({ label: a.label, amount: num(a.amount) })),
         bankAccountName: form.bankAccountName, bankName: form.bankName, bankBranch: form.bankBranch,
@@ -486,11 +505,23 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
             </table>
             <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
               <div style={{ textAlign: 'right', fontSize: 13, color: __stc('#334155') }}>
-                <div>Subtotal: <strong>{subtotal.toLocaleString('en-IN')}</strong></div>
+                {/* The same four lines, in the same order, as the generated PDF.
+                    Two decimals throughout: these used to print with
+                    maximumFractionDigits 0, which hid the very paise the round-off
+                    exists to clear. */}
+                <div>Subtotal: <strong>{formatMoney(subtotal)}</strong></div>
                 {gstRows.map(g => (
-                  <div key={g.pct}>GST @ {g.pct}%: <strong>{g.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong></div>
+                  <div key={g.pct}>GST @ {g.pct}%: <strong>{formatMoney(g.amount)}</strong></div>
                 ))}
-                <div style={{ fontSize: 15, marginTop: 4 }}>Total: <strong>{grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong></div>
+                {form.adjustments
+                  .filter(a => (a.label || '').trim() || a.amount)
+                  .map((a, i) => (
+                    <div key={`adj-${i}`}>{(a.label || 'Adjustment')}: <strong>{formatMoney(a.amount)}</strong></div>
+                  ))}
+                {toPaise(roundOff) !== 0 && (
+                  <div>Round Off: <strong>{formatSignedMoney(roundOff)}</strong></div>
+                )}
+                <div style={{ fontSize: 15, marginTop: 4 }}>Total: <strong>{formatMoney(grandTotal)}</strong></div>
               </div>
             </div>
           </div>

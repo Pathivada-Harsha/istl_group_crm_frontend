@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './CreateProposalModal.css';
 import { useAuth } from "../../hooks/useAuth";
 import useToast from '../../hooks/useToast';
+import { computeDocTotals, lineTotal, formatSignedMoney } from '../../utils/money';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -362,10 +363,10 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
       const rate = parseFloat(updated[index].rate) || 0;
       const tax = parseFloat(updated[index].tax) || 0;
 
-      // Calculate: (quantity * rate) + tax
-      const subtotal = quantity * rate;
-      const taxAmount = (subtotal * tax) / 100;
-      updated[index].amount = (subtotal + taxAmount).toFixed(2);
+      // (quantity * rate) + tax, in integer paise so the row matches the server.
+      updated[index].amount = lineTotal({
+        quantity, unitPrice: rate, taxPercent: tax,
+      }).toFixed(2);
     }
 
     setTemplateData({ ...templateData, bomItems: updated });
@@ -376,30 +377,23 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
     setTemplateData({ ...templateData, bomItems: updated });
   };
 
-  // Calculate BOM totals
+  /*
+   * BOM totals, in integer paise.
+   *
+   * The grand total used to be the sum of each row's `amount` STRING, which is
+   * produced by .toFixed(2) — so it accumulated per-row rounding instead of the
+   * values themselves. It now comes from the line items directly, and carries
+   * the round-off to the whole rupee.
+   */
   const calculateBOMTotals = () => {
-    const subtotal = templateData.bomItems.reduce((sum, item) => {
-      const quantity = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      return sum + (quantity * rate);
-    }, 0);
-
-    const totalTax = templateData.bomItems.reduce((sum, item) => {
-      const quantity = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const tax = parseFloat(item.tax) || 0;
-      const itemSubtotal = quantity * rate;
-      return sum + ((itemSubtotal * tax) / 100);
-    }, 0);
-
-    const grandTotal = templateData.bomItems.reduce((sum, item) => {
-      return sum + (parseFloat(item.amount) || 0);
-    }, 0);
-
+    const t = computeDocTotals(templateData.bomItems.map(item => ({
+      quantity: item.quantity, unitPrice: item.rate, taxPercent: item.tax,
+    })));
     return {
-      subtotal: subtotal.toFixed(2),
-      totalTax: totalTax.toFixed(2),
-      grandTotal: grandTotal.toFixed(2)
+      subtotal: t.subtotal.toFixed(2),
+      totalTax: t.tax.toFixed(2),
+      roundOff: t.roundOff,
+      grandTotal: t.grandTotal.toFixed(2),
     };
   };
 
@@ -1060,6 +1054,17 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
                             </td>
                             <td></td>
                           </tr>
+                          {calculateBOMTotals().roundOff !== 0 && (
+                            <tr style={{ backgroundColor: '#f7fafc' }}>
+                              <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600', padding: '12px' }}>
+                                Round Off:
+                              </td>
+                              <td style={{ fontWeight: '600', padding: '12px' }}>
+                                {formatSignedMoney(calculateBOMTotals().roundOff)}
+                              </td>
+                              <td></td>
+                            </tr>
+                          )}
                           <tr style={{ backgroundColor: '#e6fffa', borderTop: '2px solid #81e6d9' }}>
                             <td colSpan="6" style={{ textAlign: 'right', fontWeight: 'bold', padding: '12px', fontSize: '15px' }}>
                               Grand Total (Inc. Tax):

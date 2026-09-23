@@ -16,6 +16,8 @@ import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from '../components/preLoader.js';
 import filterApi from '../services/filterApi';
 import ConfirmationModal from '../components/ConfirmationModal';
+import TotalsSummary from '../components/TotalsSummary';
+import { computeDocTotals, validateRoundOff, roundOffOf, formatSignedMoney } from '../utils/money';
 import '../pages-css/ProjectCostExpenseManagement.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -108,6 +110,31 @@ const stageColor = (st) => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = v => v == null ? '₹0' : `₹${parseFloat(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+/*
+ * An expense claim's money.
+ *
+ * Expense items are flat amounts with no tax, so the round-off is a pure header
+ * adjustment: the items sum to the subtotal, the round-off takes it to the whole
+ * rupee, and total_amount holds the result.
+ *
+ * Four separate places on this page used to re-sum the items and print that as
+ * "Total". Once the header total is rounded, those sums no longer equal it — so
+ * each of them now shows the round-off too, and reads the saved total rather than
+ * deriving its own.
+ */
+const expenseItemsSum = (items) =>
+  computeDocTotals((items || []).map(i => ({ quantity: 1, unitPrice: i.amount, taxPercent: 0 })));
+
+/** Totals for a SAVED claim: the subtotal from its items, the rest as stored. */
+const savedExpenseTotals = (expense) => {
+  const sum = expenseItemsSum(expense && expense.expenseItems);
+  const storedRoundOff = roundOffOf(expense);
+  const storedTotal = expense && expense.totalAmount != null
+    ? Number(expense.totalAmount)
+    : sum.grandTotal;
+  return { subtotal: sum.subtotal, roundOff: storedRoundOff, total: storedTotal };
+};
 
 // ── Indian rupee live-format helpers (for amount inputs) ──────────────────────
 // Formats a raw numeric string to Indian comma format while preserving decimals-in-progress
@@ -912,6 +939,9 @@ const ProjectCostExpenseManagement = () => {
       paidByUserId: String(user?.id || ''), paidByName: user?.name || '',
       adjustedAdvanceId: '', advanceAdjustedAmount: '',
       expenseItems: [initItem],
+      // Untouched means the preview keeps tracking the automatic round-off as
+      // items change; it only freezes once the user types their own.
+      roundOff: '', roundOffTouched: false,
     });
     setModalGroupName(groupName || '');
     setModalSubGroupName(subGroupName || '');
@@ -973,6 +1003,12 @@ const ProjectCostExpenseManagement = () => {
     });
     const projectGroups = Object.entries(byProject); // [[projectId, [items]], ...]
 
+    // Re-checked here, not just by the input's min/max — those are not enforced
+    // for a pasted value, and the server rejects an out-of-band figure with a 400.
+    const expenseRoundOff = validateRoundOff(
+      expenseFormData.roundOffTouched ? expenseFormData.roundOff : null);
+    if (!expenseRoundOff.valid) { showWarning(expenseRoundOff.message); return; }
+
     setLoading(true);
     try {
       const results = [];
@@ -989,6 +1025,9 @@ const ProjectCostExpenseManagement = () => {
             paymentMode: i.paymentMode,
             description: i.description || '',
           })),
+          // The only money field the server reads off this body: the claim total
+          // is the sum of the items, and this is the adjustment on top of it.
+          roundOff: expenseRoundOff.paise / 100,
         };
         const res = await fetch(`${API_BASE_URL}/project-expenses`, {
           method: 'POST', headers: getAuthHeaders(), credentials: 'include',
@@ -1087,6 +1126,10 @@ const ProjectCostExpenseManagement = () => {
       commissionPercentage: expense.commissionPercentage || '', commissionFixedAmount: expense.commissionFixedAmount || '',
       salesOrderRef: expense.salesOrderRef || '',
       expenseItems: items,
+      // A saved round-off is an explicit decision, so editing starts from it.
+      roundOff: expense.roundOff !== null && expense.roundOff !== undefined
+        ? Number(expense.roundOff).toFixed(2) : '',
+      roundOffTouched: expense.roundOff !== null && expense.roundOff !== undefined,
     });
     setModalGroupName(expense.groupName || '');
     setModalSubGroupName(expense.subGroupName || '');
@@ -1144,6 +1187,10 @@ const ProjectCostExpenseManagement = () => {
     const projectIds = Object.keys(byProject);
     const singleProject = projectIds.length === 1;
 
+    const expenseRoundOff = validateRoundOff(
+      expenseFormData.roundOffTouched ? expenseFormData.roundOff : null);
+    if (!expenseRoundOff.valid) { showWarning(expenseRoundOff.message); return; }
+
     setLoading(true);
     try {
       if (singleProject) {
@@ -1159,6 +1206,7 @@ const ProjectCostExpenseManagement = () => {
               category: i.category, amount: parseFloat(i.amount) || 0,
               paymentMode: i.paymentMode, description: i.description || '',
             })),
+            roundOff: expenseRoundOff.paise / 100,
           }),
         });
         if (!res.ok) throw new Error('Failed to update expense');
@@ -1182,6 +1230,9 @@ const ProjectCostExpenseManagement = () => {
                 category: i.category, amount: parseFloat(i.amount) || 0,
                 paymentMode: i.paymentMode, description: i.description || '',
               })),
+              // Each split record carries the same adjustment; the server rounds
+              // each one against its own item sum.
+              roundOff: expenseRoundOff.paise / 100,
             }),
           });
           if (!res.ok) throw new Error('Failed to create split expense');
@@ -1838,7 +1889,15 @@ const ProjectCostExpenseManagement = () => {
       {showCreateModal && expenseFormData && (() => {
         const grp  = modalGroupName;
         const sub  = modalSubGroupName;
-        const total = (expenseFormData.expenseItems || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+        // Subtotal of the items, unchanged — still what the item count bar reports.
+        const total = expenseItemsSum(expenseFormData.expenseItems).subtotal;
+        // ...and the claim's full money, with the round-off the user may adjust.
+        const formTotals = expenseItemsSum(expenseFormData.expenseItems);
+        const roundOffShown = expenseFormData.roundOffTouched
+          ? expenseFormData.roundOff
+          : (formTotals.autoRoundOff || 0).toFixed(2);
+        const roundOffCheck = validateRoundOff(roundOffShown);
+        const grandTotal = formTotals.subtotal + (roundOffCheck.valid ? roundOffCheck.paise / 100 : 0);
         const pendingAdvances = []; // advance feature removed
 
         const addItem = () => {
@@ -2091,8 +2150,22 @@ const ProjectCostExpenseManagement = () => {
 
                   <div className="exp-items-total-bar">
                     <span><span style={{color:tc('#64748b')}}>{(expenseFormData.expenseItems||[]).length} item(s)</span></span>
-                    <strong className="exp-total-amt">{fmt(total)}</strong>
+                    <strong className="exp-total-amt">{fmt(grandTotal)}</strong>
                   </div>
+                  {/* Expense items are flat amounts, so there is no tax row here —
+                      the round-off is a pure header adjustment. */}
+                  <TotalsSummary
+                    dense
+                    editable
+                    subtotal={formTotals.subtotal}
+                    taxRows={[]}
+                    exactTotal={formTotals.subtotal}
+                    grandTotal={grandTotal}
+                    roundOff={roundOffShown}
+                    autoRoundOff={formTotals.autoRoundOff}
+                    onRoundOffChange={(raw) => setExpenseFormData(prev => ({ ...prev, roundOff: raw, roundOffTouched: true }))}
+                    labels={{ grandTotal: 'Total Claim' }}
+                  />
                 </div>
 
                 {/* ── Section 4: Bill Upload ── */}
@@ -2183,7 +2256,15 @@ const ProjectCostExpenseManagement = () => {
       {showEditModal && expenseFormData && (() => {
         const grp  = modalGroupName;
         const sub  = modalSubGroupName;
-        const total = (expenseFormData.expenseItems || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+        // Subtotal of the items, unchanged — still what the item count bar reports.
+        const total = expenseItemsSum(expenseFormData.expenseItems).subtotal;
+        // ...and the claim's full money, with the round-off the user may adjust.
+        const formTotals = expenseItemsSum(expenseFormData.expenseItems);
+        const roundOffShown = expenseFormData.roundOffTouched
+          ? expenseFormData.roundOff
+          : (formTotals.autoRoundOff || 0).toFixed(2);
+        const roundOffCheck = validateRoundOff(roundOffShown);
+        const grandTotal = formTotals.subtotal + (roundOffCheck.valid ? roundOffCheck.paise / 100 : 0);
 
         const addItem = () => {
           const newId = Date.now();
@@ -2417,8 +2498,22 @@ const ProjectCostExpenseManagement = () => {
                   </div>
                   <div className="exp-items-total-bar">
                     <span><span style={{color:tc('#64748b')}}>{(expenseFormData.expenseItems||[]).length} item(s)</span></span>
-                    <strong className="exp-total-amt">{fmt(total)}</strong>
+                    <strong className="exp-total-amt">{fmt(grandTotal)}</strong>
                   </div>
+                  {/* Expense items are flat amounts, so there is no tax row here —
+                      the round-off is a pure header adjustment. */}
+                  <TotalsSummary
+                    dense
+                    editable
+                    subtotal={formTotals.subtotal}
+                    taxRows={[]}
+                    exactTotal={formTotals.subtotal}
+                    grandTotal={grandTotal}
+                    roundOff={roundOffShown}
+                    autoRoundOff={formTotals.autoRoundOff}
+                    onRoundOffChange={(raw) => setExpenseFormData(prev => ({ ...prev, roundOff: raw, roundOffTouched: true }))}
+                    labels={{ grandTotal: 'Total Claim' }}
+                  />
                 </div>
 
                 {/* ── Section 4: Bill Upload ── */}
@@ -2580,10 +2675,28 @@ const ProjectCostExpenseManagement = () => {
                     ))}
                   </tbody>
                   <tfoot>
+                    {savedExpenseTotals(viewModalExpense).roundOff !== 0 && (
+                      <>
+                        <tr>
+                          <td colSpan={4} style={{color:tc('#6b7280'),padding:'8px 12px'}}>Subtotal</td>
+                          <td style={{textAlign:'right',color:tc('#374151'),padding:'8px 12px'}}>
+                            {fmt(savedExpenseTotals(viewModalExpense).subtotal)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan={4} style={{color:tc('#6b7280'),padding:'8px 12px'}}>Round Off</td>
+                          <td style={{textAlign:'right',color:tc('#374151'),padding:'8px 12px'}}>
+                            {formatSignedMoney(savedExpenseTotals(viewModalExpense).roundOff)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
                     <tr>
                       <td colSpan={4} style={{fontWeight:600,color:tc('#374151'),padding:'10px 12px'}}>Total</td>
                       <td style={{textAlign:'right',fontWeight:800,fontSize:15,color:tc('#111827'),padding:'10px 12px'}}>
-                        {fmt((viewModalExpense.expenseItems||[]).reduce((s,i)=>s+(parseFloat(i.amount)||0),0))}
+                        {/* The SAVED total, so this footer can never disagree with
+                            the amount shown for the same claim in the list. */}
+                        {fmt(savedExpenseTotals(viewModalExpense).total)}
                       </td>
                     </tr>
                   </tfoot>
@@ -2734,10 +2847,27 @@ const ProjectCostExpenseManagement = () => {
                   ))}
                 </tbody>
                 <tfoot>
+                  {savedExpenseTotals(itemsModalExpense).roundOff !== 0 && (
+                    <>
+                      <tr>
+                        <td colSpan={4} style={{ padding: '10px 12px', color: tc('#64748b') }}>Subtotal</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: tc('#374151') }}>
+                          {fmt(savedExpenseTotals(itemsModalExpense).subtotal)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={4} style={{ padding: '10px 12px', color: tc('#64748b') }}>Round Off</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: tc('#374151') }}>
+                          {formatSignedMoney(savedExpenseTotals(itemsModalExpense).roundOff)}
+                        </td>
+                      </tr>
+                    </>
+                  )}
                   <tr style={{ borderTop: `2px solid ${bg('#e2e8f0')}`, background: bg('#f8fafc') }}>
                     <td colSpan={4} style={{ padding: '12px', fontWeight: 600, color: tc('#374151') }}>Total</td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: tc('#111827'), fontSize: 15 }}>
-                      {fmt((itemsModalExpense.expenseItems || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}
+                      {/* The SAVED total — the item sum alone no longer equals it. */}
+                      {fmt(savedExpenseTotals(itemsModalExpense).total)}
                     </td>
                   </tr>
                 </tfoot>

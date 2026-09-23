@@ -2,6 +2,8 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Eye, Edit2, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ConfirmationModal from '../components/ConfirmationModal';
+import TotalsSummary from '../components/TotalsSummary';
+import { computeDocTotals, validateRoundOff, roundOffOf, exactTotalOf, formatSignedMoney } from '../utils/money';
 import GroupSubgroupWarehouseFilter from '../components/Dropdowns/GroupSubgroupWarehouseFilter.js';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
@@ -305,7 +307,10 @@ const normalizePO = po => ({
   terms:              po.paymentTerms     || po.terms              || '',
   totalItemsOrdered:  Number(po.totalItemsOrdered  ?? (po.items?.length ?? 0)),
   totalItemsReceived: Number(po.totalItemsReceived ?? 0),
+  // The FINAL total, after round-off. Inventory POs round automatically.
   totalValue:         Number(po.totalValue         ?? 0),
+  roundOff:           roundOffOf(po),
+  exactTotal:         exactTotalOf(po, 'totalValue'),
   items: (po.items || []).map(it => ({
     ...it,
     orderedQty:  Number(it.orderedQty  ?? 0),
@@ -321,9 +326,15 @@ const normalizeBill = b => ({
   billNumber:    b.billNo     || b.billNumber  || '',
   billDate:      b.billDate   ? String(b.billDate).slice(0, 10)  : '',
   dueDate:       b.dueDate    ? String(b.dueDate).slice(0, 10)   : '',
+  // amount is the FINAL total, after round-off — which is what makes `balance`
+  // and every KPI built on this shape correct with no further change.
   amount:        Number(b.totalAmount   || b.amount || 0),
   paid:          Number(b.paidAmount    || b.paid   || 0),
   balance:       Number(b.balanceAmount ?? ((b.totalAmount || 0) - (b.paidAmount || 0))),
+  // Normalising these here is what makes them available to every consumer of a
+  // bill in this module — the tabs, the KPI strips, the modals — in one place.
+  roundOff:      roundOffOf(b),
+  exactTotal:    exactTotalOf(b),
   poNumber:      b.poNo       || b.poNumber    || '—',
   poId:          b.poId       || null,
   vendorName:    b.vendorName || '',
@@ -2300,7 +2311,10 @@ function InvCreateBillModal({ open, onClose, onSave, defaultGroupName, defaultSu
   const blank = () => ({
     groupName:'', subGroupName:'', warehouseId:'', vendorId:'', vendorName:'',
     poId:'', billDate: new Date().toISOString().slice(0,10), dueDate:'',
-    totalAmount:'', notes:'', items:[]
+    totalAmount:'', notes:'', items:[],
+    // Untouched means the round-off keeps tracking the automatic value as the
+    // delivered quantities change; typing in the box freezes it.
+    roundOff:'', roundOffTouched:false
   });
   const [form, setForm] = useState(blank);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -2392,13 +2406,26 @@ function InvCreateBillModal({ open, onClose, onSave, defaultGroupName, defaultSu
     } finally { setLoading(false); }
   };
 
-  // Compute auto-total from item lines
-  const lineTotal = poItems.reduce((sum, it) => {
-    const qty = Number(it.deliveredQty) || 0;
-    const sub = qty * (Number(it.unitPrice) || 0);
-    const tax = sub * (Number(it.taxPercent) || 0) / 100;
-    return sum + sub + tax;
-  }, 0);
+  /*
+   * Compute auto-total from item lines, in integer paise.
+   *
+   * An inventory bill is an INCOMING document: the round-off is pre-filled with
+   * the automatic value and the user may nudge it within a rupee. The server now
+   * derives the total from these same lines — it used to store whatever
+   * totalAmount this modal posted, without looking at them at all.
+   */
+  const billLineTotals = computeDocTotals(
+    poItems.map(it => ({
+      quantity: it.deliveredQty,
+      unitPrice: it.unitPrice,
+      taxPercent: it.taxPercent,
+    })),
+    { roundOffOverride: form.roundOffTouched ? form.roundOff : null }
+  );
+  const lineTotal = billLineTotals.subtotal + billLineTotals.tax;
+  const billRoundOffShown = form.roundOffTouched
+    ? form.roundOff
+    : (billLineTotals.autoRoundOff || 0).toFixed(2);
 
   const setItemQty = (idx, val) => setPoItems(rows => rows.map((r, i) => i === idx ? {...r, deliveredQty: val} : r));
 
@@ -2406,13 +2433,26 @@ function InvCreateBillModal({ open, onClose, onSave, defaultGroupName, defaultSu
   const selVendor = modVendors.find(v => String(v.id) === String(form.vendorId));
   const selPO     = modPOs.find(p => String(p.id) === String(form.poId));
 
-  const canSubmit = form.vendorId && form.billDate && (lineTotal > 0 || Number(form.totalAmount) > 0);
+  const canSubmit = form.vendorId && form.billDate
+    && (lineTotal > 0 || Number(form.totalAmount) > 0)
+    && validateRoundOff(billRoundOffShown).valid;
 
   const handleSubmit = () => {
-    const finalTotal = poItems.length > 0 ? lineTotal : Number(form.totalAmount) || 0;
+    // Already blocked by canSubmit above; re-checked so a programmatic call can
+    // never post a figure the server would answer with a 400.
+    const roundOffCheck = validateRoundOff(billRoundOffShown);
+    if (!roundOffCheck.valid) return;
+    // With lines present the server derives the total and ignores this; it is
+    // still sent because a STANDALONE bill has no lines to derive from, and there
+    // the figure typed here is the only total there is.
+    const finalTotal = poItems.length > 0
+      ? billLineTotals.grandTotal
+      : Number(form.totalAmount) || 0;
+    const { roundOffTouched, ...formRest } = form;
     onSave({
-      ...form,
+      ...formRest,
       totalAmount: finalTotal,
+      roundOff: roundOffCheck.paise / 100,
       poNumber: selPO?.poNo || selPO?.poNumber || '',
       vendorName: selVendor?.name || form.vendorName,
       items: poItems.filter(it => Number(it.deliveredQty) > 0).map(it => ({
@@ -2552,6 +2592,19 @@ function InvCreateBillModal({ open, onClose, onSave, defaultGroupName, defaultSu
                   </tfoot>
                 </table>
               </div>
+              {/* Editable round off, bounded to +/- 1.00 */}
+              <TotalsSummary
+                dense
+                editable
+                subtotal={billLineTotals.subtotal}
+                tax={billLineTotals.tax}
+                exactTotal={billLineTotals.exactTotal}
+                grandTotal={billLineTotals.grandTotal}
+                roundOff={billRoundOffShown}
+                autoRoundOff={billLineTotals.autoRoundOff}
+                onRoundOffChange={(raw) => setForm(f => ({ ...f, roundOff: raw, roundOffTouched: true }))}
+                labels={{ grandTotal: 'Grand Total (incl. tax)' }}
+              />
             </div>
           )}
 
@@ -3366,7 +3419,7 @@ function RecordPaymentModal({ open, onClose, onSave, bills }) {
 // Shows everything: scope (locked), vendor (locked), linked PO (locked),
 // bill items table with editable qty/rate/tax, dates, notes, payment summary.
 function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
-  const [form, setForm] = useState({ billDate:'', dueDate:'', notes:'', totalAmount:'' });
+  const [form, setForm] = useState({ billDate:'', dueDate:'', notes:'', totalAmount:'', roundOff:'', roundOffTouched:false });
   const [items, setItems] = useState([]);  // bill line items — editable
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -3377,6 +3430,10 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
       dueDate:     bill.dueDate     || '',
       notes:       bill.notes       || '',
       totalAmount: String(bill.amount || ''),
+      // A saved round-off was an explicit decision, so editing starts from it
+      // rather than re-deriving and discarding it.
+      roundOff:        bill.roundOff ? Number(bill.roundOff).toFixed(2) : '',
+      roundOffTouched: !!bill.roundOff,
     });
     // Seed items from the bill's stored items
     const billItems = bill.items || [];
@@ -3398,17 +3455,20 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
   const sm        = BILL_STATUS[bill.status] || BILL_STATUS.UNPAID;
   const wh        = warehouses?.find(w => String(w.id) === String(bill.warehouseId));
 
-  // Live-compute total from items if any exist
-  const lineTotal = items.reduce((sum, it) => {
-    const qty = Number(it.qty)  || 0;
-    const rate = Number(it.rate) || 0;
-    const tax  = Number(it.taxPct) || 0;
-    const sub  = qty * rate;
-    return sum + sub + sub * tax / 100;
-  }, 0);
+  // Live-compute total from items if any exist — integer paise, so this agrees
+  // with the total the server derives from the same lines.
+  const editTotals = computeDocTotals(
+    items.map(it => ({ quantity: it.qty, unitPrice: it.rate, taxPercent: it.taxPct })),
+    { roundOffOverride: form.roundOffTouched ? form.roundOff : null }
+  );
+  const lineTotal = editTotals.subtotal + editTotals.tax;
+  const editRoundOffShown = form.roundOffTouched
+    ? form.roundOff
+    : (editTotals.autoRoundOff || 0).toFixed(2);
+  const editRoundOffCheck = validateRoundOff(editRoundOffShown);
 
-  const finalTotal = items.length > 0 ? lineTotal : Number(form.totalAmount) || 0;
-  const canSubmit  = form.billDate && finalTotal > 0;
+  const finalTotal = items.length > 0 ? editTotals.grandTotal : Number(form.totalAmount) || 0;
+  const canSubmit  = form.billDate && finalTotal > 0 && editRoundOffCheck.valid;
 
   const setItem = (idx, k, v) => setItems(rows => rows.map((r, i) => i === idx ? { ...r, [k]: v } : r));
 
@@ -3551,12 +3611,26 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
                         Grand Total (incl. tax)
                       </td>
                       <td style={{ padding:'10px', textAlign:'right', fontWeight:800, fontSize:14, color:__stc('#1d4ed8') }}>
-                        {fmtCcy(lineTotal.toFixed(0))}
+                        {fmtCcy(editTotals.grandTotal.toFixed(0))}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
+              {/* A paid bill's total is locked, so its round-off is too. */}
+              <TotalsSummary
+                dense
+                editable
+                subtotal={editTotals.subtotal}
+                tax={editTotals.tax}
+                exactTotal={editTotals.exactTotal}
+                grandTotal={editTotals.grandTotal}
+                roundOff={editRoundOffShown}
+                autoRoundOff={editTotals.autoRoundOff}
+                roundOffDisabled={isPaid}
+                onRoundOffChange={(raw) => setForm(f => ({ ...f, roundOff: raw, roundOffTouched: true }))}
+                labels={{ grandTotal: 'Grand Total (incl. tax)' }}
+              />
             </div>
           )}
 
@@ -3596,6 +3670,7 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
                 billDate:    form.billDate,
                 dueDate:     form.dueDate || null,
                 totalAmount: finalTotal,
+                roundOff:    editRoundOffCheck.valid ? editRoundOffCheck.paise / 100 : 0,
                 notes:       form.notes || null,
                 vendorName:  bill.vendorName,
                 items:       !isPaid ? items.filter(it => Number(it.qty) > 0).map(it => ({
@@ -4026,6 +4101,9 @@ const canEdit   = invPerms.includes('EDIT');
         billDate:    form.billDate,
         dueDate:     form.dueDate || null,
         totalAmount: Number(form.totalAmount) || 0,
+        // With line items the server derives the total from those and ignores
+        // totalAmount; roundOff is the one money field it reads either way.
+        roundOff:    Number(form.roundOff) || 0,
         notes:       form.notes || null,
         items:       form.items || [],
       };
@@ -4479,6 +4557,7 @@ const canEdit   = invPerms.includes('EDIT');
         billDate:    form.billDate,
         dueDate:     form.dueDate || null,
         totalAmount: Number(form.totalAmount) || 0,
+        roundOff:    Number(form.roundOff) || 0,
         notes:       form.notes || null,
         vendorName:  form.vendorName || null,
         items:       form.items || [],

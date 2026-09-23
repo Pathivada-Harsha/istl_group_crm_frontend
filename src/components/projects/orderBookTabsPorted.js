@@ -105,6 +105,7 @@ import * as XLSXStyle from 'xlsx-js-style'; // style-capable SheetJS fork; used 
 import { ArrowLeft, Plus, Trash2, Save, Wand2, Check, Download, RotateCcw, Maximize2 } from 'lucide-react';
 import { FaFilePdf, FaFileImage, FaFileAlt, FaFileDownload, FaExternalLinkAlt } from 'react-icons/fa';
 import '../../pages-css/OrderBookDetail.css';
+import { roundOffOf, formatSignedMoney } from '../../utils/money';
 import ConfirmationModal from '../ConfirmationModal.js';
 import useConfirmationModal from '../HandleConfirmationModal.js';
 import LocationPicker from '../LocationPicker.js';
@@ -427,6 +428,11 @@ const OverviewTab = ({ orderBook, authHeaders, onEdit, showError, showSuccess })
           <div><label>PO Date</label><span>{fmtDate(orderBook.poDate)}</span></div>
           <div><label>Subtotal</label><span>{fmtMoney(orderBook.subtotal)}</span></div>
           <div><label>Tax</label><span>{fmtMoney(orderBook.taxAmount)}</span></div>
+          {/* Between Tax and Total, where it accounts for the difference. Hidden
+              on an order book raised before the round-off feature. */}
+          {roundOffOf(orderBook) !== 0 && (
+            <div><label>Round Off</label><span>{formatSignedMoney(roundOffOf(orderBook))}</span></div>
+          )}
           <div><label>Total</label><span>{fmtMoney(orderBook.totalAmount)}</span></div>
           <div><label>Advance</label><span>{fmtMoney(orderBook.advanceAmount)}</span></div>
           <div><label>Balance</label><span>{fmtMoney(orderBook.balanceAmount)}</span></div>

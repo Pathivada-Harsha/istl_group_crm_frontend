@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Eye, Edit2, Trash2 } from 'lucide-react';
+import { lineTotal as lineTotalMoney, formatSignedMoney } from '../../utils/money';
 import FilterSelect from '../Dropdowns/FilterSelect.js';
 import {
   BILL_STATUS, PAY_MODES, fmtCcy,
@@ -588,8 +589,10 @@ function BillModal({ bill, onClose, onGetPayments }) {
                       const qty  = Number(li.qty  ?? 0);
                       const rate = Number(li.rate ?? 0);
                       const tax  = Number(li.taxPct ?? 0);
-                      const sub  = qty * rate;
-                      const lineTotal = sub + (sub * tax / 100);
+                      // Integer paise, matching the server's line arithmetic.
+                      const lineTotal = lineTotalMoney({
+                        quantity: qty, unitPrice: rate, taxPercent: tax,
+                      });
                       return (
                         <tr key={i}>
                           <td className="inv-code-cell">{li.itemCode || '—'}</td>
@@ -603,6 +606,20 @@ function BillModal({ bill, onClose, onGetPayments }) {
                       );
                     })}
                   </tbody>
+                  {/* Without this the line items visibly failed to add up to the
+                      bill's own total once the total carried a round-off. */}
+                  <tfoot>
+                    {Number(bill.roundOff || 0) !== 0 && (
+                      <tr>
+                        <td colSpan={6} className="inv-muted" style={{ textAlign:'right' }}>Round Off</td>
+                        <td style={{ textAlign:'right' }}>{formatSignedMoney(bill.roundOff)}</td>
+                      </tr>
+                    )}
+                    <tr>
+                      <td colSpan={6} style={{ textAlign:'right', fontWeight:700 }}>Total</td>
+                      <td style={{ textAlign:'right', fontWeight:700 }}>{fmtCcy(Number(bill.amount || 0).toFixed(0))}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>

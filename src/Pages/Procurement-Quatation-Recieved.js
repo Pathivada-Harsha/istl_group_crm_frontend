@@ -14,6 +14,8 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
+import TotalsSummary from "../components/TotalsSummary";
+import { computeDocTotals, validateRoundOff, roundOffOf, formatSignedMoney } from "../utils/money";
 import ConfirmationModal from '../components/ConfirmationModal';
 import filterApi from '../services/filterApi';
 import * as XLSX from 'xlsx';
@@ -1008,11 +1010,25 @@ const QuotationsReceived = () => {
     setPOFormData({ ...poFormData, items });
   };
 
+  /*
+   * A purchase order raised from this quotation. Unlike the quotation itself this
+   * is an OUTGOING document, so the round-off is automatic and nothing about it
+   * is sent to the server — the PO's total is derived there.
+   */
   const calculatePOTotal = () => {
-    if (!poFormData) return { subtotal: 0, taxAmount: 0, total: 0 };
-    const subtotal = poFormData.items.reduce((s, i) => s + i.selectedQuantity * i.unitPrice, 0);
-    const taxAmount = poFormData.items.reduce((s, i) => s + i.selectedQuantity * i.unitPrice * i.taxPercent / 100, 0);
-    return { subtotal, taxAmount, total: subtotal + taxAmount };
+    if (!poFormData) return { subtotal: 0, taxAmount: 0, roundOff: 0, exactTotal: 0, total: 0 };
+    const t = computeDocTotals(poFormData.items.map(i => ({
+      quantity: i.selectedQuantity,
+      unitPrice: i.unitPrice,
+      taxPercent: i.taxPercent,
+    })));
+    return {
+      subtotal: t.subtotal,
+      taxAmount: t.tax,
+      exactTotal: t.exactTotal,
+      roundOff: t.roundOff,
+      total: t.grandTotal,
+    };
   };
 
   const handleCreatePOFromQuotation = async () => {
@@ -1089,6 +1105,11 @@ const QuotationsReceived = () => {
         paymentTerms: data.paymentTerms || '', warranty: data.warranty || '',
         notes: data.notes || '', status: data.status || 'New',
         items: (data.items || []).map(item => ({ id: item.id, itemName: item.itemName || '', description: item.description || '', unit: item.unit || '', quantity: item.quantity || 1, make: item.make || '', unitPrice: item.unitPrice || '', taxPercent: item.taxPercent || 18, included: true })),
+        // A saved round-off was an explicit decision, so editing starts from it
+        // and counts as already touched rather than being re-derived.
+        roundOff: data.roundOff !== null && data.roundOff !== undefined
+          ? Number(data.roundOff).toFixed(2) : '',
+        roundOffTouched: data.roundOff !== null && data.roundOff !== undefined,
       });
       if (data.vendorId) { setShowNewVendorForm(false); setSelectedVendorDetails({ id: data.vendorId, name: data.vendorName, phone: data.vendorContact }); }
       else if (data.vendorName) setShowNewVendorForm(true);
@@ -1196,6 +1217,10 @@ const QuotationsReceived = () => {
       if (item.quantity === '' || item.quantity === null || item.quantity === undefined) { showWarning(`Item ${i + 1}: Quantity is required`); return; }
       if (item.unitPrice === '' || item.unitPrice === null || item.unitPrice === undefined || item.unitPrice < 0) { showWarning(`Item ${i + 1}: Unit price is required`); return; }
     }
+    // Checked here as well as by the input's min/max, which are not enforced for
+    // a pasted value — the server answers an out-of-band round-off with a 400.
+    const quotationRoundOff = validateRoundOff(quotationRoundOffValue());
+    if (!quotationRoundOff.valid) { showWarning(quotationRoundOff.message); return; }
     setLoading(true);
     try {
       const fd = new FormData();
@@ -1216,6 +1241,10 @@ const QuotationsReceived = () => {
         // this quotation is matched against the BOM at creation, and the stored link
         // saves it falling back to name matching.
         items: included.map(item => ({ id: item.id || null, itemName: item.itemName.trim(), description: item.description?.trim() || '', unit: item.unit?.trim() || '', quantity: item.quantity, unitPrice: parseFloat(item.unitPrice), taxPercent: item.taxPercent, make: item.make?.trim() || '', bomLineId: item.bomLineId || null, bomItemId: item.bomItemId || null, variantId: item.variantId || null })),
+        // Inside the JSON blob, NOT a sibling form field — the server binds the
+        // quotation from this part and would never see it otherwise. The total
+        // itself is deliberately absent: the server derives it from the items.
+        roundOff: quotationRoundOff.paise / 100,
       };
       fd.append('quotation', new Blob([JSON.stringify(qd)], { type: 'application/json' }));
       if (selectedFile) fd.append('file', selectedFile);
@@ -1243,16 +1272,40 @@ const QuotationsReceived = () => {
   const handleRemoveQuotationItem = (idx) => { if (quotationFormData?.items.length > 1) setQuotationFormData({ ...quotationFormData, items: quotationFormData.items.filter((_, i) => i !== idx) }); };
   const handleUpdateQuotationItem = (idx, field, val) => { if (quotationFormData) { const items = [...quotationFormData.items]; items[idx] = { ...items[idx], [field]: val }; setQuotationFormData({ ...quotationFormData, items }); } };
 
+  /*
+   * A vendor quotation's money.
+   *
+   * INCOMING document: the round-off is pre-filled with the automatic value and
+   * the user may nudge it within a rupee to match the figure the vendor quoted.
+   * The included-lines filter is kept — the server applies the same one, so the
+   * round-off is computed over the same set of lines on both sides.
+   */
   const calculateQuotationTotal = () => {
-    if (!quotationFormData) return { subtotal: 0, gstAmount: 0, total: 0 };
+    if (!quotationFormData) {
+      return { subtotal: 0, gstAmount: 0, roundOff: 0, autoRoundOff: 0, exactTotal: 0, total: 0 };
+    }
     const inc = quotationFormData.items.filter(i => i.included !== false);
-    let subtotal = 0, gstAmount = 0;
-    inc.forEach(i => {
-      const base = (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0);
-      subtotal  += base;
-      gstAmount += base * (parseFloat(i.taxPercent) || 0) / 100;
+    const t = computeDocTotals(inc, {
+      roundOffOverride: quotationFormData.roundOffTouched ? quotationFormData.roundOff : null,
     });
-    return { subtotal, gstAmount, total: subtotal + gstAmount };
+    return {
+      subtotal: t.subtotal,
+      gstAmount: t.tax,
+      exactTotal: t.exactTotal,
+      roundOff: t.roundOff,
+      autoRoundOff: t.autoRoundOff,
+      total: t.grandTotal,
+    };
+  };
+
+  /** What the Round Off box shows: the user's entry, or the automatic value. */
+  const quotationRoundOffValue = () => {
+    if (quotationFormData && quotationFormData.roundOffTouched) return quotationFormData.roundOff;
+    return (calculateQuotationTotal().autoRoundOff || 0).toFixed(2);
+  };
+
+  const handleQuotationRoundOffChange = (raw) => {
+    setQuotationFormData(prev => ({ ...prev, roundOff: raw, roundOffTouched: true }));
   };
 
   // ── Utility formatters ───────────────────────────────────────────────────
@@ -1634,6 +1687,9 @@ const QuotationsReceived = () => {
                   <div className="quotation-detail-item"><span className="quotation-detail-label">RFQ ID:</span><span>{selectedQuotation.rfqId || '—'}</span></div>
                   <div className="quotation-detail-item"><span className="quotation-detail-label">Valid Until:</span><span>{formatDate(selectedQuotation.validTill)}</span></div>
                   <div className="quotation-detail-item"><span className="quotation-detail-label">Uploaded On:</span><span>{formatDate(selectedQuotation.uploadedAt)}</span></div>
+                  {roundOffOf(selectedQuotation) !== 0 && (
+                    <div className="quotation-detail-item"><span className="quotation-detail-label">Round Off:</span><span>{formatSignedMoney(roundOffOf(selectedQuotation))}</span></div>
+                  )}
                   <div className="quotation-detail-item"><span className="quotation-detail-label">Total Value:</span><span className="quotation-value">{formatCurrency(selectedQuotation.totalValue)}</span></div>
                   <div className="quotation-detail-item"><span className="quotation-detail-label">Vendor Contact:</span><span>{selectedQuotation.vendorContact || '—'}</span></div>
                 </div>
@@ -2261,11 +2317,18 @@ const QuotationsReceived = () => {
                     {(() => {
                       const totals = calculateQuotationTotal();
                       return (
-                        <div className="procurement-quotation-received-quote-summary" style={{ marginTop: 14 }}>
-                          <div className="procurement-quotation-received-summary-row"><span>Subtotal:</span><span>{formatCurrency(totals.subtotal)}</span></div>
-                          {totals.gstAmount > 0 && <div className="procurement-quotation-received-summary-row"><span>GST:</span><span>{formatCurrency(totals.gstAmount)}</span></div>}
-                          <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total"><span><strong>Total Value:</strong></span><span><strong>{formatCurrency(totals.total)}</strong></span></div>
-                        </div>
+                        <TotalsSummary
+                          editable
+                          className="procurement-quotation-received-quote-summary"
+                          subtotal={totals.subtotal}
+                          tax={totals.gstAmount}
+                          exactTotal={totals.exactTotal}
+                          grandTotal={totals.total}
+                          roundOff={quotationRoundOffValue()}
+                          autoRoundOff={totals.autoRoundOff}
+                          onRoundOffChange={handleQuotationRoundOffChange}
+                          labels={{ tax: 'GST', grandTotal: 'Total Value' }}
+                        />
                       );
                     })()}
                   </>
@@ -2469,11 +2532,20 @@ const QuotationsReceived = () => {
                     </tbody>
                   </table>
                 </div>
-                <div className="procurement-quotation-received-quote-summary">
-                  <div className="procurement-quotation-received-summary-row"><span>Subtotal:</span><span>{formatCurrency(calculatePOTotal().subtotal)}</span></div>
-                  <div className="procurement-quotation-received-summary-row"><span>Tax Amount:</span><span>{formatCurrency(calculatePOTotal().taxAmount)}</span></div>
-                  <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total"><span><strong>Total PO Value:</strong></span><span><strong>{formatCurrency(calculatePOTotal().total)}</strong></span></div>
-                </div>
+                {(() => {
+                  const poTotals = calculatePOTotal();
+                  return (
+                    <TotalsSummary
+                      className="procurement-quotation-received-quote-summary"
+                      subtotal={poTotals.subtotal}
+                      tax={poTotals.taxAmount}
+                      exactTotal={poTotals.exactTotal}
+                      roundOff={poTotals.roundOff}
+                      grandTotal={poTotals.total}
+                      labels={{ tax: 'Tax Amount', grandTotal: 'Total PO Value' }}
+                    />
+                  );
+                })()}
               </div>
             </div>
             <div className="procurement-quotation-received-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px' }}>

@@ -95,7 +95,7 @@
 }
 .pvab-gated { font-size: 12.5px !important; font-weight: 500 !important; color: var(--ct-6b7280, #6b7280); }
 
-/* Over / under budget. Never colour alone — the sign is always printed too. */
+/* Over / under budget. Never colour alone — the word "over"/"under" is always printed too. */
 .pvab-over  { color: var(--ct-b91c1c, #b91c1c); }
 .pvab-under { color: var(--ct-047857, #047857); }
 .pvab-level { color: var(--ct-4b5563, #4b5563); }

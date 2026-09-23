@@ -1,0 +1,146 @@
+/* TotalsSummary.css — Subtotal / Tax / Round Off / Grand Total.
+ *
+ * Namespace: rof-*  (round off). Every selector is prefixed, and nothing here
+ * styles a bare element — the .ld-* / .custd-* namespaces in this project exist
+ * because two page stylesheets once collided and silently swallowed each other's
+ * rules. Keep the prefix.
+ *
+ * Colours go through the var(--c-<lighthex>, #<lighthex>) tokens from theme.css,
+ * which remaps them under [data-theme="dark"]. Do not hardcode a colour here or
+ * the block will be unreadable in one of the two themes.
+ */
+
+.rof-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--c-f8fafc, #f8fafc);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 10px;
+  font-size: 13.5px;
+}
+
+.rof-summary.rof-dense {
+  gap: 3px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.rof-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+}
+
+.rof-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-64748b, #64748b);
+  white-space: nowrap;
+}
+
+.rof-value {
+  font-variant-numeric: tabular-nums;   /* keeps the column of figures aligned */
+  color: var(--c-1e293b, #1e293b);
+  font-weight: 500;
+  text-align: right;
+}
+
+/* A round-off of zero next to a total that still carries paise is a document
+   that predates the feature. Muted rather than hidden: the row still accounts
+   for the difference, it just does not shout about being nothing. */
+.rof-zero .rof-label,
+.rof-zero .rof-value {
+  color: var(--c-94a3b8, #94a3b8);
+  font-weight: 400;
+}
+
+.rof-row--grand {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--c-e2e8f0, #e2e8f0);
+}
+
+.rof-row--grand .rof-label {
+  color: var(--c-0f172a, #0f172a);
+  font-weight: 600;
+}
+
+.rof-row--grand .rof-value {
+  color: var(--c-0f172a, #0f172a);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+/* ── editable round off ──────────────────────────────────────────────────── */
+
+.rof-roundoff-input {
+  width: 92px;
+  padding: 4px 8px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--c-1e293b, #1e293b);
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 6px;
+}
+
+.rof-roundoff-input:focus {
+  outline: none;
+  border-color: var(--c-3b82f6, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
+}
+
+.rof-roundoff-input:disabled {
+  background: var(--c-f8fafc, #f8fafc);
+  color: var(--c-94a3b8, #94a3b8);
+  cursor: not-allowed;
+}
+
+.rof-input-error {
+  border-color: var(--c-dc2626, #dc2626);
+}
+
+.rof-input-error:focus {
+  border-color: var(--c-dc2626, #dc2626);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.16);
+}
+
+.rof-reset-btn {
+  padding: 1px 7px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--c-3b82f6, #3b82f6);
+  background: transparent;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rof-reset-btn:hover {
+  background: var(--c-ffffff, #ffffff);
+  border-color: var(--c-3b82f6, #3b82f6);
+}
+
+.rof-error {
+  color: var(--c-dc2626, #dc2626);
+  font-size: 11.5px;
+  text-align: right;
+}
+
+/* Narrow drawers and phone widths: let the label wrap rather than squashing the
+   figures, which must stay readable. */
+@media (max-width: 480px) {
+  .rof-label {
+    white-space: normal;
+  }
+  .rof-reset-btn {
+    display: none;
+  }
+}

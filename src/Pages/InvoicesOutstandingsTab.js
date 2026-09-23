@@ -3,6 +3,7 @@ import { AlertCircle, Clock, ChevronDown, ChevronUp, RefreshCw, CheckCircle, Dow
 import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters';
 import { useAuth } from '../hooks/useAuth';
+import { roundOffOf } from '../utils/money';
 
 /* Inline-style theme mappers (dark mode) */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -181,7 +182,7 @@ export default function OutstandingsTab() {
       XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
       // ── Sheet 2: Outstanding Invoices ──────────────────────────────────────
-      const invHeaders = ['Invoice No.', 'Customer / Project', 'Project ID', 'Invoice Date', 'Due Date', 'Days Overdue', 'Ageing Bucket', 'Status', 'Invoice Amount (₹)', 'Paid (₹)', 'Outstanding Balance (₹)'];
+      const invHeaders = ['Invoice No.', 'Customer / Project', 'Project ID', 'Invoice Date', 'Due Date', 'Days Overdue', 'Ageing Bucket', 'Status', 'Round Off (₹)', 'Invoice Amount (₹)', 'Paid (₹)', 'Outstanding Balance (₹)'];
       const invRows = invoices.map(inv => {
         const days = calcDays(inv);
         return [
@@ -193,13 +194,16 @@ export default function OutstandingsTab() {
           days === null ? '' : days <= 0 ? `In ${Math.abs(days)}d` : `${days}d`,
           getBucket(days),
           (inv.status || '').replace(/_/g, ' '),
+          // Zero on a pre-feature invoice, so the column still sums correctly
+          // across a range spanning old and new records.
+          fmtN(roundOffOf(inv)),
           fmtN(inv.totalAmount),
           fmtN(inv.paidAmount),
           getBalance(inv),
         ];
       });
       const wsInvoices = XLSX.utils.aoa_to_sheet([invHeaders, ...invRows]);
-      wsInvoices['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 22 }];
+      wsInvoices['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 22 }];
       XLSX.utils.book_append_sheet(wb, wsInvoices, 'Outstanding Invoices');
 
       // ── Sheet 3: Ageing Detail (one sheet per non-empty bucket) ───────────

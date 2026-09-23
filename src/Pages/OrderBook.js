@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import '../pages-css/OrderBook.css';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
@@ -8,6 +8,8 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
+import TotalsSummary from "../components/TotalsSummary";
+import { computeDocTotals, lineTotal, roundOffOf, formatSignedMoney, excelMoney, toPaise, fromPaise } from "../utils/money";
 import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 import { Eye, Edit2, Trash2, Upload, CloudUpload } from 'lucide-react';
@@ -595,9 +597,12 @@ function OrderBook() {
 
       // ── Build Excel rows ─────────────────────────────────────────
       // ── Build a styled, colored workbook (xlsx-js-style) ─────────────
+      // Round Off sits between Tax and Total so the three columns read across as
+      // the arithmetic they are. Inserting a column here means amountCols below
+      // and both hand-written row arrays shift with it — they are positional.
       const cols = ['S.No', 'Customer', 'Group', 'Sub Group', 'Order Title', 'Order Date',
-        'PO Number', 'PO Date', 'Status', 'Subtotal (₹)', 'Tax Amount (₹)', 'Total Amount (₹)',
-        'Created By', 'Has Attachment'];
+        'PO Number', 'PO Date', 'Status', 'Subtotal (₹)', 'Tax Amount (₹)', 'Round Off (₹)',
+        'Total Amount (₹)', 'Created By', 'Has Attachment'];
       const nCols = cols.length;
       const titleFilterBits = [
         statusFilter !== 'All' ? statusFilter : '',
@@ -606,22 +611,27 @@ function OrderBook() {
       ].filter(Boolean).join(' · ');
       const title = `Order Books${titleFilterBits ? ' — ' + titleFilterBits : ''}`;
       const aoa = [[title], cols];
-      let sumSub = 0, sumTax = 0, sumTot = 0;
+      // Accumulated in integer paise: summing floats and rounding at the end let
+      // the TOTAL row drift a paisa away from the column it is meant to total.
+      let sumSubP = 0, sumTaxP = 0, sumRoundP = 0, sumTotP = 0;
       allRecords.forEach((o, idx) => {
         const sub = o.subtotal ? parseFloat(o.subtotal) : 0;
         const tax = o.taxAmount ? parseFloat(o.taxAmount) : 0;
+        const round = roundOffOf(o);
         const tot = o.totalAmount ? parseFloat(o.totalAmount) : 0;
-        sumSub += sub; sumTax += tax; sumTot += tot;
+        sumSubP += toPaise(sub); sumTaxP += toPaise(tax);
+        sumRoundP += toPaise(round); sumTotP += toPaise(tot);
         aoa.push([
           idx + 1, o.customerName || '', o.groupName || '', o.subGroupName || '', o.orderTitle || '',
           o.orderDate ? fmtOBDate(o.orderDate) : '', o.poNumber || '', o.poDate ? fmtOBDate(o.poDate) : '',
-          o.status || '', Number(sub.toFixed(2)), Number(tax.toFixed(2)), Number(tot.toFixed(2)),
+          o.status || '', excelMoney(sub), excelMoney(tax), excelMoney(round), excelMoney(tot),
           o.createdByName || '', o.hasPoFile ? 'Yes' : 'No',
         ]);
       });
       const totalRowIdx = aoa.length;
       aoa.push(['', '', '', '', '', '', '', '', 'TOTAL',
-        Number(sumSub.toFixed(2)), Number(sumTax.toFixed(2)), Number(sumTot.toFixed(2)), '', '']);
+        excelMoney(fromPaise(sumSubP)), excelMoney(fromPaise(sumTaxP)),
+        excelMoney(fromPaise(sumRoundP)), excelMoney(fromPaise(sumTotP)), '', '']);
 
       const worksheet = XLSXStyle.utils.aoa_to_sheet(aoa);
       // Palette + helpers (mirrors the EPC tracker styling).
@@ -630,7 +640,7 @@ function OrderBook() {
       const TOTALTEXT = '0B6E6E';
       const border = { style: 'thin', color: { rgb: 'D9D9D9' } };
       const allB = { top: border, bottom: border, left: border, right: border };
-      const amountCols = [9, 10, 11]; // Subtotal, Tax, Total (0-based)
+      const amountCols = [9, 10, 11, 12]; // Subtotal, Tax, Round Off, Total (0-based)
       const setS = (r, c, s) => {
         const a = XLSXStyle.utils.encode_cell({ r, c });
         if (!worksheet[a]) worksheet[a] = { t: 's', v: '' };
@@ -1276,24 +1286,23 @@ function OrderBook() {
     }));
   };
 
-  const calculateItemTotal = (item) => {
-    const quantity = parseFloat(item.quantity) || 0;
-    const unitPrice = parseFloat(item.unitPrice) || 0;
-    const discountPercent = parseFloat(item.discountPercent) || 0;
-    const taxPercent = parseFloat(item.taxPercent) || 0;
-    const subtotal = quantity * unitPrice;
-    const discount = subtotal * (discountPercent / 100);
-    const taxable = subtotal - discount;
-    const tax = taxable * (taxPercent / 100);
-    // Round to 2 decimal places to avoid floating-point drift
-    return Math.round((taxable + tax) * 100) / 100;
-  };
+  // Integer paise, via utils/money, so a line total here is the same number the
+  // server computes for that line.
+  const calculateItemTotal = (item) => lineTotal(item);
 
-  const calculateGrandTotal = () => {
-    // Sum the already-rounded line totals so grand total always equals sum of displayed line totals
-    const raw = formData.items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
-    return Math.round(raw * 100) / 100;
-  };
+  /*
+   * The order book's money. An order book is an OUTGOING document, so the grand
+   * total is rounded to the nearest whole rupee automatically — and the balance
+   * due follows the rounded total, exactly as the server derives it.
+   *
+   * Note the subtotal and the tax stay EXACT: they are taxable value and GST, and
+   * the round-off is not part of either.
+   */
+  const orderTotals = useMemo(
+    () => computeDocTotals(formData.items || []),
+    [formData.items]
+  );
+
 
   const getStatusClass = (status) => {
     const statusMap = {
@@ -1845,6 +1854,15 @@ function OrderBook() {
                     <span>Tax Amount:</span>
                     <strong>₹{parseFloat(selectedOrderBook.taxAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
                   </div>
+                  {/* Between Tax and Total, where it accounts for the difference.
+                      Hidden on an order book raised before the feature, which has
+                      no round-off to show. */}
+                  {roundOffOf(selectedOrderBook) !== 0 && (
+                    <div className="orderbook-financial-item">
+                      <span>Round Off:</span>
+                      <strong>{formatSignedMoney(roundOffOf(selectedOrderBook))}</strong>
+                    </div>
+                  )}
                   <div className="orderbook-financial-item">
                     <span>Total Amount:</span>
                     <strong className="orderbook-total">₹{parseFloat(selectedOrderBook.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
@@ -2231,10 +2249,15 @@ function OrderBook() {
                       </table>
                     </div>
 
-                    <div className="orderbook-grand-total">
-                      <span>Grand Total:</span>
-                      <strong>₹{calculateGrandTotal().toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                    </div>
+                    <TotalsSummary
+                      className="orderbook-grand-total"
+                      subtotal={orderTotals.subtotal}
+                      tax={orderTotals.tax}
+                      exactTotal={orderTotals.exactTotal}
+                      roundOff={orderTotals.roundOff}
+                      grandTotal={orderTotals.grandTotal}
+                      labels={{ tax: 'Tax Amount' }}
+                    />
                   </>
                 )}
               </div>

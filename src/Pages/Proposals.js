@@ -7,6 +7,7 @@ import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFil
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
+import { computeDocTotals, formatSignedMoney } from '../utils/money';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -460,13 +461,33 @@ const ProposalsWithTemplate = () => {
     setTemplateData({...templateData,bomItems:u});
   };
   const removeBOMRow = (i) => { setTemplateData({...templateData,bomItems:templateData.bomItems.filter((_,idx)=>idx!==i)}); const nc={...customUnitInputs}; delete nc[i]; setCustomUnitInputs(nc); };
+  /*
+   * The BOM block's own totals, in integer paise.
+   *
+   * The grand total used to be the sum of each row's `amount` string, which is
+   * produced by .toFixed(2) — so it accumulated the rounding of every row rather
+   * than the row values themselves. It now comes from the same arithmetic the
+   * server uses, and carries the round-off to the whole rupee.
+   *
+   * This block is deliberately NOT wired to the proposal's own Total Value field:
+   * that figure is entered by hand on the commercial screen and wiring the two
+   * together would silently overwrite negotiated numbers. Out of scope here.
+   */
+  const bomTotals = () => computeDocTotals(
+    templateData.bomItems.map(it => ({ quantity: it.quantity, unitPrice: it.rate, taxPercent: it.tax }))
+  );
   const calculateBOMTotals = () => {
-    const sub = templateData.bomItems.reduce((s,it)=>s+(parseFloat(it.quantity)||0)*(parseFloat(it.rate)||0),0);
-    const tax = templateData.bomItems.reduce((s,it)=>{ const st=(parseFloat(it.quantity)||0)*(parseFloat(it.rate)||0); return s+(st*(parseFloat(it.tax)||0)/100); },0);
-    const grand = templateData.bomItems.reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
-    return { subtotal:sub.toFixed(2), totalTax:tax.toFixed(2), grandTotal:grand.toFixed(2) };
+    const t = bomTotals();
+    return {
+      subtotal: t.subtotal.toFixed(2),
+      totalTax: t.tax.toFixed(2),
+      roundOff: t.roundOff,
+      grandTotal: t.grandTotal.toFixed(2),
+    };
   };
-  const calculateSystemPricingTotal = () => templateData.systemPricing.reduce((s,it)=>s+(parseFloat(it.amount)||0),0).toFixed(2);
+  const calculateSystemPricingTotal = () => computeDocTotals(
+    templateData.systemPricing.map(it => ({ quantity: 1, unitPrice: it.amount, taxPercent: 0 }))
+  ).grandTotal.toFixed(2);
   const handleBomUnitChange = (i,v) => {
     if (v==='Custom') { setCustomUnitInputs(p=>({...p,[i]:''})); updateBOMRow(i,'unit',''); }
     else { const n={...customUnitInputs}; delete n[i]; setCustomUnitInputs(n); updateBOMRow(i,'unit',v); }
@@ -914,6 +935,9 @@ const ProposalsWithTemplate = () => {
                             ))}
                             <tr className="p-subtotal-row"><td colSpan="6" style={{textAlign:'right',fontWeight:600}}>Subtotal:</td><td style={{fontWeight:600}}>₹{calculateBOMTotals().subtotal}</td><td></td></tr>
                             <tr className="p-subtotal-row"><td colSpan="6" style={{textAlign:'right',fontWeight:600}}>Tax:</td><td style={{fontWeight:600,color:'#d69e2e'}}>₹{calculateBOMTotals().totalTax}</td><td></td></tr>
+                            {calculateBOMTotals().roundOff !== 0 && (
+                              <tr className="p-subtotal-row"><td colSpan="6" style={{textAlign:'right',fontWeight:600}}>Round Off:</td><td style={{fontWeight:600}}>{formatSignedMoney(calculateBOMTotals().roundOff)}</td><td></td></tr>
+                            )}
                             <tr className="p-total-row"><td colSpan="6" style={{textAlign:'right',fontWeight:'bold'}}>Grand Total:</td><td style={{fontWeight:'bold',color:'#047857'}}>₹{calculateBOMTotals().grandTotal}</td><td></td></tr>
                           </>}
                         </tbody>

@@ -33,8 +33,6 @@ const qty = (v) => {
   return Number.isInteger(n) ? String(n) : String(parseFloat(n.toFixed(3)));
 };
 
-const pct = (v) => (v === null || v === undefined ? "" : `${Number(v) > 0 ? "+" : ""}${Number(v)}%`);
-
 /** Over budget reads one way, under budget the other; equal reads as neither. */
 const varClass = (v) => {
   const n = Number(v) || 0;
@@ -43,11 +41,40 @@ const varClass = (v) => {
   return "pvab-level";
 };
 
-const signed = (v) => {
-  if (v === null || v === undefined) return "—";
+/**
+ * A variance used to print as a signed figure — "−₹2,85,273.50". A leading minus
+ * reads as a loss, so spending LESS than planned looked like bad news. The
+ * magnitude is now printed unsigned and the direction is carried by a word, which
+ * survives greyscale, print and colour-blindness in a way colour alone does not.
+ */
+const absMoney = (v) => (v === null || v === undefined ? "—" : `₹${fmtINR(Math.abs(Number(v) || 0))}`);
+
+const absPct = (v) => (v === null || v === undefined ? "" : `${Math.abs(Number(v))}%`);
+
+/** The word that orients the figure. Same thresholds as varClass, so the two can never disagree. */
+const varWord = (v) => {
   const n = Number(v) || 0;
-  return `${n > 0 ? "+" : n < 0 ? "−" : ""}₹${fmtINR(Math.abs(n))}`;
+  if (n > 0.005) return "over";
+  if (n < -0.005) return "under";
+  return "on plan";
 };
+
+/** Contents of a variance cell: magnitude, the word that orients it, then the percentage. */
+const varianceText = (amount, percent) => (
+  <>
+    {absMoney(amount)}
+    {/* The leading space is load-bearing: .pvab-stat span em has no margin of its own. */}
+    <em> {varWord(amount)}{percent !== null && percent !== undefined ? ` ${absPct(percent)}` : ""}</em>
+  </>
+);
+
+/**
+ * Nothing bought yet is not a saving. A line with no PO against it would otherwise
+ * show its whole planned value as a green "under" at −100%, which reads as money
+ * saved when it only means the work has not been ordered.
+ */
+const varianceCell = (amount, percent, notOrdered) =>
+  notOrdered ? <span className="pvab-level">Not ordered</span> : varianceText(amount, percent);
 
 const dateOf = (s) => {
   if (!s) return "—";
@@ -94,10 +121,7 @@ export default function ProjectBomComparisonTab({ data, canSeeRates }) {
             </div>
             <div className={`pvab-stat ${varClass(summary.varianceIncGst)}`}>
               <label>Variance</label>
-              <span>
-                {signed(summary.varianceIncGst)}
-                {summary.variancePct != null && <em> {pct(summary.variancePct)}</em>}
-              </span>
+              <span>{varianceText(summary.varianceIncGst, summary.variancePct)}</span>
             </div>
           </>
         ) : (
@@ -146,6 +170,9 @@ export default function ProjectBomComparisonTab({ data, canSeeRates }) {
             {scopes.map((s) => {
               const key = String(s.scopeItemId ?? "__unassigned__");
               const open = !!openScopes[key];
+              // Only when NOTHING in the scope was ordered. A partly-ordered scope still
+              // has a real comparison to show for the part that was bought.
+              const scopeNotOrdered = s.itemCount > 0 && s.notOrderedCount === s.itemCount;
               return (
                 <React.Fragment key={key}>
                   <tr className="pvab-row-scope" onClick={() => toggleScope(key)}>
@@ -167,9 +194,8 @@ export default function ProjectBomComparisonTab({ data, canSeeRates }) {
                     {canSeeRates && <td className="pvab-c-amt">{money(s.plannedAmount)}</td>}
                     {canSeeRates && <td className="pvab-c-amt">{money(s.procuredAmount)}</td>}
                     {canSeeRates && (
-                      <td className={`pvab-c-amt ${varClass(s.variance)}`}>
-                        {signed(s.variance)}
-                        {s.variancePct != null && <em> {pct(s.variancePct)}</em>}
+                      <td className={`pvab-c-amt ${scopeNotOrdered ? "pvab-level" : varClass(s.variance)}`}>
+                        {varianceCell(s.variance, s.variancePct, scopeNotOrdered)}
                       </td>
                     )}
                   </tr>
@@ -216,7 +242,9 @@ export default function ProjectBomComparisonTab({ data, canSeeRates }) {
                             </td>
                           )}
                           {canSeeRates && (
-                            <td className={`pvab-c-amt ${varClass(l.variance)}`}>{signed(l.variance)}</td>
+                            <td className={`pvab-c-amt ${l.notOrdered ? "pvab-level" : varClass(l.variance)}`}>
+                              {varianceCell(l.variance, null, l.notOrdered)}
+                            </td>
                           )}
                         </tr>
 
@@ -279,7 +307,7 @@ export default function ProjectBomComparisonTab({ data, canSeeRates }) {
                     <td className="pvab-c-amt">{money(r.plannedGst)}</td>
                     <td className="pvab-c-amt">{money(r.procuredTaxable)}</td>
                     <td className="pvab-c-amt">{money(r.procuredGst)}</td>
-                    <td className={`pvab-c-amt ${varClass(r.gstVariance)}`}>{signed(r.gstVariance)}</td>
+                    <td className={`pvab-c-amt ${varClass(r.gstVariance)}`}>{varianceText(r.gstVariance, null)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -288,19 +316,19 @@ export default function ProjectBomComparisonTab({ data, canSeeRates }) {
                   <td className="pvab-c-name">Subtotal excl. GST</td>
                   <td className="pvab-c-amt" colSpan={2}>{money(gst.plannedSubtotal)}</td>
                   <td className="pvab-c-amt" colSpan={2}>{money(gst.procuredSubtotal)}</td>
-                  <td className={`pvab-c-amt ${varClass(gst.subtotalVariance)}`}>{signed(gst.subtotalVariance)}</td>
+                  <td className={`pvab-c-amt ${varClass(gst.subtotalVariance)}`}>{varianceText(gst.subtotalVariance, null)}</td>
                 </tr>
                 <tr>
                   <td className="pvab-c-name">GST</td>
                   <td className="pvab-c-amt" colSpan={2}>{money(gst.plannedGst)}</td>
                   <td className="pvab-c-amt" colSpan={2}>{money(gst.procuredGst)}</td>
-                  <td className={`pvab-c-amt ${varClass(gst.gstVariance)}`}>{signed(gst.gstVariance)}</td>
+                  <td className={`pvab-c-amt ${varClass(gst.gstVariance)}`}>{varianceText(gst.gstVariance, null)}</td>
                 </tr>
                 <tr className="pvab-row-total">
                   <td className="pvab-c-name">Total incl. GST</td>
                   <td className="pvab-c-amt" colSpan={2}>{money(gst.plannedTotal)}</td>
                   <td className="pvab-c-amt" colSpan={2}>{money(gst.procuredTotal)}</td>
-                  <td className={`pvab-c-amt ${varClass(gst.totalVariance)}`}>{signed(gst.totalVariance)}</td>
+                  <td className={`pvab-c-amt ${varClass(gst.totalVariance)}`}>{varianceText(gst.totalVariance, null)}</td>
                 </tr>
               </tfoot>
             </table>

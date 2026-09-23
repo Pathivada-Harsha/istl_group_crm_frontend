@@ -7,6 +7,7 @@ import {
 import * as XLSX from 'xlsx';
 import filterApi from '../services/filterApi';
 import { useAuth } from '../hooks/useAuth';
+import { roundOffOf } from '../utils/money';
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import CrmPreloader from '../components/preLoader';
@@ -602,11 +603,12 @@ export default function ProjectReports() {
     ]);
 
     // Sheet 2: Billing — Invoices
-    const invHeaders = ['Invoice No','Invoice Date','Due Date','Customer','Total Amount','Paid Amount','Balance Amount','Status','GST Amount','Receipt No','Payment Method'];
+    const invHeaders = ['Invoice No','Invoice Date','Due Date','Customer','Total Amount','Paid Amount','Balance Amount','Status','GST Amount','Receipt No','Payment Method','Round Off'];
     const invRows = (bil.invoices || []).map(r => [
       r.invoiceNo, r.invoiceDate, r.dueDate, r.customerName,
       parseFloat(r.totalAmount)||0, parseFloat(r.paidAmount)||0, parseFloat(r.balanceAmount)||0,
-      r.status, parseFloat(r.taxAmount)||0, r.receiptNo, r.paymentMethod
+      r.status, parseFloat(r.taxAmount)||0, r.receiptNo, r.paymentMethod,
+      roundOffOf(r)
     ]);
     addSheet('2. Invoices', [
       ['BILLING STATUS — INVOICES'],
@@ -617,7 +619,8 @@ export default function ProjectReports() {
       [],
       ['TOTALS', '', '', '',
         invRows.reduce((s,r)=>s+r[4],0), invRows.reduce((s,r)=>s+r[5],0), invRows.reduce((s,r)=>s+r[6],0),
-        '', invRows.reduce((s,r)=>s+r[8],0)
+        '', invRows.reduce((s,r)=>s+r[8],0), '', '',
+        invRows.reduce((s,r)=>s+r[11],0)
       ],
     ], [3]);
 
@@ -639,10 +642,11 @@ export default function ProjectReports() {
     ], [3]);
 
     // Sheet 4: Purchase Orders
-    const poHeaders = ['PO No','Order Date','Vendor','Total Value','Payment Status','Delivery Status','Items Ordered','Items Delivered'];
+    const poHeaders = ['PO No','Order Date','Vendor','Total Value','Payment Status','Delivery Status','Items Ordered','Items Delivered','Round Off'];
     const poRows = (proc.purchaseOrders || []).map(r => [
       r.poNo, r.orderDate, r.vendorName, parseFloat(r.totalValue)||0,
-      r.paymentStatus, r.status, r.totalItems, r.deliveredItems
+      r.paymentStatus, r.status, r.totalItems, r.deliveredItems,
+      roundOffOf(r)
     ]);
     addSheet('4. Purchase Orders', [
       ['PROCUREMENT — PURCHASE ORDERS'],
@@ -651,15 +655,17 @@ export default function ProjectReports() {
       poHeaders,
       ...poRows,
       [],
-      ['TOTALS','','',poRows.reduce((s,r)=>s+r[3],0)],
+      ['TOTALS','','',poRows.reduce((s,r)=>s+r[3],0),'','','','',
+        poRows.reduce((s,r)=>s+r[8],0)],
     ], [3]);
 
     // Sheet 5: Bills
-    const billHeaders = ['Bill No','Bill Date','Due Date','Vendor','Total Amount','Paid Amount','Balance','Status','Linked PO','GST Amount'];
+    const billHeaders = ['Bill No','Bill Date','Due Date','Vendor','Total Amount','Paid Amount','Balance','Status','Linked PO','GST Amount','Round Off'];
     const billRows = (proc.bills || []).map(r => [
       r.billNo, r.billDate, r.dueDate, r.vendorName,
       parseFloat(r.totalAmount)||0, parseFloat(r.paidAmount)||0, parseFloat(r.balanceAmount)||0,
-      r.status, r.linkedPONo, parseFloat(r.taxAmount)||0
+      r.status, r.linkedPONo, parseFloat(r.taxAmount)||0,
+      roundOffOf(r)
     ]);
     addSheet('5. Bills', [
       ['PROCUREMENT — BILLS RECEIVED'],
@@ -670,15 +676,17 @@ export default function ProjectReports() {
       [],
       ['TOTALS','','','',
         billRows.reduce((s,r)=>s+r[4],0), billRows.reduce((s,r)=>s+r[5],0), billRows.reduce((s,r)=>s+r[6],0),
-        '','', billRows.reduce((s,r)=>s+r[9],0)
+        '','', billRows.reduce((s,r)=>s+r[9],0),
+        billRows.reduce((s,r)=>s+r[10],0)
       ],
     ], [3]);
 
     // Sheet 6: Profitability
     const prof = report.profitability || {};
-    const expHeaders = ['Expense Code','Trip Date','Category','Amount','Paid By','Status'];
+    const expHeaders = ['Expense Code','Trip Date','Category','Amount','Paid By','Status','Round Off'];
     const expRows = (prof.expenses || []).map(r => [
-      r.expenseCode, r.tripDate, r.category, parseFloat(r.amount)||0, r.paidBy, r.status
+      r.expenseCode, r.tripDate, r.category, parseFloat(r.amount)||0, r.paidBy, r.status,
+      roundOffOf(r)
     ]);
     addSheet('6. Profitability', [
       ['PROFITABILITY ANALYSIS'],                                                          // 0
@@ -705,7 +713,8 @@ export default function ProjectReports() {
       expHeaders,                                                                          // 14
       ...expRows,
       [],
-      ['TOTAL EXPENSES', '', '', expRows.reduce((s,r)=>s+r[3],0)],
+      ['TOTAL EXPENSES', '', '', expRows.reduce((s,r)=>s+r[3],0), '', '',
+        expRows.reduce((s,r)=>s+r[6],0)],
     ], [14]);
 
     const projName = (report.overview?.projectName || 'Report').replace(/[^a-zA-Z0-9_]/g, '_');

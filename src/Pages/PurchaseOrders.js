@@ -16,6 +16,8 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import ConfirmationModal from '../components/ConfirmationModal';
+import TotalsSummary from '../components/TotalsSummary';
+import { computeDocTotals, lineTotal, roundOffOf, formatSignedMoney } from '../utils/money';
 import GeneratePoModal from './GeneratePoModal.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 import BomItemPicker from '../components/procurement/BomItemPicker.js';
@@ -992,8 +994,7 @@ const PurchaseOrders = () => {
         };
       });
       items.forEach(item => {
-        const base = item.quantity * item.unitPrice;
-        item.lineTotal = base * (1 + item.gst / 100);
+        item.lineTotal = poLineTotal(item.quantity, item.unitPrice, item.gst);
       });
       setCreatePOFormData(prev => ({
         ...prev, quotationId: qData.id, quotation: qData,
@@ -1085,12 +1086,11 @@ const PurchaseOrders = () => {
     if (!newItem.itemName?.trim()) { showWarning('Item name is required'); return; }
     if (newItem.quantity <= 0) { showWarning('Quantity must be > 0'); return; }
     if (newItem.unitPrice <= 0) { showWarning('Unit price must be > 0'); return; }
-    const base = newItem.quantity * newItem.unitPrice;
     const item = {
       id: `manual-${Date.now()}`, itemName: newItem.itemName,
       itemDescription: newItem.itemDescription, hsnCode: newItem.hsnCode, unit: newItem.unit || 'Nos', quantity: newItem.quantity,
       unitPrice: newItem.unitPrice, gst: newItem.gst,
-      lineTotal: base * (1 + newItem.gst / 100), selected: true, isManual: true
+      lineTotal: poLineTotal(newItem.quantity, newItem.unitPrice, newItem.gst), selected: true, isManual: true
     };
     setCreatePOFormData(prev => ({ ...prev, items: [...prev.items, item] }));
     setItemsStepUnlocked(true);
@@ -1115,8 +1115,7 @@ const PurchaseOrders = () => {
     }
     // Store raw string to preserve mid-typing decimal (e.g. "10.")
     item.quantity = quantity;
-    const base = qty * (parseFloat(item.unitPrice) || 0);
-    item.lineTotal = base * (1 + item.gst / 100);
+    item.lineTotal = poLineTotal(qty, item.unitPrice, item.gst);
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
   };
   const handleUpdatePOItemPrice = (index, price) => {
@@ -1126,9 +1125,7 @@ const PurchaseOrders = () => {
     item.unitPrice = price;
     const numericPrice = parseFloat(price) || 0;
     if (price !== '') {
-      const qty = parseFloat(item.quantity) || 0;
-      const base = qty * numericPrice;
-      item.lineTotal = base * (1 + item.gst / 100);
+      item.lineTotal = poLineTotal(item.quantity, numericPrice, item.gst);
     } else { item.lineTotal = 0; }
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
   };
@@ -1142,18 +1139,26 @@ const PurchaseOrders = () => {
     const item = newItems[index];
     item.gst = parseFloat(gst);
     if (item.quantity && item.unitPrice) {
-      const base = parseFloat(item.quantity) * parseFloat(item.unitPrice);
-      item.lineTotal = base * (1 + parseFloat(gst) / 100);
+      item.lineTotal = poLineTotal(item.quantity, item.unitPrice, gst);
     }
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
   };
-  const calculatePOTotal = () => createPOFormData.items.filter(i => i.selected).reduce((sum, i) => {
-    const qty      = parseFloat(i.quantity)  || 0;
-    const price    = parseFloat(i.unitPrice) || 0;
-    const gst      = parseFloat(i.gst)       || 0;
-    const base     = qty * price;
-    return sum + base * (1 + gst / 100);
-  }, 0);
+  /*
+   * The PO being created. A purchase order is an OUTGOING document, so the grand
+   * total is rounded to the nearest whole rupee on the server and nothing about
+   * the round-off is sent from here.
+   */
+  const poFormTotals = () => computeDocTotals(
+    createPOFormData.items.filter(i => i.selected).map(i => ({
+      quantity: i.quantity, unitPrice: i.unitPrice, taxPercent: i.gst,
+    }))
+  );
+  // Kept returning a number: several call sites treat it as one.
+  const calculatePOTotal = () => poFormTotals().grandTotal;
+
+  /** One PO line's total incl. GST, in the same arithmetic the server uses. */
+  const poLineTotal = (quantity, unitPrice, gst) =>
+    lineTotal({ quantity, unitPrice, taxPercent: gst });
 
   // ─── API calls ─────────────────────────────────────────────────────────────
   const fetchPurchaseOrders = async () => {
@@ -1274,8 +1279,7 @@ const PurchaseOrders = () => {
         const qty      = parseFloat(item.quantity)   || 0;
         const price    = parseFloat(item.unitPrice)  || 0;
         const gst      = parseFloat(item.taxPercent) || 0;
-        const base     = qty * price;
-        const lineTotal = base * (1 + gst / 100);
+        const lineTotal = poLineTotal(qty, price, gst);
         return {
           id: item.id || `item-${i}`, itemName: item.itemName, itemDescription: item.description || '',
           hsnCode: item.hsnCode || '', unit: item.unit || 'Nos',
@@ -1897,6 +1901,7 @@ const PurchaseOrders = () => {
         { key: 'poNo',            label: 'PO Number'              },
         { key: 'vendorName',      label: 'Vendor Name'            },
         { key: 'orderDate',       label: 'Order Date'             },
+        { key: 'roundOff',        label: 'Round Off (₹)'          },
         { key: 'totalValue',      label: 'Total Value (₹)'        },
         { key: 'status',          label: 'Status'                 },
         { key: 'paymentStatus',   label: 'Payment Status'         },
@@ -1926,6 +1931,9 @@ const PurchaseOrders = () => {
           let val = po[key] ?? '';
           if (key === 'projectName') val = pNames[po.projectId] || '';
           if (key === 'projectId')   val = po.projectId || '';
+          // Zero rather than blank on a PO raised before the feature, so the
+          // column still totals correctly across a mixed date range.
+          if (key === 'roundOff')    val = roundOffOf(po).toFixed(2);
           if ((key === 'orderDate' || key === 'deliveryDate') && val) {
             const s = String(val);
             if (s.length >= 10 && s[4] === '-') {
@@ -2236,6 +2244,9 @@ const PurchaseOrders = () => {
                   <div className="po-detail-item"><span className="po-detail-label">Payment Status:</span><span className={`purchase-orders-badge ${getPaymentBadgeClass(selectedPO.paymentStatus)}`}>{selectedPO.paymentStatus}</span></div>
                   <div className="po-detail-item"><span className="po-detail-label">Order Date:</span><span>{formatDate(selectedPO.orderDate)}</span></div>
                   <div className="po-detail-item"><span className="po-detail-label">Expected Delivery:</span><span>{formatDate(selectedPO.expectedDelivery) || '—'}</span></div>
+                  {roundOffOf(selectedPO) !== 0 && (
+                    <div className="po-detail-item"><span className="po-detail-label">Round Off:</span><span>{formatSignedMoney(roundOffOf(selectedPO))}</span></div>
+                  )}
                   <div className="po-detail-item"><span className="po-detail-label">Total Value:</span><span className="po-value">{formatCurrency(selectedPO.totalValue)}</span></div>
                   {selectedPO.groupName && (
                     <div className="po-detail-item"><span className="po-detail-label">Group:</span><span>{selectedPO.groupName}{selectedPO.subGroupName ? ` / ${selectedPO.subGroupName}` : ''}</span></div>
@@ -3208,6 +3219,22 @@ const PurchaseOrders = () => {
                           </tfoot>
                         </table>
                       </div>
+                      {/* Subtotal / GST / Round Off / Grand Total, so the figure
+                          here is the one the PO will be saved with. */}
+                      {(() => {
+                        const t = poFormTotals();
+                        return (
+                          <TotalsSummary
+                            dense
+                            subtotal={t.subtotal}
+                            tax={t.tax}
+                            exactTotal={t.exactTotal}
+                            roundOff={t.roundOff}
+                            grandTotal={t.grandTotal}
+                            labels={{ tax: 'GST' }}
+                          />
+                        );
+                      })()}
                       <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '13px', color: __stc('#64748b') }}>{createPOFormData.items.filter(i => i.selected).length} of {createPOFormData.items.length} items selected</span>
                         {!createPOFormData.quotationId && createPOFormData.items.some(i => i.selected && (!i.unitPrice || i.unitPrice === 0)) && (

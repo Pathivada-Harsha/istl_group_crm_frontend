@@ -1,5 +1,5 @@
 // Old Invoices page
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Eye, Edit2, Trash2, DollarSign, Download, Send, ChevronUp, ChevronDown, Columns, GripVertical, Check, CheckCircle, XCircle, Clock } from 'lucide-react';
 import '../pages-css/Invoices.css';
@@ -8,6 +8,8 @@ import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import ConfirmationModal from '../components/ConfirmationModal';
+import TotalsSummary from '../components/TotalsSummary';
+import { computeDocTotals, exactTotalOf, roundOffOf, formatSignedMoney } from '../utils/money';
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
@@ -983,23 +985,25 @@ const fetchStats = async () => {
   /**
    * Calculate invoice totals
    */
-  const calculateInvoice = () => {
-    let subtotal = 0;
-    let taxTotal = 0;
-
-    formData.items.forEach(item => {
-      const lineTotal = item.quantity * item.unitPrice;
-      const lineTax = (lineTotal * item.taxPercent) / 100;
-      subtotal += lineTotal;
-      taxTotal += lineTax;
-    });
-
+  /*
+   * Invoices are an OUTGOING document: the server rounds the grand total to the
+   * nearest whole rupee and this preview has to reach the same answer, so the
+   * arithmetic goes through utils/money (integer paise) instead of the float
+   * accumulation it used to do.
+   *
+   * Memoised because the form re-renders on every keystroke and the old
+   * calculateInvoice() was called three times per render.
+   */
+  const invoiceTotals = useMemo(() => {
+    const t = computeDocTotals(formData.items);
     return {
-      subtotal,
-      taxTotal,
-      grandTotal: subtotal + taxTotal
+      subtotal: t.subtotal,
+      taxTotal: t.tax,
+      exactTotal: t.exactTotal,
+      roundOff: t.roundOff,
+      grandTotal: t.grandTotal,
     };
-  };
+  }, [formData.items]);
 
   // ─── Export to Excel ────────────────────────────────────────────────────────
   const [exportLoading, setExportLoading] = useState(false);
@@ -1051,6 +1055,7 @@ const fetchStats = async () => {
       const totalAmt    = allInvoices.reduce((s, i) => s + (parseFloat(i.totalAmount)   || 0), 0);
       const paidAmt     = allInvoices.reduce((s, i) => s + (parseFloat(i.paidAmount)    || 0), 0);
       const balanceAmt  = allInvoices.reduce((s, i) => s + (parseFloat(i.balanceAmount) || parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0) || 0), 0);
+      const roundOffAmt = allInvoices.reduce((s, i) => s + roundOffOf(i), 0);
       const countByStatus = allInvoices.reduce((acc, i) => {
         const s = fmtStatus(i.status);
         acc[s] = (acc[s] || 0) + 1;
@@ -1076,6 +1081,8 @@ const fetchStats = async () => {
         [''],
         ['── SUMMARY ─────────────────────────────────'],
         ['Total Invoices',      total],
+        // The figure to reconcile against the ledger's round-off account.
+        ['Total Round Off (₹)', fmtCurrency(roundOffAmt)],
         ['Total Amount (₹)',    fmtCurrency(totalAmt)],
         ['Paid Amount (₹)',     fmtCurrency(paidAmt)],
         ['Balance Amount (₹)', fmtCurrency(balanceAmt)],
@@ -1113,6 +1120,8 @@ const fetchStats = async () => {
         'Invoice Date',
         'Due Date',
         'Status',
+        'Exact Total (₹)',
+        'Round Off (₹)',
         'Total Amount (₹)',
         'Paid Amount (₹)',
         'Balance Amount (₹)',
@@ -1140,6 +1149,10 @@ const fetchStats = async () => {
           fmtDate(inv.invoiceDate),
           fmtDate(inv.dueDate),
           fmtStatus(inv.status),
+          // Exact total falls back to the total itself on a pre-feature invoice,
+          // so Exact + Round Off ties to Total on every row in the sheet.
+          fmtCurrency(exactTotalOf(inv)),
+          fmtCurrency(roundOffOf(inv)),
           fmtCurrency(total),
           fmtCurrency(paid),
           fmtCurrency(balance),
@@ -1170,7 +1183,7 @@ const fetchStats = async () => {
         'System Invoice No', 'Tally Invoice No', 'Customer Name',
         'Group', 'Sub-Group', 'Project ID',
         'Invoice Date', 'Due Date', 'Days Overdue',
-        'Status', 'Total (₹)', 'Paid (₹)', 'Balance (₹)'
+        'Status', 'Round Off (₹)', 'Total (₹)', 'Paid (₹)', 'Balance (₹)'
       ];
 
       const today = new Date();
@@ -1187,6 +1200,7 @@ const fetchStats = async () => {
           fmtDate(inv.invoiceDate), fmtDate(inv.dueDate),
           daysOver,
           fmtStatus(inv.status),
+          fmtCurrency(roundOffOf(inv)),
           fmtCurrency(total), fmtCurrency(paid), fmtCurrency(balance)
         ];
       });
@@ -2174,6 +2188,21 @@ const fetchStats = async () => {
                 )}
 
                 <div className="Invoices-page-invoice-totals">
+                  {/* Round Off of a saved invoice. Shown only when there is one,
+                      so an invoice raised before the feature reads exactly as it
+                      always did. */}
+                  {roundOffOf(selectedInvoice) !== 0 && (
+                    <>
+                      <div className="Invoices-page-total-row">
+                        <span>Total before Round Off:</span>
+                        <span>{formatCurrency(exactTotalOf(selectedInvoice))}</span>
+                      </div>
+                      <div className="Invoices-page-total-row">
+                        <span>Round Off:</span>
+                        <span>{formatSignedMoney(roundOffOf(selectedInvoice))}</span>
+                      </div>
+                    </>
+                  )}
                   <div className="Invoices-page-total-row">
                     <span>Total Amount:</span>
                     <span>{formatCurrency(selectedInvoice.totalAmount)}</span>
@@ -2556,20 +2585,15 @@ const fetchStats = async () => {
                     </div>
                   ))}
 
-                  <div className="Invoices-page-calculation-summary">
-                    <div className="Invoices-page-calc-row">
-                      <span>Subtotal:</span>
-                      <span>{formatCurrency(calculateInvoice().subtotal)}</span>
-                    </div>
-                    <div className="Invoices-page-calc-row">
-                      <span>Tax Total:</span>
-                      <span>{formatCurrency(calculateInvoice().taxTotal)}</span>
-                    </div>
-                    <div className="Invoices-page-calc-row Invoices-page-calc-grand">
-                      <span>Grand Total:</span>
-                      <span>{formatCurrency(calculateInvoice().grandTotal)}</span>
-                    </div>
-                  </div>
+                  <TotalsSummary
+                    className="Invoices-page-calculation-summary"
+                    subtotal={invoiceTotals.subtotal}
+                    tax={invoiceTotals.taxTotal}
+                    exactTotal={invoiceTotals.exactTotal}
+                    roundOff={invoiceTotals.roundOff}
+                    grandTotal={invoiceTotals.grandTotal}
+                    labels={{ tax: 'Tax Total' }}
+                  />
                 </div>
               </div>
             </div>
