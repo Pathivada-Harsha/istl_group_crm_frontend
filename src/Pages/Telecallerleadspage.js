@@ -64,15 +64,14 @@ const isResurfaced = (lead) => {
   return !!d && !isNaN(d) && dayOnly(d) < dayOnly(new Date());
 };
 
-// "Yesterday" / "2 days ago" / null for a lead marked earlier than today —
+// "125 days" / "1 day" for a lead marked earlier than today —
 // null means it's from today, i.e. not stale yet.
-const relativeDayLabel = (dateStr) => {
+const resurfacedLabel = (dateStr) => {
   const d = parseBackendDate(dateStr);
   if (!d || isNaN(d)) return null;
   const diffDays = Math.round((dayOnly(new Date()) - dayOnly(d)) / 86400000);
   if (diffDays <= 0) return null;
-  if (diffDays === 1) return "Yesterday";
-  return `${diffDays} days ago`;
+  return `${diffDays} ${diffDays === 1 ? "day" : "days"}`;
 };
 
 const isKivDueToday = (lead) => {
@@ -1950,7 +1949,7 @@ function BoardCard({ lead, onDragStart, onDragEnd, onDetail, onStatus, onEdit, c
       <span className="tc-board-card-code">{lead.leadCode}</span>
       {resurfaced && (
         <div className="tc-board-resurfaced-tag">
-          ⚡ Resurfaced{lead.telecallerStatusUpdatedAt ? ` — ${relativeDayLabel(lead.telecallerStatusUpdatedAt)}` : ""}
+          ⚡ Resurfaced{lead.telecallerStatusUpdatedAt ? ` — ${resurfacedLabel(lead.telecallerStatusUpdatedAt)}` : ""}
         </div>
       )}
       <div className="tc-board-card-contact"><span>📞 {lead.phone}</span></div>
@@ -2006,7 +2005,7 @@ function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
       {isResurfaced(lead) && (
         <div style={{margin:"4px 0 2px",display:"flex",alignItems:"center",gap:5}}>
           <span style={{fontSize:11,fontWeight:600,color:"#d97706",background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:20,padding:"2px 10px",display:"inline-flex",alignItems:"center",gap:4}}>
-            ⚡ Resurfaced — {relativeDayLabel(lead.telecallerStatusUpdatedAt)}
+            ⚡ Resurfaced — {resurfacedLabel(lead.telecallerStatusUpdatedAt)}
           </span>
         </div>
       )}
