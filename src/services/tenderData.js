@@ -88,6 +88,43 @@ export const SOURCES = [
 ];
 export const CLIENT_TYPES = ['Government', 'PSU', 'Private', 'Cooperative', 'Individual', 'Developer'];
 export const SUBMISSION_MODES = ['Online Portal', 'Physical', 'Email', 'Both'];
+
+// EMD / bid security
+export const EMD_STATUSES = [
+  'Not paid', 'Exempted', 'Paid', 'Refund requested', 'Refunded', 'Forfeited',
+  'Adjusted to security deposit',
+];
+export const EMD_MODES = [
+  'Online (NEFT / RTGS)', 'Portal payment gateway', 'Demand Draft', 'Bank Guarantee',
+  'Insurance Surety Bond', 'FDR', 'Other',
+];
+// Instruments that are returned rather than refunded, and expire.
+export const EMD_INSTRUMENTS = new Set(['Bank Guarantee', 'Insurance Surety Bond', 'FDR', 'Demand Draft']);
+
+/**
+ * Where a tender's EMD stands. One place for the rule so the tab, the list
+ * column and the stat tiles never disagree.
+ *   status      — the recorded status, or inferred from the amounts when unset
+ *   blocked     — money (or an instrument) still with the client
+ *   deducted    — refunded, but short of what was paid
+ *   refundDue   — the tender is closed (Lost / Cancelled) and money is still out
+ *   expiring    — a BG/ISB/FDR still out whose validity ends within 15 days (or has ended)
+ */
+export const emdSummary = (t) => {
+  const paid = Number(t.emdPaidAmount) || 0;
+  const refunded = Number(t.emdRefundAmount) || 0;
+  const status = t.emdStatus || (paid > 0 ? 'Paid' : '');
+  const out = status === 'Paid' || status === 'Refund requested';
+  const blocked = out ? Math.max(0, paid - refunded) : 0;
+  const deducted = status === 'Refunded' && refunded > 0 && refunded < paid ? paid - refunded : 0;
+  const refundDue = blocked > 0 && ['Lost', 'Cancelled'].includes(t.status);
+  let expiring = false;
+  if (blocked > 0 && EMD_INSTRUMENTS.has(t.emdPaymentMode) && t.emdValidTill) {
+    const days = (new Date(t.emdValidTill) - new Date()) / 86400000;
+    expiring = days <= 15;
+  }
+  return { status, paid, refunded, blocked, deducted, refundDue, expiring };
+};
 export const LOSS_REASONS = [
   'Price (L1 lost)', 'Technical disqualification', 'Eligibility not met',
   'EMD / documentation', 'Withdrew', 'Cancelled by authority', 'Other',
@@ -290,13 +327,39 @@ export const evaluateCriterion = (c) => {
 // A criterion counts as satisfied for the roll-up if it passes OR is overridden.
 export const criterionSatisfied = (c) => !!c.override || evaluateCriterion(c) === 'pass';
 
-// Overall Go/No-Go: NO-GO if any un-overridden failure, else PENDING if any
-// un-overridden pending, else GO. Empty list → PENDING.
+// Rows sharing an altGroup (within a category) are OR-alternatives of one
+// clause — "1 no. 66kV sub-station OR 5 nos. 33kV OR 2 nos. bay works". The
+// tender needs any ONE of them, so they are judged together as one unit; every
+// other row is a unit of its own.
+const unitKey = (c) => (c.altGroup ? `${(c.category || '').trim()}::${c.altGroup}` : `row::${c._key}`);
+
+// Criteria → units, in first-appearance order: [{ key, altGroup, rows }].
+export const groupCriteria = (criteria = []) => {
+  const units = new Map();
+  criteria.forEach((c) => {
+    const k = unitKey(c);
+    if (!units.has(k)) units.set(k, { key: k, altGroup: c.altGroup || '', rows: [] });
+    units.get(k).rows.push(c);
+  });
+  return [...units.values()];
+};
+
+// One unit → 'pass' | 'fail' | 'pending'. Satisfied as soon as any alternative
+// passes or is overridden; failed only when every alternative has failed.
+export const evaluateUnit = (rows) => {
+  if (rows.some(criterionSatisfied)) return 'pass';
+  const live = rows.filter((c) => !c.override).map(evaluateCriterion);
+  if (live.length && live.every((r) => r === 'fail')) return 'fail';
+  return 'pending';
+};
+
+// Overall Go/No-Go over units: NO-GO if any unit fails, else PENDING if any is
+// pending, else GO. Empty list → PENDING.
 export const computeEligibility = (criteria = []) => {
   if (!criteria.length) return 'PENDING';
-  const live = criteria.filter((c) => !c.override).map(evaluateCriterion);
-  if (live.includes('fail')) return 'NO_GO';
-  if (live.includes('pending')) return 'PENDING';
+  const results = groupCriteria(criteria).map((u) => evaluateUnit(u.rows));
+  if (results.includes('fail')) return 'NO_GO';
+  if (results.includes('pending')) return 'PENDING';
   return 'GO';
 };
 
@@ -338,6 +401,9 @@ export const stageUnlocked = (tender, key) => {
 export const blankCriterion = (category = 'Technical') => ({
   _key: genKey(), category, criterionName: '', requiredValue: '', ourValue: '',
   operator: 'gte', override: false, overrideReason: '', overrideBy: '', overrideAt: '',
+  // altGroup: shared by OR-alternatives. clauseText / sourcePage: the tender's
+  // own wording and page, when the row was imported from the PDF.
+  altGroup: '', clauseText: '', sourcePage: '',
 });
 
 export const blankDocument = (documentName = '') => ({
@@ -389,6 +455,12 @@ export const blankTender = () => ({
   l1Value: '', ourRank: '', status: 'Draft', lossReason: '', result: '', competitorNotes: '',
   contractValue: '', loaNumber: '', loaDate: '', agreementDate: '',
   projectId: '',
+  // EMD / bid security — what was actually paid, to whom, and whether it came
+  // back. emdAmount (financials) is what the tender demands.
+  emdStatus: '', emdPaidAmount: '', emdPaidDate: '', emdPaymentMode: '', emdReference: '',
+  emdPaidFromAccount: '', emdBeneficiaryName: '', emdBeneficiaryBank: '',
+  emdBeneficiaryAccount: '', emdBeneficiaryIfsc: '', emdValidTill: '',
+  emdRefundAmount: '', emdRefundDate: '', emdRefundReference: '', emdRefundAccount: '', emdNotes: '',
   // source PDF (uploaded NIT; bytes live server-side — these are metadata only)
   sourcePdfName: '', sourcePdfMimeType: '', hasSourcePdf: false,
   createdAt: new Date().toISOString().slice(0, 10),

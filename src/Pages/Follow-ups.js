@@ -1199,7 +1199,7 @@ export default function ClientDashboardFollowUps() {
           </svg>
           <input
             type="text"
-            placeholder="Search by lead, customer, notes..."
+            placeholder="Search by lead ID, name, phone, assignee..."
             className={`followups-search-input${searchTerm ? ' has-value' : ''}`}
             value={searchTerm}
             onChange={(e) => {

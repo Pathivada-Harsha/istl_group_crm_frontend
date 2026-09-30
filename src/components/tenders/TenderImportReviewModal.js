@@ -23,7 +23,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useMemo, useState } from 'react';
 import {
-  SECTORS, TENDER_TYPES, SOURCES, CLIENT_TYPES, FINANCIAL_YEARS,
+  SECTORS, TENDER_TYPES, SOURCES, CLIENT_TYPES, FINANCIAL_YEARS, groupCriteria,
 } from '../../services/tenderData';
 
 // Field-name → the label the Basic Info tab uses, so a row reads the same as the
@@ -57,6 +57,7 @@ const FIELD_LABELS = {
   financialOpeningDate: 'Financial Opening Date',
   boqItems: 'BOQ / Schedule rows',
   eligibilityCriteria: 'Eligibility criteria',
+  documents: 'Documents checklist',
 };
 
 // The control each field gets. A parser can put a value outside a fixed
@@ -96,8 +97,11 @@ const summarise = (field, value) => {
 
 /**
  * Build one row per proposed change. The child arrays (BOQ, eligibility) become
- * a single row each — they are all-or-nothing on import, and only offered when
- * the tender has none yet, so importing can never destroy manual work.
+ * a single row each — they are all-or-nothing on import. BOQ is only offered
+ * when the tender has none yet, so importing can never destroy manual work.
+ * Eligibility is offered either way, because a re-read is how criteria that
+ * were read badly get replaced; it always arrives unticked, and says how many
+ * existing criteria applying it would replace.
  */
 function buildRows(parse, tender) {
   const rows = (parse.fields || []).map((f) => ({
@@ -128,13 +132,114 @@ function buildRows(parse, tender) {
     confident: false,
   });
 
-  if ((parse.boqItems || []).length && !(tender.boqItems || []).length) {
-    rows.push(arrayRow('boqItems', parse.boqItems));
+  const boq = parse.boqItems || [];
+  if (boq.length) {
+    rows.push({
+      ...arrayRow('boqItems', boq),
+      labelInDoc: parse.origin === 'regex+ai'
+        ? 'schedule rows — quantities from the schedule, descriptions read by AI'
+        : 'schedule rows — quantities exact, descriptions best-effort until the AI re-read',
+      sourceText: '',
+      replaces: (tender.boqItems || []).length,
+    });
   }
-  if ((parse.eligibilityCriteria || []).length && !(tender.eligibilityCriteria || []).length) {
-    rows.push(arrayRow('eligibilityCriteria', parse.eligibilityCriteria));
+  const documents = parse.documents || [];
+  if (documents.length) {
+    rows.push({
+      ...arrayRow('documents', documents),
+      page: documents[0].sourcePage || null,
+      labelInDoc: 'documents the tender asks for, each with the clause that asks',
+      sourceText: '',
+      replaces: (tender.documents || []).length,
+    });
+  }
+  const eligibility = parse.eligibilityCriteria || [];
+  if (eligibility.length) {
+    rows.push({
+      ...arrayRow('eligibilityCriteria', eligibility),
+      page: eligibility[0].sourcePage || null,
+      labelInDoc: parse.origin === 'regex+ai'
+        ? 'qualifying requirements, read by AI and checked against the clause text'
+        : 'figures stated in the eligibility section — re-read with AI for every clause',
+      sourceText: '',
+      replaces: (tender.eligibilityCriteria || []).length,
+    });
   }
   return rows;
+}
+
+const OP_SIGN = { gte: '≥', lte: '≤', eq: '=', contains: 'contains' };
+
+// "≥ ₹26,90,00,000", "≥ 1.82", "yes / no", or a prompt when the figure was left
+// blank because the clause does not state it.
+const criterionValue = (c) => {
+  if (c.operator === 'boolean') return 'yes / no';
+  if (isBlank(c.requiredValue)) return 'value not stated — enter it';
+  const n = Number(c.requiredValue);
+  const shown = c.category === 'Financial' && Number.isFinite(n) && n >= 1000
+    ? money(c.requiredValue) : String(c.requiredValue);
+  return `${OP_SIGN[c.operator] || ''} ${shown}`.trim();
+};
+
+/** A plain list of what an array row would apply: BOQ lines, checklist documents. */
+function ListPreview({ count, warn, items }) {
+  return (
+    <div className="tnd-import-elig">
+      <span className="tnd-import-static">{count}</span>
+      {warn && <span className="tnd-import-elig-warn">{warn}</span>}
+      <ul className="tnd-import-elig-list">
+        {items.map((it, i) => (
+          <li key={i}>
+            <div className="tnd-import-elig-item" title={it.title || ''}>
+              {it.lead && <span className="tnd-import-elig-cat">{it.lead}</span>}
+              <span className="tnd-import-elig-name">{it.text}</span>
+              {it.value && <span className="tnd-import-elig-val">{it.value}</span>}
+              {it.page ? <span className="tnd-import-page">p.{it.page}</span> : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The criteria an eligibility row would apply, OR-alternatives boxed together.
+ * Hovering a line shows the clause it was read from.
+ */
+function EligibilityPreview({ criteria, replaces }) {
+  // Parsed rows have no _key yet; grouping needs one for the standalone rows.
+  const units = groupCriteria(criteria.map((c, i) => ({ ...c, _key: `p${i}` })));
+  return (
+    <div className="tnd-import-elig">
+      <span className="tnd-import-static">
+        {criteria.length} criteri{criteria.length === 1 ? 'on' : 'a'} read from the document
+      </span>
+      {replaces > 0 && (
+        <span className="tnd-import-elig-warn">
+          Applying this replaces the {replaces} criteri{replaces === 1 ? 'on' : 'a'} already on the Eligibility tab.
+        </span>
+      )}
+      <ul className="tnd-import-elig-list">
+        {units.map((u) => (
+          <li key={u.key} className={u.altGroup ? 'is-group' : ''}>
+            {u.altGroup && <span className="tnd-import-elig-any">Any one of · {u.altGroup}</span>}
+            {u.rows.map((c, i) => (
+              <div key={c._key} className="tnd-import-elig-item" title={c.clauseText || ''}>
+                {i > 0 && <span className="tnd-import-elig-or">or</span>}
+                <span className="tnd-import-elig-cat">{c.category}</span>
+                <span className="tnd-import-elig-name">{c.criterionName}</span>
+                <span className={`tnd-import-elig-val${isBlank(c.requiredValue) && c.operator !== 'boolean' ? ' is-blank' : ''}`}>
+                  {criterionValue(c)}
+                </span>
+                {c.sourcePage ? <span className="tnd-import-page">p.{c.sourcePage}</span> : null}
+              </div>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 const seedState = (rows) => {
@@ -206,6 +311,33 @@ export default function TenderImportReviewModal({
       'aria-label': row.label,
     };
 
+    if (row.key === 'eligibilityCriteria') {
+      return <EligibilityPreview criteria={row.parsed} replaces={row.replaces} />;
+    }
+    if (row.key === 'boqItems') {
+      return (
+        <ListPreview
+          count={`${row.parsed.length} schedule row${row.parsed.length === 1 ? '' : 's'}`}
+          warn={row.replaces > 0 && `Applying this replaces the ${row.replaces} BOQ rows already on Rate Analysis.`}
+          items={row.parsed.map((b) => ({
+            lead: b.itemNo,
+            text: b.scope ? `${b.scope} — ${b.description}` : b.description,
+            value: [b.quantity, b.unit].filter(Boolean).join(' '),
+            page: b.page,
+          }))}
+        />
+      );
+    }
+    if (row.key === 'documents') {
+      return (
+        <ListPreview
+          count={`${row.parsed.length} document${row.parsed.length === 1 ? '' : 's'} the tender asks for`}
+          warn={row.replaces > 0
+            && `Applying this replaces the current checklist; rows you have already marked or linked are kept.`}
+          items={row.parsed.map((d) => ({ text: d.documentName, page: d.sourcePage, title: d.notes }))}
+        />
+      );
+    }
     if (row.kind === 'array') {
       return (
         <span className="tnd-import-static">
@@ -278,6 +410,14 @@ export default function TenderImportReviewModal({
             {busy ? 'Reading…' : '✨ Re-read with AI'}
           </button>
         </div>
+        {/* Where each section came from — or why it is empty. A missing BOQ
+            that the tender publishes on its portal should say so, not look
+            like a failed read. */}
+        {(parse.sectionNotes || []).length > 0 && (
+          <ul className="tnd-import-notes">
+            {parse.sectionNotes.map((n) => <li key={n}>{n}</li>)}
+          </ul>
+        )}
 
         {rows.length > 0 && (
           <div className="tnd-import-toolbar">

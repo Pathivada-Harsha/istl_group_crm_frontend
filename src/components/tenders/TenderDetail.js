@@ -17,7 +17,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   computeEligibility, nextStatusForEligibility, statusBadgeClass,
-  blankBoqItem, blankCriterion, genKey,
+  blankBoqItem, blankCriterion, blankDocument, genKey,
 } from '../../services/tenderData';
 import tenderApi from '../../services/tenderApi';
 import TenderBasicInfoTab from './TenderBasicInfoTab';
@@ -26,6 +26,7 @@ import TenderDocumentsTab from './TenderDocumentsTab';
 import TenderBoqTab from './TenderBoqTab';
 import TenderWorkflowTab from './TenderWorkflowTab';
 import TenderSubmissionTab from './TenderSubmissionTab';
+import TenderEmdTab from './TenderEmdTab';
 import TenderResultTab from './TenderResultTab';
 import TenderImportReviewModal from './TenderImportReviewModal';
 
@@ -35,6 +36,7 @@ const TABS = [
   { k: 'documents', l: 'Documents' },
   { k: 'boq', l: 'Rate Analysis & Bid' },
   { k: 'workflow', l: 'Workflow' },
+  { k: 'emd', l: 'EMD' },
   { k: 'submission', l: 'Submission' },
   { k: 'result', l: 'Result' },
 ];
@@ -43,21 +45,40 @@ const TABS = [
 // without them); every downstream (bid-preparation) tab stays LOCKED until the
 // Eligibility check computes to GO. NO_GO and PENDING both keep them locked —
 // overriding a failing criterion (on the Eligibility tab) is the way through.
+// EMD is deliberately NOT gated: money out with a client stays trackable whatever
+// the eligibility state.
 const GATED_TABS = new Set(['documents', 'boq', 'workflow', 'submission', 'result']);
 
 // Turn the rows the user ticked in the review modal into a patch. Only what was
 // ticked is written — including over a value already in the form, because the
 // user looked at both and chose. The child arrays arrive as whole collections.
-function patchFromReview(selection) {
+function patchFromReview(selection, current) {
   const out = {};
   Object.entries(selection || {}).forEach(([k, v]) => {
-    if (k === 'boqItems') {
+    if (k === 'documents') {
+      // The tender's own checklist replaces the generic default list, but a row
+      // someone has already worked on (status set, link or notes filled) is
+      // progress, and survives unless the tender asks for the same document.
+      const incoming = v.map((d) => ({
+        ...blankDocument(d.documentName), notes: d.notes || '', _key: genKey(),
+      }));
+      const names = new Set(incoming.map((d) => d.documentName.trim().toLowerCase()));
+      const worked = (current.documents || []).filter((d) =>
+        (d.status !== 'pending' || (d.link || '').trim() || (d.notes || '').trim())
+        && !names.has((d.documentName || '').trim().toLowerCase()));
+      out.documents = [...incoming, ...worked];
+    } else if (k === 'boqItems') {
       // `page` rides along for the review's provenance line only; it is not part
       // of a BOQ row and must not be saved as one.
       out.boqItems = v.map(({ page, ...r }) => ({ ...blankBoqItem(r.scope || ''), ...r, _key: genKey() }));
     } else if (k === 'eligibilityCriteria') {
-      out.eligibilityCriteria = v.map(
-        (r) => ({ ...blankCriterion(r.category || 'Technical'), ...r, _key: genKey() }));
+      // `note` explains a value the checker blanked; it belongs to the review,
+      // not to the criterion.
+      out.eligibilityCriteria = v.map(({ note, ...r }) => ({
+        ...blankCriterion(r.category || 'Technical'), ...r,
+        altGroup: r.altGroup || '', clauseText: r.clauseText || '', sourcePage: r.sourcePage || '',
+        _key: genKey(),
+      }));
     } else {
       out[k] = v;
     }
@@ -195,7 +216,7 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
   };
 
   const onApplyReview = (selection) => {
-    const changes = patchFromReview(selection);
+    const changes = patchFromReview(selection, tender);
     patch(changes);
     const n = Object.keys(changes).length;
     setImportMsg(n
@@ -328,6 +349,7 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
         {activeTab === 'documents' && <TenderDocumentsTab {...tabProps} />}
         {activeTab === 'boq' && <TenderBoqTab {...tabProps} />}
         {activeTab === 'workflow' && <TenderWorkflowTab {...tabProps} />}
+        {activeTab === 'emd' && <TenderEmdTab {...tabProps} />}
         {activeTab === 'submission' && <TenderSubmissionTab {...tabProps} />}
         {activeTab === 'result' && <TenderResultTab {...tabProps} />}
       </div>

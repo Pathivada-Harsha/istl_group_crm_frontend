@@ -272,8 +272,8 @@ const Analytics = () => {
         <>
           <section className="anl-kpis">
             <KpiCard label="Leads Generated" value={fmtInt(data.leadsGenerated)} accent={SERIES[0]} />
-            <KpiCard label="Leads Won" value={fmtInt(data.leadsWon)} accent={SERIES[1]} />
-            <KpiCard label="Conversion Rate" value={fmtPct(data.conversionRate)} hint="Won of all generated" accent={SERIES[2]} />
+            <KpiCard label="Leads Won" value={fmtInt(data.leadsWon)} hint="Converted in this period" accent={SERIES[1]} />
+            <KpiCard label="Conversion Rate" value={fmtPct(data.conversionRate)} hint="Won ÷ generated in period" accent={SERIES[2]} />
             <KpiCard label="Weighted (Priority)" value={fmtPct(data.weightedConversionRate)} hint="High 3 / Med 2 / Low 1" accent={SERIES[4]} />
             <KpiCard label="Weighted (Subgroup)" value={fmtPct(data.weightedConversionByGroup)} hint="Avg of subgroup rates" accent={SERIES[5]} />
             <KpiCard label="Avg Time to Convert" value={fmtDays(data.avgDaysToConvert)} hint={`n = ${data.convertedSampleSize}`} accent={SERIES[3]} />
@@ -309,11 +309,11 @@ const Analytics = () => {
               );
             })()}
 
-            <Panel title="Status Distribution" subtitle="Where leads sit now"
+            <Panel title="Status Distribution" subtitle="Open: generated in period · Closed: closed in period"
                    onExpand={openModal} render={(m) => <PieChart data={data.byStatus} modal={m} />} />
 
             <Panel title="Conversion by Priority" subtitle="Rate within each tier"
-                   onExpand={openModal} render={() => <RateBars rows={data.byPriority} nameKey="priority" metaFn={r => `${r.won} won of ${r.total} ${DOT} weight ${r.weight}`} />} />
+                   onExpand={openModal} render={() => <RateBars rows={data.byPriority} nameKey="priority" metaFn={r => `${r.won} won ${DOT} ${r.total} generated ${DOT} weight ${r.weight}`} />} />
 
             <Panel title="Conversion by Subgroup" subtitle="Leads in vs converted"
                    onExpand={openModal} render={(m) => <LineChart rows={data.byGroup} modal={m} />} />

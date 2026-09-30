@@ -20,8 +20,23 @@ import tenderApi from '../services/tenderApi';
 import { useAuth } from '../hooks/useAuth';
 import {
   newTender, hydrateTender, TENDER_STATUSES, FINANCIAL_YEARS,
-  boqBidTotal, fmtINR, fmtINRShort, fmtDate, isOverdue, statusBadgeClass,
+  boqBidTotal, fmtINR, fmtINRShort, fmtDate, isOverdue, statusBadgeClass, emdSummary,
 } from '../services/tenderData';
+
+// EMD column: the status, plus what is still out with the client. Red when the
+// tender is closed and the money hasn't come back.
+const emdCell = (t) => {
+  const s = emdSummary(t);
+  if (!s.status) return <span className="tnd-muted">—</span>;
+  const cls = s.refundDue || s.expiring ? 'is-due' : s.blocked > 0 ? 'is-out' : 'is-done';
+  return (
+    <span className={`tnd-emd-pill ${cls}`}
+      title={s.refundDue ? 'Tender closed — EMD not yet returned' : s.expiring ? 'Instrument validity ending' : ''}>
+      {s.refundDue ? 'Refund due' : s.status}
+      {s.blocked > 0 ? ` · ${fmtINRShort(s.blocked)}` : ''}
+    </span>
+  );
+};
 
 // ─── Columns ────────────────────────────────────────────────────────────────
 const ALL_COLUMNS = [
@@ -34,6 +49,7 @@ const ALL_COLUMNS = [
   { key: 'financialYear',    label: 'FY',                sortable: true,  required: false },
   { key: 'bidValue',         label: 'Bid Value',         sortable: true,  required: false },
   { key: 'contractValue',    label: 'Contract Value',    sortable: true,  required: false },
+  { key: 'emd',              label: 'EMD',               sortable: true,  required: false },
   { key: 'deadline',         label: 'Deadline',          sortable: true,  required: false },
   { key: 'status',           label: 'Status',            sortable: true,  required: true  },
   { key: 'project',          label: 'Project',           sortable: false, required: false },
@@ -53,6 +69,7 @@ const sortValue = (t, key) => {
     case 'tender':        return String(t.tenderName || '').toLowerCase();
     case 'bidValue':      return boqBidTotal(t) || 0;
     case 'contractValue': return Number(t.contractValue) || 0;
+    case 'emd':           return emdSummary(t).blocked;
     case 'deadline':      return t.submissionDeadline || '';
     case 'project':       return String(t.projectId || '').toLowerCase();
     default:              return String(t[key] ?? '').toLowerCase();
@@ -293,6 +310,9 @@ export default function Tenders() {
       preparing: preparing.length,
       winRate: decided ? Math.round((won.length / decided) * 100) : 0,
       wonValue: won.reduce((s, t) => s + (Number(t.contractValue) || 0), 0),
+      emdOut: tenders.reduce((s, t) => s + emdSummary(t).blocked, 0),
+      emdOutCount: tenders.filter((t) => emdSummary(t).blocked > 0).length,
+      emdDue: tenders.filter((t) => emdSummary(t).refundDue).length,
     };
   }, [tenders]);
 
@@ -412,6 +432,7 @@ export default function Tenders() {
       );
       case 'bidValue': return <span className="tnd-money">{boqBidTotal(t) > 0 ? fmtINR(boqBidTotal(t)) : '—'}</span>;
       case 'contractValue': return <span className="tnd-money">{t.contractValue ? fmtINR(t.contractValue) : '—'}</span>;
+      case 'emd': return emdCell(t);
       case 'deadline': return (
         <div className="tnd-cell-stack">
           <span className="tnd-deadline-date">{fmtDate(t.submissionDeadline)}</span>
@@ -468,6 +489,9 @@ export default function Tenders() {
     { label: 'Preparing', value: stats.preparing, color: '#2563eb' },
     { label: 'Win Rate', value: `${stats.winRate}%`, color: '#0d9488' },
     { label: 'Won Contract Value', value: fmtINRShort(stats.wonValue), color: '#16a34a' },
+    // Money out with clients, and how many closed tenders still owe it back.
+    { label: `EMD with clients (${stats.emdOutCount})`, value: fmtINRShort(stats.emdOut), color: '#d97706' },
+    { label: 'EMD refunds due', value: stats.emdDue, color: stats.emdDue ? '#dc2626' : '#64748b' },
   ];
 
   const pager = (

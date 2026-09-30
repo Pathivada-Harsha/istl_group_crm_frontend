@@ -5,10 +5,16 @@
 //
 //  Owns tender.eligibilityCriteria. The GO/No-Go value is computed live here and
 //  cached to tender.eligibilityDecision on Save (used by the Workflow pre-fill).
+//
+//  Rows sharing an altGroup are OR-alternatives of one clause ("1 no. 66kV
+//  sub-station OR 5 nos. 33kV …"): they render boxed under "Any one of" and the
+//  box passes as soon as one alternative does. Imported rows carry the tender's
+//  own wording and page, one click away under "Source".
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState } from 'react';
 import {
-  blankCriterion, evaluateCriterion, computeEligibility, OPERATORS, suggestOperator, currentUserLabel,
+  blankCriterion, evaluateCriterion, evaluateUnit, computeEligibility, groupCriteria,
+  OPERATORS, suggestOperator, currentUserLabel,
 } from '../../services/tenderData';
 
 // Sections always offered, even when empty, so there is somewhere to add a
@@ -20,6 +26,12 @@ const OTHER = '__other__';
 export default function TenderEligibilityTab({ tender, setTender }) {
   const [overrideKey, setOverrideKey] = useState(null);
   const [reason, setReason] = useState('');
+  const [openSources, setOpenSources] = useState(() => new Set());
+  const toggleSource = (key) => setOpenSources((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   const criteria = tender.eligibilityCriteria || [];
   const decision = computeEligibility(criteria);
@@ -46,9 +58,27 @@ export default function TenderEligibilityTab({ tender, setTender }) {
   const add = (category) => setTender((prev) => ({
     ...prev, eligibilityCriteria: [...(prev.eligibilityCriteria || []), blankCriterion(category)],
   }));
-  const remove = (key) => setTender((prev) => ({
-    ...prev, eligibilityCriteria: prev.eligibilityCriteria.filter((c) => c._key !== key),
-  }));
+  // Removing an alternative can leave a group of one, which is no longer a
+  // choice — that last row goes back to being an ordinary criterion.
+  const remove = (key) => setTender((prev) => {
+    const gone = prev.eligibilityCriteria.find((c) => c._key === key);
+    let rest = prev.eligibilityCriteria.filter((c) => c._key !== key);
+    if (gone && gone.altGroup) {
+      const sameGroup = (c) => c.altGroup === gone.altGroup && c.category === gone.category;
+      if (rest.filter(sameGroup).length === 1) {
+        rest = rest.map((c) => (sameGroup(c) ? { ...c, altGroup: '' } : c));
+      }
+    }
+    return { ...prev, eligibilityCriteria: rest };
+  });
+  // A new alternative goes straight after the group's last member.
+  const addAlternative = (unit) => setTender((prev) => {
+    const list = [...prev.eligibilityCriteria];
+    const last = unit.rows[unit.rows.length - 1];
+    const at = list.findIndex((c) => c._key === last._key);
+    list.splice(at + 1, 0, { ...blankCriterion(last.category), altGroup: unit.altGroup });
+    return { ...prev, eligibilityCriteria: list };
+  });
 
   // Update a value cell and, while the operator is still the default '≥',
   // auto-pick the operator from the value's shape (yes/no → boolean, number → ≥,
@@ -80,8 +110,10 @@ export default function TenderEligibilityTab({ tender, setTender }) {
   const undoOverride = (key) => upd(key, { override: false, overrideReason: '', overrideBy: '', overrideAt: '' });
 
   // Say how many are outstanding: "some criteria are not yet evaluated" gives no
-  // clue what to go and fix when the rows are further down the page.
-  const countBy = (r) => criteria.filter((c) => !c.override && evaluateCriterion(c) === r).length;
+  // clue what to go and fix when the rows are further down the page. An OR
+  // group counts once — it is one requirement however many ways it can be met.
+  const units = groupCriteria(criteria);
+  const countBy = (r) => units.filter((u) => evaluateUnit(u.rows) === r).length;
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const banner = {
     GO: { cls: 'tnd-elig-go', verdict: 'GO', note: 'All criteria are satisfied (passed or overridden).' },
@@ -131,60 +163,96 @@ export default function TenderEligibilityTab({ tender, setTender }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((c) => {
-                  const failed = !c.override && evaluateCriterion(c) === 'fail';
-                  return (
-                    <tr key={c._key}>
-                      <td>
-                        <input className="tnd-inp" value={c.criterionName}
-                          placeholder="e.g. Average annual turnover"
-                          onChange={(e) => upd(c._key, { criterionName: e.target.value })} />
-                        {c.override && (
-                          <div className="tnd-override-reason">
-                            Overridden: {c.overrideReason || '—'} · {c.overrideBy}{c.overrideAt ? ` · ${c.overrideAt}` : ''}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <input className="tnd-inp" value={c.requiredValue}
-                          disabled={c.operator === 'boolean'}
-                          onChange={(e) => applyValue(c, 'requiredValue', e.target.value)} />
-                      </td>
-                      <td>
-                        {c.operator === 'boolean' ? (
-                          <select className="tnd-inp" value={c.ourValue || ''}
-                            onChange={(e) => upd(c._key, { ourValue: e.target.value })}>
-                            <option value="">—</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
-                          </select>
-                        ) : (
-                          <input className="tnd-inp" value={c.ourValue}
-                            onChange={(e) => applyValue(c, 'ourValue', e.target.value)} />
-                        )}
-                      </td>
-                      <td>
-                        <select className="tnd-inp" value={c.operator}
-                          onChange={(e) => upd(c._key, { operator: e.target.value })}>
-                          {OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                      </td>
-                      <td>{resultBadge(c)}</td>
-                      <td>
-                        <div className="tnd-row-actions">
-                          {failed && <button className="tnd-link-txt" onClick={() => openOverride(c)}>Override</button>}
-                          {c.override && <button className="tnd-link-txt" onClick={() => undoOverride(c._key)}>Undo</button>}
-                          <button className="tnd-icon-x" title="Remove" onClick={() => remove(c._key)}>×</button>
-                        </div>
+                {groupCriteria(rows).map((u) => (u.altGroup ? (
+                  <React.Fragment key={u.key}>
+                    <tr className="tnd-elig-group-head">
+                      <td colSpan={6}>
+                        <span className="tnd-elig-group-label">Any one of</span>
+                        <span className="tnd-elig-group-ref">{u.altGroup}</span>
+                        {unitBadge(u)}
+                        <button className="tnd-link-txt" onClick={() => addAlternative(u)}>＋ Add alternative</button>
                       </td>
                     </tr>
-                  );
-                })}
+                    {u.rows.map((c, i) => (
+                      <React.Fragment key={c._key}>
+                        {i > 0 && (
+                          <tr className="tnd-elig-or-row"><td colSpan={6}><span>or</span></td></tr>
+                        )}
+                        {renderRow(c, true)}
+                      </React.Fragment>
+                    ))}
+                  </React.Fragment>
+                ) : renderRow(u.rows[0], false)))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+    );
+  };
+
+  const unitBadge = (u) => {
+    const r = evaluateUnit(u.rows);
+    return <span className={`tnd-badge tnd-badge-${r}`}>{r}</span>;
+  };
+
+  const renderRow = (c, inGroup) => {
+    const failed = !c.override && evaluateCriterion(c) === 'fail';
+    const sourceOpen = openSources.has(c._key);
+    return (
+      <tr key={c._key} className={inGroup ? 'tnd-elig-alt' : undefined}>
+        <td>
+          <input className="tnd-inp" value={c.criterionName}
+            placeholder="e.g. Average annual turnover"
+            onChange={(e) => upd(c._key, { criterionName: e.target.value })} />
+          {c.override && (
+            <div className="tnd-override-reason">
+              Overridden: {c.overrideReason || '—'} · {c.overrideBy}{c.overrideAt ? ` · ${c.overrideAt}` : ''}
+            </div>
+          )}
+          {/* The tender's own wording: the name above is a summary, and the
+              clause is what a bidder is actually judged against. */}
+          {c.clauseText && (
+            <button type="button" className="tnd-elig-source-btn" aria-expanded={sourceOpen}
+              onClick={() => toggleSource(c._key)}>
+              {sourceOpen ? '▾' : '▸'} Source{c.sourcePage ? ` · p.${c.sourcePage}` : ''}
+            </button>
+          )}
+          {sourceOpen && <blockquote className="tnd-elig-clause">{c.clauseText}</blockquote>}
+        </td>
+        <td>
+          <input className="tnd-inp" value={c.requiredValue}
+            disabled={c.operator === 'boolean'}
+            onChange={(e) => applyValue(c, 'requiredValue', e.target.value)} />
+        </td>
+        <td>
+          {c.operator === 'boolean' ? (
+            <select className="tnd-inp" value={c.ourValue || ''}
+              onChange={(e) => upd(c._key, { ourValue: e.target.value })}>
+              <option value="">—</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          ) : (
+            <input className="tnd-inp" value={c.ourValue}
+              onChange={(e) => applyValue(c, 'ourValue', e.target.value)} />
+          )}
+        </td>
+        <td>
+          <select className="tnd-inp" value={c.operator}
+            onChange={(e) => upd(c._key, { operator: e.target.value })}>
+            {OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </td>
+        <td>{resultBadge(c)}</td>
+        <td>
+          <div className="tnd-row-actions">
+            {failed && <button className="tnd-link-txt" onClick={() => openOverride(c)}>Override</button>}
+            {c.override && <button className="tnd-link-txt" onClick={() => undoOverride(c._key)}>Undo</button>}
+            <button className="tnd-icon-x" title="Remove" onClick={() => remove(c._key)}>×</button>
+          </div>
+        </td>
+      </tr>
     );
   };
 

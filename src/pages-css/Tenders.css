@@ -178,6 +178,36 @@
 .tnd-override-reason { font-size: 11px; color: var(--ct-854d0e, #854d0e); font-style: italic; }
 .tnd-link-txt { border: none; background: none; color: var(--c-2563eb, #2563eb); cursor: pointer; font-size: 11px; font-weight: 600; padding: 0; font-family: inherit; text-decoration: underline; }
 
+/* OR-alternatives: a header row, the options with a left rule, "or" between. */
+.tnd-elig-group-head td {
+  background: var(--c-eff6ff, #eff6ff); border-top: 1px solid var(--c-bfdbfe, #bfdbfe);
+  padding: 7px 10px;
+}
+.tnd-elig-group-head td > * { margin-right: 10px; vertical-align: middle; }
+.tnd-elig-group-label {
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--ct-1e40af, #1e40af);
+}
+.tnd-elig-group-ref { font-size: 11px; color: var(--ct-64748b, #64748b); font-variant-numeric: tabular-nums; }
+.tnd-elig-alt td:first-child { border-left: 3px solid var(--c-bfdbfe, #bfdbfe); }
+.tnd-elig-or-row td {
+  padding: 0 10px; border-left: 3px solid var(--c-bfdbfe, #bfdbfe);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--ct-1d4ed8, #1d4ed8);
+}
+
+/* The clause as the tender words it, one click under the criterion name. */
+.tnd-elig-source-btn {
+  margin-top: 4px; border: none; background: none; padding: 0; cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 600; color: var(--ct-64748b, #64748b);
+}
+.tnd-elig-source-btn:hover { color: var(--ct-2563eb, #2563eb); }
+.tnd-elig-clause {
+  margin: 6px 0 2px; padding: 8px 10px; max-width: 70ch;
+  border-left: 3px solid var(--c-cbd5e1, #cbd5e1); background: var(--c-f8fafc, #f8fafc);
+  font-size: 12px; line-height: 1.5; color: var(--ct-334155, #334155); white-space: normal;
+}
+
 /* ── Rate Analysis & Bid (BOQ) ──────────────────────────────────────────── */
 .tnd-boq-controls {
   display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
@@ -495,6 +525,12 @@
 }
 .tnd-import-banner.ok { background: var(--c-f0fdf4, #f0fdf4); color: var(--ct-065f46, #065f46); }
 .tnd-import-banner.warn { background: var(--c-fffbeb, #fffbeb); color: var(--ct-92400e, #92400e); }
+.tnd-import-notes {
+  margin: 0; padding: 8px 18px 8px 34px;
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
+  font-size: 12px; line-height: 1.5; color: var(--ct-475569, #475569);
+  display: flex; flex-direction: column; gap: 2px;
+}
 .tnd-import-banner .tnd-btn { flex-shrink: 0; }
 
 .tnd-import-toolbar {
@@ -584,6 +620,41 @@ textarea.tnd-import-input { resize: vertical; overflow-y: auto; display: block; 
   color: var(--ct-2563eb, #2563eb); text-decoration: underline;
 }
 
+/* Eligibility row: every criterion it would apply, OR-alternatives boxed. */
+.tnd-import-elig { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tnd-import-elig-warn {
+  font-size: 11px; font-weight: 600; color: var(--ct-92400e, #92400e);
+  background: var(--c-fffbeb, #fffbeb); border: 1px solid var(--c-fde68a, #fde68a);
+  border-radius: 6px; padding: 5px 8px;
+}
+.tnd-import-elig-list {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px;
+  max-height: 260px; overflow-y: auto;
+}
+.tnd-import-elig-list li.is-group {
+  border-left: 3px solid var(--c-bfdbfe, #bfdbfe); background: var(--c-eff6ff, #eff6ff);
+  border-radius: 0 6px 6px 0; padding: 4px 8px;
+}
+.tnd-import-elig-any {
+  display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--ct-1e40af, #1e40af); margin-bottom: 2px;
+}
+.tnd-import-elig-item {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px;
+  font-size: 12px; line-height: 1.45; color: var(--ct-0f172a, #0f172a); cursor: help;
+}
+.tnd-import-elig-or {
+  flex-basis: 100%; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  color: var(--ct-1d4ed8, #1d4ed8);
+}
+.tnd-import-elig-cat {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--ct-64748b, #64748b); min-width: 62px;
+}
+.tnd-import-elig-name { flex: 1 1 200px; min-width: 0; }
+.tnd-import-elig-val { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tnd-import-elig-val.is-blank { font-weight: 500; font-style: italic; color: var(--ct-b45309, #b45309); }
+
 .tnd-import-discarded { font-size: 11px; color: var(--ct-64748b, #64748b); margin-top: 14px; }
 .tnd-import-discarded summary { cursor: pointer; font-weight: 600; }
 .tnd-import-discarded ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
@@ -599,3 +670,19 @@ textarea.tnd-import-input { resize: vertical; overflow-y: auto; display: block; 
   .tnd-import-source { grid-column: 2 / -1; }
   .tnd-import-currentcell { padding-top: 0; }
 }
+
+/* ── EMD tab ─────────────────────────────────────────────────────────────── */
+.tnd-emd-alert {
+  margin: -6px 0 14px; padding: 8px 12px; border-radius: 8px;
+  background: var(--c-fef2f2, #fef2f2); border: 1px solid var(--c-fecaca, #fecaca);
+  color: var(--ct-991b1b, #991b1b); font-size: 12px; font-weight: 600;
+}
+.tnd-emd-warn { margin-top: 4px; font-size: 11px; color: var(--ct-b45309, #b45309); }
+.tnd-emd-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .3px; white-space: nowrap;
+  background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-475569, #475569);
+}
+.tnd-emd-pill.is-out { background: var(--c-fef3c7, #fef3c7); color: var(--ct-92400e, #92400e); }
+.tnd-emd-pill.is-due { background: var(--c-fee2e2, #fee2e2); color: var(--ct-991b1b, #991b1b); }
+.tnd-emd-pill.is-done { background: var(--c-d1fae5, #d1fae5); color: var(--ct-065f46, #065f46); }
