@@ -484,7 +484,17 @@ const PurchaseOrders = () => {
     show: false, title: '', message: '', type: 'confirm',
     onConfirm: null, onCancel: null, confirmText: 'Confirm', cancelText: 'Cancel'
   });
-  const GST_OPTIONS = [0, 5, 12, 18, 28];
+  // 8.9% is the composite solar GST rate order-book lines carry. A rate missing
+  // from this list made the <select> display 0% while the total used 8.9%.
+  const GST_OPTIONS = [0, 5, 8.9, 12, 18, 28];
+  // The options for one line: the standard rates plus whatever rate it carries,
+  // so the dropdown always shows the rate the total is computed with.
+  const gstOptionsFor = (gst) => {
+    const g = parseFloat(gst);
+    return Number.isFinite(g) && !GST_OPTIONS.includes(g) ? [...GST_OPTIONS, g].sort((a, b) => a - b) : GST_OPTIONS;
+  };
+  // An order-book / quotation rate of 0 is a real rate; only a missing one defaults to 18%.
+  const gstOf = (taxPercent) => (taxPercent === null || taxPercent === undefined || taxPercent === '' ? 18 : parseFloat(taxPercent));
 
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -914,7 +924,7 @@ const PurchaseOrders = () => {
           allocatedQty,
           remainingQty,
           quantity: remainingQty,
-          unitPrice: 0, gst: item.taxPercent || 18, lineTotal: 0,
+          unitPrice: 0, gst: gstOf(item.taxPercent), lineTotal: 0,
           selected: remainingQty > 0,
         };
       });
@@ -950,7 +960,7 @@ const PurchaseOrders = () => {
       remainingQty,                       // available to assign
       quantity: remainingQty,             // default to remaining
       unit: item.unit || 'Nos',
-      unitPrice: 0, gst: item.taxPercent || 18, lineTotal: 0, selected: remainingQty > 0
+      unitPrice: 0, gst: gstOf(item.taxPercent), lineTotal: 0, selected: remainingQty > 0
     };
   });
 
@@ -3199,7 +3209,7 @@ const PurchaseOrders = () => {
                                 <td className="po-td" style={{ textAlign: 'center' }}>
                                   <select value={item.gst} onChange={(e) => handleUpdatePOItemGST(index, e.target.value)} disabled={!item.selected}
                                     style={{ width: '100%', padding: '6px 4px', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? __sbg('white') : __sbg('#f1f5f9') }}>
-                                    {GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}
+                                    {gstOptionsFor(item.gst).map(g => <option key={g} value={g}>{g}%</option>)}
                                   </select>
                                 </td>
                                 <td className="po-td po-td-clip" style={{ textAlign: 'right', fontWeight: '600', color: item.selected ? __stc('#059669') : __stc('#94a3b8'), fontSize: '14px' }}>{formatCurrency(computedLineTotal)}</td>

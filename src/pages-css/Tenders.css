@@ -686,3 +686,133 @@ textarea.tnd-import-input { resize: vertical; overflow-y: auto; display: block; 
 .tnd-emd-pill.is-out { background: var(--c-fef3c7, #fef3c7); color: var(--ct-92400e, #92400e); }
 .tnd-emd-pill.is-due { background: var(--c-fee2e2, #fee2e2); color: var(--ct-991b1b, #991b1b); }
 .tnd-emd-pill.is-done { background: var(--c-d1fae5, #d1fae5); color: var(--ct-065f46, #065f46); }
+
+/* ── Excel import review ─────────────────────────────────────────────────
+   Same grid as the PDF review. Each field carries an OK / Warning / Error pill
+   and, on its second line, the sheet it came from and the reason. The child
+   collections expand into an editable table spanning the full row. */
+.tnd-import-status {
+  display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .4px; padding: 2px 6px; border-radius: 5px; white-space: nowrap; cursor: default;
+}
+.tnd-import-status.is-ok { background: var(--c-d1fae5, #d1fae5); color: var(--ct-065f46, #065f46); }
+.tnd-import-status.is-warning { background: var(--c-fef3c7, #fef3c7); color: var(--ct-92400e, #92400e); }
+.tnd-import-status.is-error { background: var(--c-fee2e2, #fee2e2); color: var(--ct-991b1b, #991b1b); }
+.tnd-import-row.is-error { border-left-color: var(--c-dc2626, #dc2626); }
+.tnd-import-reason.is-warning { color: var(--ct-b45309, #b45309); font-weight: 600; }
+.tnd-import-reason.is-error { color: var(--ct-b91c1c, #b91c1c); font-weight: 600; }
+.tnd-import-keep {
+  display: block; margin-top: 2px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .3px; color: var(--ct-64748b, #64748b);
+}
+.tnd-import-toggle-rows { margin-left: 0; align-self: flex-start; }
+.tnd-import-rows-wrap { grid-column: 1 / -1; min-width: 0; }
+.tnd-import-rows { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.tnd-import-rows-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+  display: block; overflow-x: auto;
+}
+.tnd-import-rows-table th {
+  text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--ct-64748b, #64748b); padding: 6px 6px; border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
+  white-space: nowrap;
+}
+.tnd-import-rows-table td { padding: 4px 6px; vertical-align: top; border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9); }
+.tnd-import-rows-table th.is-wide { min-width: 260px; width: 100%; }
+.tnd-import-rows-table th.is-narrow { min-width: 80px; }
+.tnd-import-rows-table th:not(.is-wide):not(.is-narrow):not(.tnd-import-rows-num):not(.tnd-import-rows-status) { min-width: 130px; }
+.tnd-import-rows-table .tnd-import-input { padding: 5px 7px; font-size: 12px; }
+.tnd-import-rows-num { width: 28px; color: var(--ct-94a3b8, #94a3b8); font-variant-numeric: tabular-nums; padding-top: 10px !important; }
+.tnd-import-rows-status { width: 70px; padding-top: 9px !important; }
+.tnd-import-rows-table tr.is-error td:first-child { box-shadow: inset 3px 0 0 var(--c-dc2626, #dc2626); }
+.tnd-import-rows-table tr.is-warning td:first-child { box-shadow: inset 3px 0 0 var(--c-d97706, #d97706); }
+.tnd-import-rows-issues td {
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9); padding-top: 0 !important;
+  font-size: 11px; color: var(--ct-b45309, #b45309);
+}
+
+/* ── Excel import: checked against the tender PDF ─────────────────────────
+   Verified carries the PDF's own words and page; Unverified asks for an
+   explicit "I checked this"; Mismatch is an error (the red status pill). */
+.tnd-verify-pill {
+  display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .4px; padding: 2px 6px; border-radius: 5px; white-space: nowrap; cursor: default;
+  border: 1px solid transparent;
+}
+.tnd-verify-pill.is-verified { background: var(--c-ecfdf5, #ecfdf5); color: var(--ct-065f46, #065f46); border-color: var(--c-a7f3d0, #a7f3d0); }
+.tnd-verify-pill.is-unverified { background: var(--c-fffbeb, #fffbeb); color: var(--ct-92400e, #92400e); border-color: var(--c-fde68a, #fde68a); }
+.tnd-verify-pill.is-mismatch { background: var(--c-fef2f2, #fef2f2); color: var(--ct-991b1b, #991b1b); border-color: var(--c-fecaca, #fecaca); }
+.tnd-verify-note { display: block; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.tnd-verify-note.is-verified { color: var(--ct-065f46, #065f46); font-style: italic; }
+.tnd-verify-note.is-unverified { color: var(--ct-b45309, #b45309); }
+.tnd-verify-source { font-size: 11px !important; border-style: dashed !important; }
+.tnd-verify-ack {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+  color: var(--ct-92400e, #92400e); cursor: pointer; margin-top: 2px;
+}
+.tnd-import-rows-status .tnd-verify-ack { display: flex; margin-top: 4px; font-weight: 500; }
+.tnd-verify-bulk {
+  padding: 6px 8px; border-radius: 6px; line-height: 1.35;
+  background: var(--c-fffbeb, #fffbeb); border: 1px solid var(--c-fde68a, #fde68a);
+}
+.tnd-verify-counts { display: block; font-size: 11px; color: var(--ct-64748b, #64748b); }
+.tnd-verify-filter {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600;
+  color: var(--ct-475569, #475569); cursor: pointer; margin-right: 6px;
+}
+.tnd-import-rows-table th.is-source { min-width: 240px; }
+.tnd-import-rows-table th.is-source,
+.tnd-import-rows-table td.is-source .tnd-import-input { border-color: var(--c-fde68a, #fde68a); }
+
+/* The two-file picker in front of an Excel import. */
+.tnd-xl-dialog { max-width: 560px; width: 100%; }
+.tnd-xl-dialog-lead { font-size: 13px; color: var(--ct-475569, #475569); margin: 0 0 14px; line-height: 1.5; }
+.tnd-xl-dialog-files { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.tnd-xl-file {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 8px; background: var(--c-f8fafc, #f8fafc);
+}
+.tnd-xl-file-step {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; background: var(--c-dbeafe, #dbeafe); color: var(--ct-1e40af, #1e40af);
+}
+.tnd-xl-file-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tnd-xl-file-label { font-size: 12px; font-weight: 700; color: var(--ct-0f172a, #0f172a); }
+.tnd-xl-file-name { font-size: 12px; color: var(--ct-334155, #334155); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tnd-xl-file-name.is-empty { color: var(--ct-94a3b8, #94a3b8); }
+.tnd-xl-file-stored { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ct-475569, #475569); cursor: pointer; }
+@media (max-width: 520px) {
+  .tnd-xl-file { flex-wrap: wrap; }
+  .tnd-xl-file .tnd-btn { margin-left: 36px; }
+}
+
+/* ── Eligibility: tiered tenders (Category A / B / C) ── */
+.tnd-elig-tier-strip { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.tnd-elig-tier-chip {
+  font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1px solid transparent;
+}
+.tnd-elig-tier-chip.is-pass { background: var(--c-ecfdf5, #ecfdf5); color: var(--ct-065f46, #065f46); border-color: var(--c-a7f3d0, #a7f3d0); }
+.tnd-elig-tier-chip.is-fail { background: var(--c-fef2f2, #fef2f2); color: var(--ct-991b1b, #991b1b); border-color: var(--c-fecaca, #fecaca); }
+.tnd-elig-tier-chip.is-pending { background: var(--c-fffbeb, #fffbeb); color: var(--ct-92400e, #92400e); border-color: var(--c-fde68a, #fde68a); }
+.tnd-elig-group-title {
+  margin: 18px 0 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--ct-64748b, #64748b);
+}
+.tnd-elig-tier { border-left: 3px solid var(--c-e2e8f0, #e2e8f0); padding-left: 10px; margin-bottom: 6px; }
+.tnd-elig-tier.is-pass { border-left-color: var(--c-16a34a, #16a34a); }
+.tnd-elig-tier.is-fail { border-left-color: var(--c-dc2626, #dc2626); }
+.tnd-elig-tier.is-pending { border-left-color: var(--c-d97706, #d97706); }
+.tnd-elig-tier-inp { margin-top: 4px; font-size: 11px !important; padding: 4px 7px !important; max-width: 240px; }
+
+/* ── List: EMD Valid Till lapsed, and the EMD/date fields on grid cards ── */
+.tnd-date-lapsed { color: var(--ct-dc2626, #dc2626); font-weight: 700; }
+.tnd-card-fields {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px;
+  margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--c-e2e8f0, #e2e8f0);
+}
+.tnd-card-field { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tnd-card-field-label {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--ct-94a3b8, #94a3b8);
+}
+.tnd-card-field-value { font-size: 12px; color: var(--ct-0f172a, #0f172a); overflow: hidden; text-overflow: ellipsis; }

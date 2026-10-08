@@ -11,6 +11,12 @@
 //  A "View PDF" button opens the stored (or freshly-picked) file in an iframe
 //  modal, mirroring OrderBook's attached-PO viewer.
 //
+//  The Excel template is the manual-assist path: "Excel Template" downloads a
+//  workbook pre-filled with this tender (for an LLM to complete from the PDF),
+//  and "Import from Excel" reads a filled one into the same review modal. That
+//  review's confirm is "Apply & Save", and the save carries the file's name so
+//  the server records the import in the tender's history.
+//
 //  Tab order: Basic Info → Eligibility → Documents → Rate Analysis & Bid →
 //  Workflow → Submission → Result.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -29,6 +35,7 @@ import TenderSubmissionTab from './TenderSubmissionTab';
 import TenderEmdTab from './TenderEmdTab';
 import TenderResultTab from './TenderResultTab';
 import TenderImportReviewModal from './TenderImportReviewModal';
+import TenderExcelImportDialog from './TenderExcelImportDialog';
 
 const TABS = [
   { k: 'basic', l: 'Basic Info' },
@@ -68,15 +75,17 @@ function patchFromReview(selection, current) {
         && !names.has((d.documentName || '').trim().toLowerCase()));
       out.documents = [...incoming, ...worked];
     } else if (k === 'boqItems') {
-      // `page` rides along for the review's provenance line only; it is not part
-      // of a BOQ row and must not be saved as one.
-      out.boqItems = v.map(({ page, ...r }) => ({ ...blankBoqItem(r.scope || ''), ...r, _key: genKey() }));
+      // `page` / `sourceText` ride along for the review's provenance only; they
+      // are not part of a BOQ row and must not be saved as one.
+      out.boqItems = v.map(({ page, sourceText, ...r }) => ({ ...blankBoqItem(r.scope || ''), ...r, _key: genKey() }));
     } else if (k === 'eligibilityCriteria') {
-      // `note` explains a value the checker blanked; it belongs to the review,
-      // not to the criterion.
-      out.eligibilityCriteria = v.map(({ note, ...r }) => ({
+      // `note` explains a value the checker blanked and `sourceText` is the
+      // spreadsheet's quote; both belong to the review. A verified row brings
+      // the PDF's own clause and page instead (clauseText / sourcePage).
+      out.eligibilityCriteria = v.map(({ note, sourceText, ...r }) => ({
         ...blankCriterion(r.category || 'Technical'), ...r,
-        altGroup: r.altGroup || '', clauseText: r.clauseText || '', sourcePage: r.sourcePage || '',
+        altGroup: r.altGroup || '', tier: r.tier || '',
+        clauseText: r.clauseText || '', sourcePage: r.sourcePage || '',
         _key: genKey(),
       }));
     } else {
@@ -86,7 +95,9 @@ function patchFromReview(selection, current) {
   return out;
 }
 
-export default function TenderDetail({ initial, isNew, canCreate = true, canEdit = true, onCreate, onUpdate, onBack }) {
+export default function TenderDetail({
+  initial, isNew, initialExcelFile = null, canCreate = true, canEdit = true, onCreate, onUpdate, onBack,
+}) {
   const [tender, setTender] = useState(initial);
   const [isNewState, setIsNewState] = useState(isNew);
   const [activeTab, setActiveTab] = useState('basic');   // useState only — no browser storage
@@ -106,6 +117,18 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
   const [viewer, setViewer] = useState({ open: false, loading: false, url: '', err: '' });
   const viewerBlobRef = useRef(null);                    // objectURL to revoke on close
 
+  // ── Excel template state ──
+  // An import is a review like the PDF one, but its confirm button saves. The
+  // import's provenance rides along on that save (and on a retry, if the save
+  // fails) so the server can record it in the tender's history.
+  const pendingImportRef = useRef(null);                 // { importSource, importFileName, importSummary, importBulkAcks }
+  const autoImportedRef = useRef(false);
+  const [excelBusy, setExcelBusy] = useState(false);
+  const [excelDialog, setExcelDialog] = useState(false);
+  // `pdf` is the tender PDF picked with the Excel; it becomes the tender's
+  // source PDF when the import is applied.
+  const [excelReview, setExcelReview] = useState({ open: false, result: null, fileName: '', pdf: null });
+
   const patch = (changes) => setTender((prev) => ({ ...prev, ...changes }));
 
   const flashSaved = () => {
@@ -121,11 +144,19 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
     setSaving(true);
     setFlash('');
     try {
+      const payload = pendingImportRef.current ? { ...finalized, ...pendingImportRef.current } : finalized;
       const saved = isNewState
-        ? await onCreate(finalized)
-        : await onUpdate(finalized.id, finalized);
+        ? await onCreate(payload)
+        : await onUpdate(finalized.id, payload);
+      pendingImportRef.current = null;
       const savedId = (saved && saved.id != null) ? saved.id : finalized.id;
-      if (savedId != null) setTender((prev) => ({ ...prev, id: savedId }));
+      // The server can add history entries of its own (an Excel import); adopt
+      // its log so the next whole-object save doesn't drop them.
+      setTender((prev) => ({
+        ...prev,
+        ...(savedId != null ? { id: savedId } : {}),
+        ...(saved && Array.isArray(saved.approvalLog) ? { approvalLog: saved.approvalLog } : {}),
+      }));
       if (isNewState) setIsNewState(false);
 
       // Store the just-imported PDF now that we have an id (OrderBook's
@@ -231,6 +262,70 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
     setImportMsg('Import cancelled — no field was changed');
   };
 
+  // ── Excel: template download (pre-filled) and import → review → Apply & Save ──
+  const onDownloadTemplate = async () => {
+    setExcelBusy(true);
+    setImportMsg('');
+    try {
+      await tenderApi.downloadExcelTemplate(tender);
+    } catch (err) {
+      setImportMsg(err.message || 'Could not download the template');
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
+  // { excel, pdf, useStored }: the filled template plus the PDF to check it
+  // against — a freshly picked one, or the one this tender already stores.
+  const runExcelImport = async ({ excel, pdf, useStored }) => {
+    setExcelBusy(true);
+    setImportMsg('');
+    try {
+      const result = await tenderApi.importExcel({
+        file: excel, pdf, tenderId: useStored && !isNewState ? tender.id : null,
+      });
+      setExcelDialog(false);
+      setExcelReview({ open: true, result, fileName: excel.name, pdf: pdf || null });
+    } catch (err) {
+      setImportMsg(err.message || 'Import failed');
+      setExcelDialog(false);
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
+  // Opened from the list's "Import from Excel": read the files straight away.
+  useEffect(() => {
+    if (initialExcelFile && !autoImportedRef.current) {
+      autoImportedRef.current = true;
+      runExcelImport(initialExcelFile);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // `bulkAcks`: [{ table, rows }] for every table whose unverified rows were
+  // confirmed with one tick — the server writes each into the history.
+  const onApplyExcel = (selection, summary, bulkAcks = []) => {
+    pendingImportRef.current = {
+      importSource: 'excel', importFileName: excelReview.fileName, importSummary: summary,
+      importBulkAcks: bulkAcks,
+    };
+    const next = { ...tender, ...patchFromReview(selection, tender) };
+    if (excelReview.pdf) {
+      // The PDF the values were checked against becomes the tender's own.
+      pendingPdfRef.current = excelReview.pdf;
+      next.sourcePdfName = excelReview.pdf.name;
+    }
+    setExcelReview({ open: false, result: null, fileName: '', pdf: null });
+    setImportMsg('');
+    commit(next);
+  };
+
+  const onCancelExcel = () => {
+    setExcelReview({ open: false, result: null, fileName: '', pdf: null });
+    setImportMsg('Excel import cancelled — nothing was changed');
+  };
+
   // ── viewer: blob for a stored tender, or the local file if not yet saved ──
   const revokeViewerBlob = () => {
     if (viewerBlobRef.current) { URL.revokeObjectURL(viewerBlobRef.current); viewerBlobRef.current = null; }
@@ -300,6 +395,23 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
               👁 View PDF
             </button>
           )}
+
+          <button
+            className="tnd-btn"
+            onClick={onDownloadTemplate}
+            disabled={excelBusy}
+            title="Download the Excel template pre-filled with this tender's current values"
+          >
+            ⬇ Excel Template
+          </button>
+          <button
+            className="tnd-btn"
+            onClick={() => setExcelDialog(true)}
+            disabled={excelBusy || saving || !canSave}
+            title={!canSave ? 'You do not have permission to edit tenders' : 'Import a filled template with its tender PDF — you review it before anything is saved'}
+          >
+            {excelBusy ? 'Reading…' : '📥 Import from Excel'}
+          </button>
 
           <button
             className="tnd-btn tnd-btn-primary"
@@ -390,6 +502,30 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
           onApply={onApplyReview}
           onReread={onRereadWithAi}
           onCancel={onCancelReview}
+        />
+      )}
+
+      {excelDialog && (
+        <TenderExcelImportDialog
+          // A saved tender's stored PDF can be reused; one picked earlier in this
+          // session (not yet uploaded) is offered as the default.
+          storedPdfName={!isNewState && tender.hasSourcePdf && !pendingPdfRef.current ? tender.sourcePdfName || 'stored PDF' : ''}
+          pendingPdf={pendingPdfRef.current}
+          busy={excelBusy}
+          onImport={runExcelImport}
+          onCancel={() => setExcelDialog(false)}
+        />
+      )}
+
+      {excelReview.open && excelReview.result && (
+        <TenderImportReviewModal
+          parse={excelReview.result}
+          tender={tender}
+          isNew={isNewState}
+          fileName={excelReview.fileName}
+          busy={saving}
+          onApply={onApplyExcel}
+          onCancel={onCancelExcel}
         />
       )}
     </div>

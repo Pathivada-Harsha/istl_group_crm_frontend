@@ -413,7 +413,8 @@ const InvoicesManagementPage = () => {
         description: item.itemName || '',
         quantity: remainingQty,
         unitPrice: parseFloat(item.unitPrice) || 0,
-        taxPercent: parseFloat(item.taxPercent) || 18,
+        // 0% is a real rate; only a missing one falls back to 18%.
+        taxPercent: item.taxPercent != null && item.taxPercent !== '' ? parseFloat(item.taxPercent) : 18,
         unitType: normalizeUnit(item.unit),
         orderBookItemId: item.id,
         maxQty: remainingQty,
@@ -435,18 +436,22 @@ const InvoicesManagementPage = () => {
   });
 
   const selectOrderBookItem = (index, item) => {
-    const newItems = [...formData.items];
-    newItems[index] = {
-      ...newItems[index],
-      description: item.itemName,
-      quantity: item.quantity || 1,
-      unitPrice: item.unitPrice || 0,
-      taxPercent: item.taxPercent || 18,
-      unitType: normalizeUnit(item.unit),
-      orderBookItemId: item.id
-    };
-
-    setFormData({ ...formData, items: newItems });
+    // Functional update: the pick must land on the latest items, not on a
+    // copy captured when the dropdown rendered.
+    setFormData(prev => {
+      const newItems = [...prev.items];
+      newItems[index] = {
+        ...newItems[index],
+        description: item.itemName,
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice || 0,
+        // 0% is a real rate; only a missing one falls back to 18%.
+        taxPercent: item.taxPercent != null && item.taxPercent !== '' ? Number(item.taxPercent) : 18,
+        unitType: normalizeUnit(item.unit),
+        orderBookItemId: item.id
+      };
+      return { ...prev, items: newItems };
+    });
     setShowDropdown(prev => ({ ...prev, [index]: false }));
     setFilteredItems(prev => ({ ...prev, [index]: [] }));
   };
@@ -566,7 +571,10 @@ const InvoicesManagementPage = () => {
   // Click outside handler to close dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (!event.target.closest('.Invoices-page-form-group')) {
+      // The line-item description lives in .Invoices-page-ifield, not a form
+      // group; without it here, pressing on a suggestion closed the dropdown
+      // before its click could fire, and the pick was lost.
+      if (!event.target.closest('.Invoices-page-form-group, .Invoices-page-ifield, .invoice-item-dropdown')) {
         setShowDropdown({});
       }
     };
@@ -2501,7 +2509,9 @@ const fetchStats = async () => {
                         {showDropdown[index] && filteredItems[index]?.length > 0 && (
                           <div className="invoice-item-dropdown">
                             {filteredItems[index].map((obItem) => (
-                              <div key={obItem.id} onClick={() => selectOrderBookItem(index, obItem)}
+                              <div key={obItem.id}
+                                // mousedown, not click: the input's blur / outside-click must not win the race.
+                                onMouseDown={(e) => { e.preventDefault(); selectOrderBookItem(index, obItem); }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                               >

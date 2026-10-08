@@ -866,13 +866,10 @@ const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals 
 
   useEffect(() => {
     const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
-    fetch(`${apiBase}/proposals/getAll?page=0&size=100&groupName=${lead.groupName || ''}&subGroupName=${lead.subGroupName || ''}`, { credentials: 'include', headers })
+    fetch(`${apiBase}/proposals/by-lead/${lead.id}`, { credentials: 'include', headers })
       .then(r => r.json())
       .then(data => {
-        if (data.success) {
-          const all = data.data.content || [];
-          setProposals(all.filter(p => p.leadId === lead.id));
-        }
+        if (data.success) setProposals(data.data || []);
       })
       .catch(() => { })
       .finally(() => setLoading(false));
@@ -881,7 +878,7 @@ const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals 
   const totalValue = proposals.reduce((s, p) => s + (parseFloat(p.totalValue) || 0), 0);
   const approved = proposals.filter(p => p.status === 'Approved').length;
   const latestStatus = proposals.length > 0
-    ? proposals.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0].status
+    ? [...proposals].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0].status
     : null;
 
   const getPropStatusClass = s => ({ Draft: 'ld-ps-draft', Sent: 'ld-ps-sent', Approved: 'ld-ps-approved', Rejected: 'ld-ps-rejected', 'On Hold': 'ld-ps-hold' }[s] || 'ld-ps-draft');
@@ -958,12 +955,11 @@ const TenderDocumentsTab = ({ lead, currentUser, permissions, showSuccess, showE
   const fetchDocs = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/proposals/getAll?page=0&size=100&groupName=${lead.groupName || ''}&subGroupName=${lead.subGroupName || ''}`, { credentials: 'include', headers });
+      const res = await fetch(`${API_BASE_URL}/proposals/by-lead/${lead.id}`, { credentials: 'include', headers });
       const data = await res.json();
       if (data.success) {
-        const all = data.data.content || [];
-        // Only show docs for this lead that are "offline" (i.e. actual uploaded PDFs)
-        setDocs(all.filter(p => (p.leadId === lead.id || p.leadCode === lead.leadCode) && p.offlinePdfName));
+        // Only show docs that are "offline" (i.e. actual uploaded PDFs)
+        setDocs((data.data || []).filter(p => p.offlinePdfName));
       }
     } catch { } finally { setLoading(false); }
   };
@@ -1285,12 +1281,9 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
   const fetchProposals = useCallback(async () => {
     setLoadingProposals(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/proposals/getAll?page=0&size=50&groupName=${lead.groupName || ''}&subGroupName=${lead.subGroupName || ''}`, { credentials: 'include', headers });
+      const res = await fetch(`${API_BASE_URL}/proposals/by-lead/${lead.id}`, { credentials: 'include', headers });
       const data = await res.json();
-      if (data.success) {
-        const all = data.data.content || [];
-        setProposals(all.filter(p => p.leadId === lead.id || p.leadCode === lead.leadCode));
-      }
+      if (data.success) setProposals(data.data || []);
     } catch { showError('Failed to load proposals'); }
     finally { setLoadingProposals(false); }
   }, [lead.id]);

@@ -9,6 +9,9 @@
 //
 //  Not gated on eligibility: money that is out with a client must stay
 //  trackable whatever the tender's state.
+//
+//  The tender / processing fee has its own section: it is a separate charge
+//  (often non-refundable) and never part of the EMD figures above it.
 // ─────────────────────────────────────────────────────────────────────────────
 import React from 'react';
 import FilterSelect from '../Dropdowns/FilterSelect';
@@ -124,6 +127,27 @@ export default function TenderEmdTab({ tender, patch }) {
           {field('Account Number', 'emdBeneficiaryAccount')}
           {field('IFSC', 'emdBeneficiaryIfsc', {
             onChange: (v) => patch({ emdBeneficiaryIfsc: v.toUpperCase() }),
+          })}
+        </div>
+      </div>
+
+      {/* The tender / processing fee is its own charge, not part of the EMD:
+          a tender may ask for either, both or neither. */}
+      <div className="leads-enquiries-form-section">
+        <h3 className="leads-enquiries-form-section-title">Tender / Processing Fee</h3>
+        <p className="tnd-hint" style={{ marginTop: 0 }}>
+          {Number(tender.feeAmount) > 0
+            ? `${fmtINR(tender.feeAmount)}${tender.feeRefundable === 'No' ? ', non-refundable' : tender.feeRefundable === 'Yes' ? ', refundable' : ''} — separate from the EMD.`
+            : 'The fee some tenders charge to participate (document / processing fee). Separate from the EMD.'}
+        </p>
+        <div className="leads-enquiries-form-grid">
+          {field('Fee Amount (₹)', 'feeAmount', { type: 'number' })}
+          {select('Refundable?', 'feeRefundable', ['Yes', 'No'], 'Not stated')}
+          {field('Beneficiary / In Favour Of', 'feeBeneficiaryName', { placeholder: tender.issuingAuthority || '' })}
+          {field('Bank & Branch', 'feeBeneficiaryBank')}
+          {field('Account Number', 'feeBeneficiaryAccount')}
+          {field('IFSC', 'feeBeneficiaryIfsc', {
+            onChange: (v) => patch({ feeBeneficiaryIfsc: v.toUpperCase() }),
           })}
         </div>
       </div>

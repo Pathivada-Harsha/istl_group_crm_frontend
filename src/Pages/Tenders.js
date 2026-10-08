@@ -16,16 +16,19 @@ import '../pages-css/Leads-Enquire.css';   // reuse list/table/badge/card/pagina
 import '../pages-css/Tenders.css';          // tender-only widgets
 import FilterSelect from '../components/Dropdowns/FilterSelect';
 import TenderDetail from '../components/tenders/TenderDetail';
+import TenderExcelImportDialog from '../components/tenders/TenderExcelImportDialog';
+import { exportTenders } from '../components/tenders/tenderExport';
 import tenderApi from '../services/tenderApi';
 import { useAuth } from '../hooks/useAuth';
 import {
   newTender, hydrateTender, TENDER_STATUSES, FINANCIAL_YEARS,
   boqBidTotal, fmtINR, fmtINRShort, fmtDate, isOverdue, statusBadgeClass, emdSummary,
+  emdValidTillLapsed,
 } from '../services/tenderData';
 
-// EMD column: the status, plus what is still out with the client. Red when the
-// tender is closed and the money hasn't come back.
-const emdCell = (t) => {
+// EMD Status column: the status, plus what is still out with the client. Red
+// when the tender is closed and the money hasn't come back.
+const emdStatusCell = (t) => {
   const s = emdSummary(t);
   if (!s.status) return <span className="tnd-muted">—</span>;
   const cls = s.refundDue || s.expiring ? 'is-due' : s.blocked > 0 ? 'is-out' : 'is-done';
@@ -49,8 +52,16 @@ const ALL_COLUMNS = [
   { key: 'financialYear',    label: 'FY',                sortable: true,  required: false },
   { key: 'bidValue',         label: 'Bid Value',         sortable: true,  required: false },
   { key: 'contractValue',    label: 'Contract Value',    sortable: true,  required: false },
-  { key: 'emd',              label: 'EMD',               sortable: true,  required: false },
+  // What the tender demands (emdAmount)…
+  { key: 'emd',              label: 'EMD Required',      sortable: true,  required: false },
+  // …and what actually happened to it.
+  { key: 'emdStatus',        label: 'EMD Status',        sortable: true,  required: false },
+  { key: 'emdPaidAmount',    label: 'EMD Paid Amount',   sortable: true,  required: false },
+  { key: 'emdPaidDate',      label: 'EMD Paid Date',     sortable: true,  required: false },
+  { key: 'emdValidTill',     label: 'EMD Valid Till',    sortable: true,  required: false },
+  { key: 'emdRefundDate',    label: 'EMD Refund Date',   sortable: true,  required: false },
   { key: 'deadline',         label: 'Deadline',          sortable: true,  required: false },
+  { key: 'technicalOpeningDate', label: 'Technical Opening Date', sortable: true, required: false },
   { key: 'status',           label: 'Status',            sortable: true,  required: true  },
   { key: 'project',          label: 'Project',           sortable: false, required: false },
   { key: 'actions',          label: 'Actions',           sortable: false, required: true  },
@@ -58,18 +69,70 @@ const ALL_COLUMNS = [
 const DEFAULT_ORDER = ALL_COLUMNS.map((c) => c.key);
 // Keep the default table close to what it showed before — the rest are one
 // click away in the Columns chooser.
+const HIDDEN_BY_DEFAULT = [
+  'clientCompany', 'location', 'financialYear',
+  'emdPaidDate', 'emdValidTill', 'emdRefundDate', 'technicalOpeningDate',
+];
 const DEFAULT_VISIBLE = ALL_COLUMNS
-  .filter((c) => !['clientCompany', 'location', 'financialYear'].includes(c.key))
+  .filter((c) => !HIDDEN_BY_DEFAULT.includes(c.key))
   .map((c) => c.key);
 
+// Grid cards show these when their column is switched on and they hold a value.
+const CARD_FIELDS = ['emd', 'emdStatus', 'emdPaidAmount', 'emdPaidDate', 'emdValidTill', 'emdRefundDate', 'technicalOpeningDate'];
+const hasCardValue = (t, key) => (key === 'emdStatus'
+  ? !!emdSummary(t).status
+  : !!t[key === 'emd' ? 'emdAmount' : key]);
+
+const MONEY_COLUMNS = new Set(['emd', 'emdPaidAmount']);
+const DATE_COLUMNS = new Set(['emdPaidDate', 'emdValidTill', 'emdRefundDate', 'technicalOpeningDate']);
+const COLUMN_FIELD = { emd: 'emdAmount' };   // column key → tender field, where they differ
+
+// ── Column layout persistence ───────────────────────────────────────────────
+// Order + visibility live in localStorage. `known` records which columns
+// existed when the layout was saved, so a column added since then appears at
+// its default position with its default visibility instead of staying hidden.
+const COLUMNS_STORAGE_KEY = 'tenders_columns_v1';
+
+const loadColumnLayout = () => {
+  const fallback = { order: DEFAULT_ORDER, visible: DEFAULT_VISIBLE };
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(COLUMNS_STORAGE_KEY) || 'null'); } catch { return fallback; }
+  if (!saved || !Array.isArray(saved.order) || !Array.isArray(saved.visible)) return fallback;
+  const known = new Set(Array.isArray(saved.known) ? saved.known : saved.order);
+  const order = saved.order.filter((k) => DEFAULT_ORDER.includes(k));
+  DEFAULT_ORDER.forEach((k, i) => {
+    if (order.includes(k)) return;
+    // Insert after the nearest column that precedes it in the default order.
+    const before = DEFAULT_ORDER.slice(0, i).reverse().find((p) => order.includes(p));
+    order.splice(before ? order.indexOf(before) + 1 : 0, 0, k);
+  });
+  const visible = [
+    ...saved.visible.filter((k) => DEFAULT_ORDER.includes(k)),
+    ...DEFAULT_VISIBLE.filter((k) => !known.has(k)),
+  ];
+  return { order, visible };
+};
+
+const saveColumnLayout = (order, visible) => {
+  try {
+    localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify({ order, visible, known: DEFAULT_ORDER }));
+  } catch { /* storage unavailable — the layout just won't survive a reload */ }
+};
+
 // Comparable value per column for client-side sorting (numbers stay numeric so
-// money/dates sort properly rather than lexically).
+// money/dates sort properly rather than lexically). Blank money/dates are null
+// and always sort last, whichever the direction.
 const sortValue = (t, key) => {
+  if (MONEY_COLUMNS.has(key)) {
+    const v = t[COLUMN_FIELD[key] || key];
+    return v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+  }
+  if (DATE_COLUMNS.has(key)) return t[key] ? String(t[key]).slice(0, 10) : null;
   switch (key) {
     case 'tender':        return String(t.tenderName || '').toLowerCase();
     case 'bidValue':      return boqBidTotal(t) || 0;
     case 'contractValue': return Number(t.contractValue) || 0;
-    case 'emd':           return emdSummary(t).blocked;
+    case 'emdStatus':     return String(emdSummary(t).status || '').toLowerCase() || null;
     case 'deadline':      return t.submissionDeadline || '';
     case 'project':       return String(t.projectId || '').toLowerCase();
     default:              return String(t[key] ?? '').toLowerCase();
@@ -202,6 +265,7 @@ export default function Tenders() {
   // tender getting its server id doesn't remount and reset the active tab)
   const [view, setView] = useState('list');
   const detailInitialRef = useRef(null);
+  const excelFileRef = useRef(null);       // { excel, pdf } to import into the new tender, if any
   const [detailKey, setDetailKey] = useState(0);
   const [detailIsNew, setDetailIsNew] = useState(false);
 
@@ -218,8 +282,9 @@ export default function Tenders() {
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('tenders_view_mode') || 'table');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [columnOrder, setColumnOrder] = useState(DEFAULT_ORDER);
-  const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
+  const [columnOrder, setColumnOrder] = useState(() => loadColumnLayout().order);
+  const [visibleColumns, setVisibleColumns] = useState(() => loadColumnLayout().visible);
+  useEffect(() => { saveColumnLayout(columnOrder, visibleColumns); }, [columnOrder, visibleColumns]);
   const [sortColumn, setSortColumn] = useState('');
   const [sortDirection, setSortDirection] = useState('asc');
   const dragIndexRef = useRef(null);
@@ -240,8 +305,29 @@ export default function Tenders() {
   };
   useEffect(() => { load(); }, []);
 
-  const openTender = (t) => { detailInitialRef.current = t; setDetailIsNew(false); setDetailKey((k) => k + 1); setView('detail'); };
-  const openNew = () => { detailInitialRef.current = newTender(); setDetailIsNew(true); setDetailKey((k) => k + 1); setView('detail'); };
+  const openTender = (t) => { detailInitialRef.current = t; excelFileRef.current = null; setDetailIsNew(false); setDetailKey((k) => k + 1); setView('detail'); };
+  const openNew = (excelFile = null) => {
+    detailInitialRef.current = newTender();
+    excelFileRef.current = excelFile;
+    setDetailIsNew(true); setDetailKey((k) => k + 1); setView('detail');
+  };
+
+  // ── Excel template: blank download / import into a new tender ──────────
+  // The import never saves on its own: the file opens a new tender whose review
+  // screen shows what was read, and only "Apply & Save" there writes anything.
+  const [excelDialog, setExcelDialog] = useState(false);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const downloadTemplate = async () => {
+    setTemplateBusy(true);
+    try { await tenderApi.downloadExcelTemplate(); }
+    catch (e) { setNotice({ kind: 'error', text: e.message || 'Could not download the template.' }); }
+    finally { setTemplateBusy(false); }
+  };
+  // { excel, pdf }: both files go to the new tender, which reads them straight away.
+  const onExcelImport = (files) => {
+    setExcelDialog(false);
+    openNew(files);
+  };
   const backToList = () => { setView('list'); load(); };
 
   const createTender = async (working) => {
@@ -331,7 +417,12 @@ export default function Tenders() {
   const sortedRows = useMemo(() => {
     if (!sortColumn) return rows;
     const dir = sortDirection === 'asc' ? 1 : -1;
-    return [...rows].sort((x, y) => dir * cmp(sortValue(x, sortColumn), sortValue(y, sortColumn)));
+    return [...rows].sort((x, y) => {
+      const a = sortValue(x, sortColumn);
+      const b = sortValue(y, sortColumn);
+      if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;   // blanks last
+      return dir * cmp(a, b);
+    });
   }, [rows, sortColumn, sortDirection]);
 
   // ── paging (client-side) ──────────────────────────────────────────────
@@ -341,6 +432,25 @@ export default function Tenders() {
   const pagedRows = sortedRows.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
   const startRecord = totalRecords === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
   const endRecord = Math.min(safePage * rowsPerPage, totalRecords);
+
+  // Export exactly what the list shows — same search, filters and sort, every
+  // page — and say on the Summary sheet which filters produced it.
+  const exportFiltered = () => {
+    try {
+      const sortLabel = sortColumn
+        ? `${(ALL_COLUMNS.find((c) => c.key === sortColumn) || {}).label || sortColumn} (${sortDirection === 'asc' ? 'ascending' : 'descending'})`
+        : 'As listed';
+      exportTenders(sortedRows, [
+        ['Search', search.trim() || '—'],
+        ['Status', statusFilter === 'All' ? 'All' : statusFilter],
+        ['Financial Year', fyFilter === 'All' ? 'All' : `FY ${fyFilter}`],
+        ['Sorted by', sortLabel],
+        ['Of total tenders', tenders.length],
+      ]);
+    } catch (e) {
+      setNotice({ kind: 'error', text: e.message || 'Could not export the tenders.' });
+    }
+  };
 
   // A changed filter/search/page-size always restarts at page 1.
   useEffect(() => { setCurrentPage(1); }, [search, statusFilter, fyFilter, rowsPerPage]);
@@ -421,6 +531,9 @@ export default function Tenders() {
     );
   };
 
+  // The EMD / opening-date fields a grid card shows: switched on, and holding a value.
+  const cardFieldsFor = (t) => CARD_FIELDS.filter((k) => visibleColumns.includes(k) && hasCardValue(t, k));
+
   // ── cell renderer ─────────────────────────────────────────────────────
   const renderCell = (t, key) => {
     switch (key) {
@@ -432,7 +545,15 @@ export default function Tenders() {
       );
       case 'bidValue': return <span className="tnd-money">{boqBidTotal(t) > 0 ? fmtINR(boqBidTotal(t)) : '—'}</span>;
       case 'contractValue': return <span className="tnd-money">{t.contractValue ? fmtINR(t.contractValue) : '—'}</span>;
-      case 'emd': return emdCell(t);
+      case 'emd': return <span className="tnd-money">{t.emdAmount ? fmtINR(t.emdAmount) : '—'}</span>;
+      case 'emdStatus': return emdStatusCell(t);
+      case 'emdPaidAmount': return <span className="tnd-money">{t.emdPaidAmount ? fmtINR(t.emdPaidAmount) : '—'}</span>;
+      case 'emdValidTill': return emdValidTillLapsed(t)
+        ? <span className="tnd-date-lapsed" title="Validity has passed and the EMD has not been refunded">{fmtDate(t.emdValidTill)}</span>
+        : fmtDate(t.emdValidTill);
+      case 'emdPaidDate':
+      case 'emdRefundDate':
+      case 'technicalOpeningDate': return fmtDate(t[key]);
       case 'deadline': return (
         <div className="tnd-cell-stack">
           <span className="tnd-deadline-date">{fmtDate(t.submissionDeadline)}</span>
@@ -472,6 +593,7 @@ export default function Tenders() {
         key={detailKey}
         initial={detailInitialRef.current}
         isNew={detailIsNew}
+        initialExcelFile={excelFileRef.current}
         canCreate={canCreate}
         canEdit={canEdit}
         onCreate={createTender}
@@ -576,8 +698,36 @@ export default function Tenders() {
           <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={load} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
+          <button
+            className="leads-enquiries-btn leads-enquiries-btn-secondary"
+            onClick={exportFiltered}
+            disabled={loading || sortedRows.length === 0}
+            title="Every tender matching the current search and filters (all pages), with all its data"
+          >
+            ⬇ Export Tenders ({sortedRows.length})
+          </button>
+          <button
+            className="leads-enquiries-btn leads-enquiries-btn-secondary"
+            onClick={downloadTemplate}
+            disabled={templateBusy}
+            title="A workbook to fill from a tender PDF — by hand or with an AI assistant"
+          >
+            {templateBusy ? 'Preparing…' : '⬇ Download Excel Template'}
+          </button>
           {canCreate && (
-            <button className="leads-enquiries-btn leads-enquiries-btn-primary" onClick={openNew}>
+            <button
+              className="leads-enquiries-btn leads-enquiries-btn-secondary"
+              onClick={() => setExcelDialog(true)}
+              title="Create a tender from a filled template and its tender PDF — you review everything before it is saved"
+            >
+              📥 Import from Excel
+            </button>
+          )}
+          {excelDialog && (
+            <TenderExcelImportDialog onImport={onExcelImport} onCancel={() => setExcelDialog(false)} />
+          )}
+          {canCreate && (
+            <button className="leads-enquiries-btn leads-enquiries-btn-primary" onClick={() => openNew()}>
               <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
@@ -589,9 +739,8 @@ export default function Tenders() {
 
       {/* View toggle + column controls */}
       <div className="leads-enquiries-view-toggle-container">
-        {viewMode === 'table' && (
-          <ColumnVisibilityDropdown columns={ALL_COLUMNS} visibleColumns={visibleColumns} onToggle={handleToggleColumn} onReset={handleResetColumns} />
-        )}
+        {/* Shown in both views: the grid cards show the toggled EMD/date fields too. */}
+        <ColumnVisibilityDropdown columns={ALL_COLUMNS} visibleColumns={visibleColumns} onToggle={handleToggleColumn} onReset={handleResetColumns} />
         <div className="leads-enquiries-view-toggle">
           <button className={`leads-enquiries-view-btn${viewMode === 'table' ? ' active' : ''}`} onClick={() => switchView('table')} title="Table View">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
@@ -690,6 +839,18 @@ export default function Tenders() {
                           <span>Contract {fmtINR(t.contractValue)}</span>
                         </div>
                       ) : null}
+                      {/* EMD + opening-date fields follow the Columns chooser: a
+                          field shows on the card when its column is switched on. */}
+                      {cardFieldsFor(t).length > 0 && (
+                        <div className="tnd-card-fields">
+                          {cardFieldsFor(t).map((k) => (
+                            <div key={k} className="tnd-card-field">
+                              <span className="tnd-card-field-label">{ALL_COLUMNS.find((c) => c.key === k).label}</span>
+                              <span className="tnd-card-field-value">{renderCell(t, k)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
