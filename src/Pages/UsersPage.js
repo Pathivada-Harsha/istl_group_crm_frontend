@@ -775,6 +775,9 @@ const UsersPage = () => {
   const [modalLoading, setModalLoading] = useState(false); // local loader for permission modals — avoids full-page flicker
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
+  // "Reporting To" filter: 'all' or a user id (everyone under that user, direct and indirect).
+  const [filterReportingTo, setFilterReportingTo] = useState('all');
+  const [reportingManagers, setReportingManagers] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const { user, pagePermissions, menuPermissions } = useAuth();
@@ -954,6 +957,20 @@ useEffect(() => {
     finally { setLoading(false); }
   }, [user?.id, currentPage, pageSize]);
 
+  // Options for the "Reporting To" filter: the users in the caller's scope
+  // inside the caller's scope. Small read-only call; refreshed after user changes.
+  const fetchReportingManagers = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch(`${API}/users/reporting-managers/${user.id}`, { credentials: "include" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setReportingManagers(data);
+    } catch { /* non-blocking — the filter just keeps its previous options */ }
+  }, [user?.id]);
+
+  useEffect(() => { fetchReportingManagers(); }, [fetchReportingManagers]);
+
   // FIX #3: fetch ALL users (no pagination) for hierarchy chart
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchAllUsersForHierarchy = useCallback(async () => {
@@ -1046,6 +1063,7 @@ useEffect(() => {
     setLoading(true); setLoadingText('Searching...'); setIsSearching(true);
     try {
       const params = new URLSearchParams({ searchTerm: searchTerm.trim(), role: filterRole, page: currentPage, size: pageSize });
+      if (filterReportingTo !== 'all') params.set('reportingToUserId', filterReportingTo);
       const res = await fetch(`${API}/users/search/${user.id}?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error('Failed to search');
       const data = await res.json();
@@ -1066,23 +1084,23 @@ useEffect(() => {
       }
     } catch { showToast('Error searching users', 'error'); }
     finally { setLoading(false); setIsSearching(false); }
-  }, [user?.id, searchTerm, filterRole, currentPage, pageSize]);
+  }, [user?.id, searchTerm, filterRole, filterReportingTo, currentPage, pageSize]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!user?.id) return;
     if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
-    const shouldSearch = searchTerm.trim() !== '' || filterRole !== 'all';
+    const shouldSearch = searchTerm.trim() !== '' || filterRole !== 'all' || filterReportingTo !== 'all';
     if (shouldSearch) searchDebounceTimer.current = setTimeout(searchUsers, 1000);
     else fetchUsers();
     return () => { if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current); };
-  }, [searchTerm, filterRole, user?.id]); // intentional: fetchUsers/searchUsers are stable refs
+  }, [searchTerm, filterRole, filterReportingTo, user?.id]); // intentional: fetchUsers/searchUsers are stable refs
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!user?.id) return;
     if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
-    const shouldSearch = searchTerm.trim() !== '' || filterRole !== 'all';
+    const shouldSearch = searchTerm.trim() !== '' || filterRole !== 'all' || filterReportingTo !== 'all';
     if (shouldSearch) searchUsers(); else fetchUsers();
   }, [currentPage, pageSize]); // intentional: fetchUsers/searchUsers are stable refs
 
@@ -1192,7 +1210,7 @@ useEffect(() => {
       // FIX #4: proper error handling  don't let backend errors cause logout
       if (res.ok) {
         const result = await res.text();
-        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+        if (searchTerm.trim() || filterRole !== 'all' || filterReportingTo !== 'all') await searchUsers(); else await fetchUsers(); fetchReportingManagers();
         setShowAddUserModal(false);
         showToast(result || 'User created successfully!', 'success');
       } else {
@@ -1267,7 +1285,7 @@ useEffect(() => {
         })
       });
       if (res.ok) {
-        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+        if (searchTerm.trim() || filterRole !== 'all' || filterReportingTo !== 'all') await searchUsers(); else await fetchUsers(); fetchReportingManagers();
         setShowEditUserModal(false); setSelectedUser(null);
         const msg = await res.text().catch(() => '');
         showToast(msg || 'User updated successfully!', 'success');
@@ -1298,7 +1316,7 @@ useEffect(() => {
       try {
         const res = await fetch(`${API}/users/deactivateUser/${userToDelete.id}`, { credentials: "include", method: 'PUT' });
         if (res.ok) {
-          if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+          if (searchTerm.trim() || filterRole !== 'all' || filterReportingTo !== 'all') await searchUsers(); else await fetchUsers(); fetchReportingManagers();
           showToast('User deactivated successfully! Delete again to permanently remove.', 'warning');
         } else { showToast('Error deactivating user', 'error'); }
         setLoading(false); setUserToDelete(null);
@@ -1309,7 +1327,7 @@ useEffect(() => {
       try {
         const res = await fetch(`${API}/users/deleteUser/${userToDelete.id}`, { credentials: "include", method: 'DELETE' });
         if (res.ok) {
-          if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+          if (searchTerm.trim() || filterRole !== 'all' || filterReportingTo !== 'all') await searchUsers(); else await fetchUsers(); fetchReportingManagers();
           showToast('User deleted successfully!', 'success');
         } else { showToast('Error deleting user', 'error'); }
         setLoading(false); setUserToDelete(null);
@@ -1355,7 +1373,7 @@ const handleEditMenuPermissions = async (u) => {
         body: JSON.stringify(complete)
       });
       if (res.ok) {
-        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+        if (searchTerm.trim() || filterRole !== 'all' || filterReportingTo !== 'all') await searchUsers(); else await fetchUsers(); fetchReportingManagers();
         // ✅ Modal stays open so admin can keep editing — only show a success toast
         showToast('Menu permissions updated!', 'success');
       } else { showToast('Error saving menu permissions', 'error'); }
@@ -1399,7 +1417,7 @@ const handleEditMenuPermissions = async (u) => {
         body: JSON.stringify({ permissionIds: selectedUserPermissions })
       });
       if (res.ok) {
-        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+        if (searchTerm.trim() || filterRole !== 'all' || filterReportingTo !== 'all') await searchUsers(); else await fetchUsers(); fetchReportingManagers();
         // ✅ Modal stays open so admin can keep editing — only show a success toast
         showToast('Page permissions updated!', 'success');
       } else { showToast('Error saving page permissions', 'error'); }
@@ -1599,6 +1617,14 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 options={filteredRoles.map(r => ({ value: r.name, label: r.name }))}
                 placeholder="All Roles"
                 onChange={(v) => { setFilterRole(v || 'all'); setCurrentPage(1); }}
+              />
+            </div>
+            <div className="users-page-role-filter" style={{ width: 240 }}>
+              <FilterSelect
+                value={filterReportingTo === 'all' ? '' : filterReportingTo}
+                options={reportingManagers.map(m => ({ value: String(m.id), label: m.name }))}
+                placeholder="All Users"
+                onChange={(v) => { setFilterReportingTo(v || 'all'); setCurrentPage(1); }}
               />
             </div>
           </div>

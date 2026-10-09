@@ -98,7 +98,9 @@ const computeRoi = (f) => {
   };
 };
 
-const blankBomRow = () => ({ component: '', specification: '', make: '', quantity: '', unit: 'No\'s' });
+const ERR = '#dc2626';
+
+const blankBomRow =() => ({ component: '', specification: '', make: '', quantity: '', unit: 'No\'s' });
 
 /**
  * Editable review step for the Solar proposal document. Prefilled from the
@@ -114,6 +116,11 @@ export default function GenerateProposalModal({
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Becomes true after the first Generate click. From then on the errors are
+  // re-derived from the form on every render, so a field's error clears the
+  // moment its value becomes valid and BOM row add/delete stays in sync.
+  const [submitted, setSubmitted] = useState(false);
+  const bodyRef = React.useRef(null);
   const leadId = lead?.id;
 
   const headers = React.useMemo(() => ({
@@ -129,6 +136,7 @@ export default function GenerateProposalModal({
 
   const load = useCallback(async () => {
     setLoading(true);
+    setSubmitted(false);
     try {
       const qs = new URLSearchParams({ leadId: String(leadId) });
       if (proposalId) qs.set('proposalId', String(proposalId));
@@ -252,22 +260,62 @@ export default function GenerateProposalModal({
   const addBom = () => setForm(f => ({ ...f, bomRows: [...f.bomRows, blankBomRow()] }));
   const rmBom = (i) => setForm(f => ({ ...f, bomRows: f.bomRows.filter((_, idx) => idx !== i) }));
 
+  // One pass over every mandatory field, keyed by field id. Same rules the
+  // old first-failure-wins checks applied; nothing new is made mandatory except
+  // that a BOM row the preparer has started must be usable (blank rows are
+  // still dropped on submit, exactly as before).
+  const validate = (f) => {
+    const e = {};
+    if (!f.clientName.trim()) e.clientName = 'Client name is required.';
+    if (!f.propertyType) e.propertyType = 'Pick the proposal type — it is not recorded on this lead.';
+    if (num(f.totalCost) <= 0) e.totalCost = 'Enter the total cost.';
+    if (f.includeRoi && num(f.tariffPerUnit) <= 0) e.tariffPerUnit = 'ROI needs the electricity tariff (₹/unit).';
+    if (f.includeRoi && num(f.capacityKw) <= 0) e.capacityKw = 'ROI needs the plant capacity in kWp.';
+    if (f.includeSubsidy && num(f.subsidyAmount) <= 0) e.subsidyAmount = 'Enter the subsidy amount, or switch the Subsidy section off.';
+    const used = (r) => (r.component || '').trim() || (r.specification || '').trim();
+    if (!f.bomRows.some(used)) {
+      e.bomRows = 'The proposal needs at least one Bill of Material line.';
+    }
+    f.bomRows.forEach((r, i) => {
+      const started = used(r) || (r.make || '').trim() || String(r.quantity ?? '').trim();
+      if (!started) return;
+      if (!used(r)) e[`bom-${i}-component`] = 'Enter a component or specification.';
+      const q = String(r.quantity ?? '').trim();
+      if (q !== '' && /^-?[\d,.]+$/.test(q) && num(q) <= 0) e[`bom-${i}-quantity`] = 'Quantity must be greater than zero.';
+    });
+    return e;
+  };
+
+  const errors = submitted && form ? validate(form) : {};
+  const errorCount = Object.keys(errors).length;
+
+  // Props for an input/control that takes part in validation.
+  const fp = (id, base = I) => ({
+    id: `gp-${id}`,
+    'data-field': id,
+    'aria-invalid': errors[id] ? 'true' : undefined,
+    'aria-describedby': errors[id] ? `gp-err-${id}` : undefined,
+    'data-invalid': errors[id] ? 'true' : undefined,
+    style: errors[id] ? { ...base, border: `1px solid ${ERR}`, outline: 'none', boxShadow: `0 0 0 1px ${ERR}` } : base,
+  });
+  const errMsg = (id) => errors[id]
+    ? <div id={`gp-err-${id}`} role="alert" style={{ fontSize: 11, color: __stc('#dc2626'), marginTop: 3 }}>{errors[id]}</div>
+    : null;
+
   const generate = async () => {
-    if (!form.clientName.trim()) { showError('Client name is required'); return; }
-    if (!form.propertyType) { showError('Pick the proposal type — it is not recorded on this lead'); return; }
-    if (!form.bomRows.some(r => (r.component || '').trim() || (r.specification || '').trim())) {
-      showError('The proposal needs at least one Bill of Material line — add them on the lead\'s BOM tab.');
+    const found = validate(form);
+    if (Object.keys(found).length) {
+      setSubmitted(true);
+      // Wait for the error state to render, then jump to the first invalid
+      // control in document order. scroll-margin on the body offsets nothing
+      // here because the header lives outside the scrolling body.
+      requestAnimationFrame(() => {
+        const first = bodyRef.current && bodyRef.current.querySelector('[data-invalid="true"]');
+        if (!first) return;
+        first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        if (typeof first.focus === 'function') first.focus({ preventScroll: true });
+      });
       return;
-    }
-    if (num(form.totalCost) <= 0) { showError('Enter the total cost'); return; }
-    if (form.includeRoi && num(form.tariffPerUnit) <= 0) {
-      showError('ROI needs the electricity tariff (₹/unit) — it is blank'); return;
-    }
-    if (form.includeRoi && num(form.capacityKw) <= 0) {
-      showError('ROI needs the plant capacity in kWp'); return;
-    }
-    if (form.includeSubsidy && num(form.subsidyAmount) <= 0) {
-      showError('Enter the subsidy amount, or switch the Subsidy section off'); return;
     }
 
     setBusy(true);
@@ -340,14 +388,15 @@ export default function GenerateProposalModal({
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: __sbg('#f8fafc'), borderRadius: 12, width: 'min(1000px,96vw)', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
-        <div style={{ position: 'sticky', top: 0, background: '#2563eb', color: '#fff', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 2 }}>
+      <div role="dialog" aria-modal="true" style={{ background: __sbg('#f8fafc'), borderRadius: 12, width: 'min(1000px,96vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ flexShrink: 0, background: '#2563eb', color: '#fff', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <strong style={{ fontSize: 15 }}>
             {meta?.regeneration ? `Re-generate Proposal (v${(meta.lastVersion || 0) + 1})` : 'Generate Proposal'} — {lead?.name}
           </strong>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
 
+        <div ref={bodyRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {loading || !form ? (
           <div style={{ padding: 40, textAlign: 'center', color: __stc('#64748b') }}>Reading the lead's tabs…</div>
         ) : (
@@ -364,7 +413,7 @@ export default function GenerateProposalModal({
               <div style={grid2}>
                 <div>
                   <label style={L}>Proposal type</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <div role="group" tabIndex={-1} {...fp('propertyType', { display: 'flex', flexWrap: 'wrap', gap: 8, borderRadius: 8, padding: errors.propertyType ? 4 : 0 })}>
                     {PROPERTY_TYPES.map(t => (
                       <button key={t} type="button" onClick={() => setPropertyType(t)}
                         style={{
@@ -380,11 +429,12 @@ export default function GenerateProposalModal({
                       ? 'Subsidy applies to residential rooftops only. ROI is included whenever the capacity and tariff are known.'
                       : 'Property type not recorded on this lead — pick one.'}
                   </div>
+                  {errMsg('propertyType')}
                 </div>
                 <div><label style={L}>Proposal title (CRM record)</label><input style={I} value={form.title} onChange={e => set('title', e.target.value)} /></div>
               </div>
               <div style={{ ...grid2, marginTop: 10 }}>
-                <div><label style={L}>Client name</label><input style={I} value={form.clientName} onChange={e => set('clientName', e.target.value)} /></div>
+                <div><label style={L} htmlFor="gp-clientName">Client name</label><input {...fp('clientName')} value={form.clientName} onChange={e => set('clientName', e.target.value)} />{errMsg('clientName')}</div>
                 <div>
                   <label style={L}>Location</label>
                   <input style={I} value={form.siteLocation} onChange={e => set('siteLocation', e.target.value)} />
@@ -424,8 +474,9 @@ export default function GenerateProposalModal({
                 </div>
                 <div><label style={L}>GST %</label><input style={I} type="number" step="0.1" value={form.gstPercent} onChange={e => setGst(e.target.value)} /></div>
                 <div>
-                  <label style={L}>Total incl. GST (₹)</label>
-                  <input style={I} type="number" value={form.totalCost} onChange={e => setTotal(e.target.value)} />
+                  <label style={L} htmlFor="gp-totalCost">Total incl. GST (₹)</label>
+                  <input {...fp('totalCost')} type="number" value={form.totalCost} onChange={e => setTotal(e.target.value)} />
+                  {errMsg('totalCost')}
                   <div style={hint}>Edit this to quote a round figure — the base back-computes.</div>
                 </div>
               </div>
@@ -465,7 +516,8 @@ export default function GenerateProposalModal({
                 <div style={grid2}>
                   <div>
                     <label style={L}>Central Government subsidy applicable (₹)</label>
-                    <input style={I} type="number" value={form.subsidyAmount} onChange={e => set('subsidyAmount', e.target.value)} />
+                    <input {...fp('subsidyAmount')} type="number" value={form.subsidyAmount} onChange={e => set('subsidyAmount', e.target.value)} />
+                    {errMsg('subsidyAmount')}
                     <div style={hint}>Default from the MNRE slab for this capacity — confirm before generating.</div>
                   </div>
                   <div style={{ alignSelf: 'end', fontSize: 12, color: __stc('#334155') }}>
@@ -489,12 +541,14 @@ export default function GenerateProposalModal({
                 <div style={grid2}>
                   <div>
                     <label style={L}>Plant capacity (kWp) — entered</label>
-                    <input style={I} type="number" step="0.01" value={form.capacityKw} onChange={e => set('capacityKw', e.target.value)} />
+                    <input {...fp('capacityKw')} type="number" step="0.01" value={form.capacityKw} onChange={e => set('capacityKw', e.target.value)} />
+                    {errMsg('capacityKw')}
                     <div style={hint}>Technical Scope → system capacity</div>
                   </div>
                   <div>
                     <label style={L}>Electricity tariff (₹/unit) — entered</label>
-                    <input style={I} type="number" step="0.01" value={form.tariffPerUnit} onChange={e => set('tariffPerUnit', e.target.value)} />
+                    <input {...fp('tariffPerUnit')} type="number" step="0.01" value={form.tariffPerUnit} onChange={e => set('tariffPerUnit', e.target.value)} />
+                    {errMsg('tariffPerUnit')}
                     <div style={hint}>{meta?.roiSources?.tariffPerUnit}</div>
                   </div>
                 </div>
@@ -568,9 +622,10 @@ export default function GenerateProposalModal({
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <div style={title}>Bill of Material</div>
-                <button onClick={addBom} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>+ Add row</button>
+                <button onClick={addBom} {...fp('bomRows', { background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' })}>+ Add row</button>
               </div>
               <div style={{ fontSize: 12, color: __stc('#64748b'), marginBottom: 8 }}>{meta?.bomSource}</div>
+              {errMsg('bomRows')}
               {form.bomRows.length === 0 ? (
                 <div style={{ background: __sbg('#fef2f2'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 6, padding: 12, fontSize: 13, color: __stc('#dc2626') }}>
                   This lead has no BOM lines. Add them on the lead's <strong>BOM</strong> tab, then generate —
@@ -594,10 +649,10 @@ export default function GenerateProposalModal({
                       {form.bomRows.map((r, i) => (
                         <tr key={i}>
                           <td style={{ ...td, color: __stc('#94a3b8'), fontSize: 12, paddingTop: 10 }}>{i + 1}</td>
-                          <td style={td}><input style={I} value={r.component || ''} onChange={e => setBom(i, 'component', e.target.value)} /></td>
+                          <td style={td}><input {...fp(`bom-${i}-component`)} aria-label={`Component, row ${i + 1}`} value={r.component || ''} onChange={e => setBom(i, 'component', e.target.value)} />{errMsg(`bom-${i}-component`)}</td>
                           <td style={td}><input style={I} value={r.specification || ''} onChange={e => setBom(i, 'specification', e.target.value)} /></td>
                           <td style={td}><input style={I} value={r.make || ''} onChange={e => setBom(i, 'make', e.target.value)} /></td>
-                          <td style={td}><input style={I} value={r.quantity ?? ''} onChange={e => setBom(i, 'quantity', e.target.value)} /></td>
+                          <td style={td}><input {...fp(`bom-${i}-quantity`)} aria-label={`Quantity, row ${i + 1}`} value={r.quantity ?? ''} onChange={e => setBom(i, 'quantity', e.target.value)} />{errMsg(`bom-${i}-quantity`)}</td>
                           <td style={td}><input style={I} value={r.unit || ''} onChange={e => setBom(i, 'unit', e.target.value)} /></td>
                           <td style={td}>
                             <button onClick={() => rmBom(i)} title="Remove row"
@@ -611,18 +666,27 @@ export default function GenerateProposalModal({
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
-              <button onClick={onClose} disabled={busy}
-                style={{ padding: '9px 18px', borderRadius: 7, border: `1px solid ${__sbg('#cbd5e1')}`, background: __sbg('#fff'), color: __stc('#334155'), fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                Cancel
-              </button>
-              <button onClick={generate} disabled={busy}
-                style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: busy ? '#93b4f0' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: busy ? 'default' : 'pointer' }}>
-                {busy ? 'Generating…' : (meta?.regeneration ? `Generate v${(meta.lastVersion || 0) + 1}` : 'Generate & Download')}
-              </button>
-            </div>
           </div>
         )}
+        </div>
+
+        <div style={{ flexShrink: 0, borderTop: `1px solid ${__sbg('#e2e8f0')}`, background: __sbg('#f8fafc'), padding: '10px 18px' }}>
+          {errorCount > 0 && (
+            <div role="alert" style={{ fontSize: 12, color: __stc('#dc2626'), marginBottom: 8, textAlign: 'right' }}>
+              Please complete all highlighted mandatory fields before generating the proposal.
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button onClick={onClose} disabled={busy}
+              style={{ padding: '9px 18px', borderRadius: 7, border: `1px solid ${__sbg('#cbd5e1')}`, background: __sbg('#fff'), color: __stc('#334155'), fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={generate} disabled={busy || loading || !form}
+              style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: (busy || loading || !form) ? '#93b4f0' : '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: (busy || loading || !form) ? 'default' : 'pointer' }}>
+              {busy ? 'Generating…' : (meta?.regeneration ? `Generate v${(meta.lastVersion || 0) + 1}` : 'Generate & Download')}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -866,16 +866,16 @@ const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals 
 
   useEffect(() => {
     const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
-    fetch(`${apiBase}/proposals/getAll?page=0&size=100&groupName=${lead.groupName || ''}&subGroupName=${lead.subGroupName || ''}`, { credentials: 'include', headers })
+    let cancelled = false;
+    setProposals([]);
+    fetch(`${apiBase}/proposals/by-lead/${lead.id}`, { credentials: 'include', headers })
       .then(r => r.json())
       .then(data => {
-        if (data.success) {
-          const all = data.data.content || [];
-          setProposals(all.filter(p => p.leadId === lead.id));
-        }
+        if (!cancelled && data.success) setProposals(data.data || []);
       })
       .catch(() => { })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [lead.id]);
 
   const totalValue = proposals.reduce((s, p) => s + (parseFloat(p.totalValue) || 0), 0);
@@ -1282,17 +1282,28 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
     }
   };
 
+  // Latest request wins, and a response is only applied while it still belongs
+  // to the lead on screen — a slow reply for lead A must never land under lead B.
+  const proposalsReqRef = useRef(0);
+  const proposalsLeadRef = useRef(null);
   const fetchProposals = useCallback(async () => {
+    const seq = ++proposalsReqRef.current;
+    const leadId = lead.id;
+    if (proposalsLeadRef.current !== leadId) { proposalsLeadRef.current = leadId; setProposals([]); }
     setLoadingProposals(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/proposals/getAll?page=0&size=50&groupName=${lead.groupName || ''}&subGroupName=${lead.subGroupName || ''}`, { credentials: 'include', headers });
+      // Scoped to this lead on the server, with the lead-level access rule — no
+      // global page limit and no role-specific ownership filter to fall through.
+      const res = await fetch(`${API_BASE_URL}/proposals/by-lead/${leadId}`, { credentials: 'include', headers });
       const data = await res.json();
+      if (seq !== proposalsReqRef.current) return;
       if (data.success) {
-        const all = data.data.content || [];
-        setProposals(all.filter(p => p.leadId === lead.id || p.leadCode === lead.leadCode));
+        const all = data.data || [];
+        // /getAll returned newest first; keep that order.
+        setProposals([...all].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))));
       }
-    } catch { showError('Failed to load proposals'); }
-    finally { setLoadingProposals(false); }
+    } catch { if (seq === proposalsReqRef.current) showError('Failed to load proposals'); }
+    finally { if (seq === proposalsReqRef.current) setLoadingProposals(false); }
   }, [lead.id]);
 
   // Auto-advance lead status to "Proposal Sent" whenever a proposal is created
@@ -1335,7 +1346,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
     if (activeTab === 'proposals') fetchProposals();
     if (activeTab === 'history') fetchHistory();
     if (activeTab === 'overview' && isClosedLead) fetchHistory();
-  }, [activeTab, isClosedLead]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, isClosedLead, lead.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const downloadPDF = async (id) => {
     try {
@@ -1602,7 +1613,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       // If upload failed after proposal was created, delete the orphan proposal record
       if (newId) {
         try {
-          await fetch(`${API_BASE_URL}/proposals/${newId}`, {
+          await fetch(`${API_BASE_URL}/proposals/delete/${newId}`, {
             method: 'DELETE', credentials: 'include',
             headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
           });
@@ -2973,6 +2984,13 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
   const [statusFilter, setStatusFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
   const [sourceFilter, setSourceFilter] = useState('All');
+  // "Assigned User" filter — levels 1-3 only. Eligibility is decided by the server:
+  // /leads/handler-counts answers 403 for everyone else and the control stays hidden.
+  const [handlerFilter, setHandlerFilter] = useState('All');
+  const [handlerOptions, setHandlerOptions] = useState([]);
+  const [handlerEligible, setHandlerEligible] = useState(false);
+  const handlerFilterRef = useRef('All');      // read by fetchLeads so every caller sends it
+  const handlerDeniedRef = useRef(false);
   // Date range filter
   const [dateRangeMode, setDateRangeMode] = useState('all'); // 'all' | 'single' | 'range'
   const [dateFrom, setDateFrom] = useState('');
@@ -3056,6 +3074,8 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
   const fetchLeads = async (page, size, search, status, priority, source, group, subGroup, _reason, fromDate, toDate, sortByCol, sortDir) => {
   // console.trace('🚀 fetchLeads called — reason:', _reason);
   const seq = ++fetchLeadsSeq.current; // claim the latest-request slot
+  // Keep the Assigned User counts fresh, but not on every page/sort click.
+  if (!['PAGE_CHANGE', 'ROWS_CHANGE', 'SORT_CHANGE', 'PAGE_CLAMP'].includes(_reason)) fetchHandlerOptions();
   setLoading(true);
   setError(null);
   try {
@@ -3080,6 +3100,7 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
       subGroupName:  subGroup || null,
       fromDate:      fromDate || null,
       toDate:        toDate   || null,
+      handlerUserId: handlerFilterRef.current !== 'All' ? Number(handlerFilterRef.current) : null,
       sortBy:        effectiveSortBy,
       sortDirection: effectiveSortDir,
     };
@@ -3091,6 +3112,15 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
 
     // Race guard: a newer request started while this one was in flight → drop this result.
     if (seq !== fetchLeadsSeq.current) return;
+
+    // Page past the end (e.g. the last row of the last page was just deleted or
+    // reassigned away): the server answers an empty page but a non-zero total.
+    // Land on the real last page instead of showing an empty table.
+    if (data.success && page > 1 && !(data.data || []).length && (data.count ?? 0) > 0) {
+      const lastPage = Math.max(1, data.totalPages ?? Math.ceil(data.count / size));
+      setCurrentPage(lastPage);
+      return fetchLeads(lastPage, size, search, status, priority, source, group, subGroup, 'PAGE_CLAMP', fromDate, toDate, sortByCol, sortDir);
+    }
 
     if (data.success) {
       setLeads(data.data || []);
@@ -3125,6 +3155,21 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
       const res = await fetch(`${API_BASE_URL}/filters/assignable-users`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setUsers(data);
     } catch (e) { console.error('fetchUsers failed:', e); setUsers([]); }
+  };
+
+  // Options + per-user lead counts for the Assigned User filter. A 403 means this
+  // role is not eligible: remember it, hide the control, and stop asking.
+  const fetchHandlerOptions = async () => {
+    if (handlerDeniedRef.current) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/leads/handler-counts`, { credentials: 'include', headers: buildHeaders() });
+      if (res.status === 403) { handlerDeniedRef.current = true; setHandlerEligible(false); return; }
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.data)) {
+        setHandlerOptions(data.data);
+        setHandlerEligible(true);
+      }
+    } catch (e) { /* non-blocking — the filter simply stays as it was */ }
   };
 
   const fetchAllUsers = async () => {
@@ -3205,7 +3250,7 @@ useEffect(() => {
     fetchLeads(1, rpp, searchTerm, statusFilter, priorityFilter, sourceFilter, gn, sgn, 'FILTER_CHANGE', dateFrom, dateTo);
   }, 400);
   return () => clearTimeout(timer);
-}, [searchTerm, statusFilter, priorityFilter, sourceFilter, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
+}, [searchTerm, statusFilter, priorityFilter, sourceFilter, dateFrom, dateTo, handlerFilter]); // eslint-disable-line react-hooks/exhaustive-deps
   // ── Form subgroup load ─────────────────────────────────────────────
   useEffect(() => {
     if (formData.groupName) fetchSubGroupsForForm(formData.groupName); else setSubGroups([]);
@@ -3717,6 +3762,7 @@ useEffect(() => {
         subGroupName: subGroupName || null,
         fromDate:     dateFrom     || null,
         toDate:       dateTo       || null,
+        handlerUserId: handlerFilter !== 'All' ? Number(handlerFilter) : null,
         exportAll:    true,
       };
       const data = await fetchWithHeaders(
@@ -3887,6 +3933,19 @@ useEffect(() => {
           <FilterSelect value={statusFilter} options={[{value:'All',label:'All Status'},...['New','Interested','Not Interested','Not Responded','Keep in View','Prospect','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))]} placeholder="All Status" onChange={v=>setStatusFilter(v)} />
           <FilterSelect value={priorityFilter} options={[{value:'All',label:'All Priority'},...['High','Medium','Low'].map(s=>({value:s,label:s}))]} placeholder="All Priority" onChange={v=>setPriorityFilter(v)} />
           <FilterSelect value={sourceFilter} options={[{value:'All',label:'All Sources'},...['Website','Referral','Cold Call','Email','Walk-in','Social Media','Digital Marketing','Campaign','Tender','Others'].map(s=>({value:s,label:s}))]} placeholder="All Sources" onChange={v=>setSourceFilter(v)} />
+          {handlerEligible && (
+            <FilterSelect
+              value={handlerFilter}
+              options={[
+                { value: 'All', label: 'All Users' },
+                ...handlerOptions.map(o => ({ value: String(o.id), label: `${o.name} (${o.count} ${o.count === 1 ? 'Lead' : 'Leads'})` })),
+                // keep a selected user selectable/visible even if their count dropped to zero
+                ...(handlerFilter !== 'All' && !handlerOptions.some(o => String(o.id) === handlerFilter)
+                  ? [{ value: handlerFilter, label: 'Selected user (0 Leads)' }] : []),
+              ]}
+              placeholder="Assigned User"
+              onChange={v => { handlerFilterRef.current = v || 'All'; setHandlerFilter(v || 'All'); }} />
+          )}
 
           {/* Date range filter */}
           <div className="leads-date-filter-group">
