@@ -125,6 +125,17 @@ export const emdSummary = (t) => {
   }
   return { status, paid, refunded, blocked, deducted, refundDue, expiring };
 };
+
+// The EMD instrument's validity has run out and the money has not come back —
+// the list shows EMD Valid Till in red.
+export const emdValidTillLapsed = (t) => {
+  if (!t?.emdValidTill || t.emdStatus === 'Refunded' || t.emdRefundDate) return false;
+  const d = new Date(t.emdValidTill);
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
+};
 export const LOSS_REASONS = [
   'Price (L1 lost)', 'Technical disqualification', 'Eligibility not met',
   'EMD / documentation', 'Withdrew', 'Cancelled by authority', 'Other',
@@ -141,6 +152,22 @@ export const OPERATORS = [
   { value: 'contains', label: 'contains' },
   { value: 'boolean', label: 'yes / no' },
 ];
+
+// Eligibility sections always offered. "Legal" is one the PDF importer produces
+// (licences, statutory registrations, not-blacklisted).
+export const ELIGIBILITY_CATEGORIES = ['Technical', 'Financial', 'Legal'];
+
+// The vocabularies the Excel template's dropdowns offer and its import matches
+// against. Sent with every template/import request, so the backend never keeps
+// a copy of its own — these constants are the single source for both.
+export const tenderExcelOptions = () => ({
+  clientTypes: CLIENT_TYPES,
+  sectors: SECTORS,
+  tenderTypes: TENDER_TYPES,
+  sources: SOURCES,
+  eligibilityCategories: ELIGIBILITY_CATEGORIES,
+  operators: OPERATORS,
+});
 
 // Suggest an eligibility operator from the shape of a typed value, so criteria
 // don't stay stuck on the default '≥'. yes/no → boolean, a number → ≥ (gte),
@@ -327,11 +354,14 @@ export const evaluateCriterion = (c) => {
 // A criterion counts as satisfied for the roll-up if it passes OR is overridden.
 export const criterionSatisfied = (c) => !!c.override || evaluateCriterion(c) === 'pass';
 
-// Rows sharing an altGroup (within a category) are OR-alternatives of one
-// clause — "1 no. 66kV sub-station OR 5 nos. 33kV OR 2 nos. bay works". The
-// tender needs any ONE of them, so they are judged together as one unit; every
-// other row is a unit of its own.
-const unitKey = (c) => (c.altGroup ? `${(c.category || '').trim()}::${c.altGroup}` : `row::${c._key}`);
+// Rows sharing an altGroup (within a category, and within a tier) are
+// OR-alternatives of one clause — "1 no. 66kV sub-station OR 5 nos. 33kV OR
+// 2 nos. bay works". The tender needs any ONE of them, so they are judged
+// together as one unit; every other row is a unit of its own.
+const tierOf = (c) => String(c.tier || '').trim();
+const unitKey = (c) => (c.altGroup
+  ? `${tierOf(c)}::${(c.category || '').trim()}::${c.altGroup}`
+  : `row::${c._key}`);
 
 // Criteria → units, in first-appearance order: [{ key, altGroup, rows }].
 export const groupCriteria = (criteria = []) => {
@@ -353,14 +383,53 @@ export const evaluateUnit = (rows) => {
   return 'pending';
 };
 
-// Overall Go/No-Go over units: NO-GO if any unit fails, else PENDING if any is
-// pending, else GO. Empty list → PENDING.
+// Units → 'pass' | 'fail' | 'pending': fail if any unit fails, else pending if
+// any is pending, else pass. All of them are required.
+const allOf = (rows) => {
+  const results = groupCriteria(rows).map((u) => evaluateUnit(u.rows));
+  if (results.includes('fail')) return 'fail';
+  if (results.includes('pending')) return 'pending';
+  return 'pass';
+};
+
+// The bidder tiers an empanelment / EOI tender defines (Category A / B / C), in
+// first-appearance order. Empty for an ordinary tender.
+export const tierNames = (criteria = []) => {
+  const seen = [];
+  criteria.forEach((c) => { const t = tierOf(c); if (t && !seen.includes(t)) seen.push(t); });
+  return seen;
+};
+
+// Each tier judged on its own rows: [{ tier, status, rows }]. A bidder
+// qualifies for a tier by meeting every row of it (alternatives inside it
+// still count as one).
+export const tierResults = (criteria = []) => tierNames(criteria).map((tier) => {
+  const rows = criteria.filter((c) => tierOf(c) === tier);
+  return { tier, status: allOf(rows), rows };
+});
+
+// The tiers the company currently qualifies for.
+export const qualifyingTiers = (criteria = []) =>
+  tierResults(criteria).filter((t) => t.status === 'pass').map((t) => t.tier);
+
+// Overall Go/No-Go. Every row with no tier must be met. When the tender has
+// tiers, the bidder must also meet ALL rows of at least ONE tier:
+//   NO-GO   — an untiered row fails, or every tier has a failing row;
+//   PENDING — nothing has failed outright but no tier is met yet, or an
+//             untiered row is still pending;
+//   GO      — untiered rows met and at least one tier met.
+// With no tiers this is exactly the old rule. Empty list → PENDING.
 export const computeEligibility = (criteria = []) => {
   if (!criteria.length) return 'PENDING';
-  const results = groupCriteria(criteria).map((u) => evaluateUnit(u.rows));
-  if (results.includes('fail')) return 'NO_GO';
-  if (results.includes('pending')) return 'PENDING';
-  return 'GO';
+  const base = criteria.filter((c) => !tierOf(c));
+  const baseResult = base.length ? allOf(base) : 'pass';
+  if (baseResult === 'fail') return 'NO_GO';
+  const tiers = tierResults(criteria);
+  if (tiers.length) {
+    if (tiers.every((t) => t.status === 'fail')) return 'NO_GO';
+    if (!tiers.some((t) => t.status === 'pass')) return 'PENDING';
+  }
+  return baseResult === 'pending' ? 'PENDING' : 'GO';
 };
 
 // Auto-transition the tender status from the live eligibility decision. Only
@@ -401,9 +470,10 @@ export const stageUnlocked = (tender, key) => {
 export const blankCriterion = (category = 'Technical') => ({
   _key: genKey(), category, criterionName: '', requiredValue: '', ourValue: '',
   operator: 'gte', override: false, overrideReason: '', overrideBy: '', overrideAt: '',
-  // altGroup: shared by OR-alternatives. clauseText / sourcePage: the tender's
-  // own wording and page, when the row was imported from the PDF.
-  altGroup: '', clauseText: '', sourcePage: '',
+  // altGroup: shared by OR-alternatives. tier: the bidder class it belongs to
+  // on a tiered tender (blank = every bidder must meet it). clauseText /
+  // sourcePage: the tender's own wording and page, when imported.
+  altGroup: '', tier: '', clauseText: '', sourcePage: '',
 });
 
 export const blankDocument = (documentName = '') => ({
@@ -461,6 +531,10 @@ export const blankTender = () => ({
   emdPaidFromAccount: '', emdBeneficiaryName: '', emdBeneficiaryBank: '',
   emdBeneficiaryAccount: '', emdBeneficiaryIfsc: '', emdValidTill: '',
   emdRefundAmount: '', emdRefundDate: '', emdRefundReference: '', emdRefundAccount: '', emdNotes: '',
+  // Tender / processing fee — a separate charge from the EMD (a tender may ask
+  // for either, both or neither). feeRefundable: 'Yes' | 'No' | ''.
+  feeAmount: '', feeRefundable: '', feeBeneficiaryName: '', feeBeneficiaryBank: '',
+  feeBeneficiaryAccount: '', feeBeneficiaryIfsc: '',
   // source PDF (uploaded NIT; bytes live server-side — these are metadata only)
   sourcePdfName: '', sourcePdfMimeType: '', hasSourcePdf: false,
   createdAt: new Date().toISOString().slice(0, 10),
@@ -478,7 +552,11 @@ export const newTender = () => ({
 export const hydrateTender = (t) => {
   if (!t) return newTender();
   const base = blankTender();
-  const m = { ...base, ...t };
+  // Request-only fields of an Excel import never belong on the working copy:
+  // echoed back on the next save, importBulkAcks would go as "" where the
+  // server expects a list, and the save would be refused.
+  const { importSource, importFileName, importSummary, importBulkAcks, ...rest } = t;
+  const m = { ...base, ...rest };
   Object.keys(m).forEach((k) => {
     if (Array.isArray(base[k])) return;
     if (m[k] === null || m[k] === undefined) m[k] = '';

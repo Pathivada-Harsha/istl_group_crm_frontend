@@ -22,9 +22,11 @@
 //  escalating just as much as a missing one does.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useMemo, useState } from 'react';
+import { groupCriteria } from '../../services/tenderData';
 import {
-  SECTORS, TENDER_TYPES, SOURCES, CLIENT_TYPES, FINANCIAL_YEARS, groupCriteria,
-} from '../../services/tenderData';
+  SELECTS, DATE_FIELDS, MONEY_FIELDS, LONG_FIELDS, isBlank, money,
+} from './tenderImportFields';
+import TenderExcelImportReview from './TenderExcelImportReview';
 
 // Field-name → the label the Basic Info tab uses, so a row reads the same as the
 // input it will land in. Anything not listed falls back to a de-camelised name.
@@ -60,34 +62,10 @@ const FIELD_LABELS = {
   documents: 'Documents checklist',
 };
 
-// The control each field gets. A parser can put a value outside a fixed
-// vocabulary, so every dropdown keeps whatever was read as an extra option
-// rather than silently dropping it.
-const SELECTS = {
-  sector: SECTORS,
-  tenderType: TENDER_TYPES,
-  source: SOURCES,
-  clientType: CLIENT_TYPES,
-  financialYear: FINANCIAL_YEARS,
-};
-const DATE_FIELDS = new Set([
-  'submissionDeadline', 'technicalOpeningDate', 'financialOpeningDate',
-]);
-const MONEY_FIELDS = new Set(['estimatedValue', 'emdAmount']);
-const LONG_FIELDS = new Set(['tenderName', 'clientAddress']);
-
+// The control each field gets lives in tenderImportFields.js, shared with the
+// Excel review.
 const prettyField = (k) =>
   FIELD_LABELS[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
-
-const isBlank = (v) => v === undefined || v === null || String(v).trim() === '';
-
-// Money is stored as plain rupees. The input keeps the raw figure — it is what
-// gets saved — and a formatted hint sits beside it, because nine unbroken
-// digits are exactly the thing a reviewer cannot check at a glance.
-const money = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? `₹${n.toLocaleString('en-IN')}` : null;
-};
 
 const summarise = (field, value) => {
   if (isBlank(value)) return '—';
@@ -252,7 +230,17 @@ const seedState = (rows) => {
   return { checked, values };
 };
 
-export default function TenderImportReviewModal({
+/**
+ * One review screen for both imports. An Excel import (parse.kind === 'excel')
+ * gets per-field statuses, current-vs-imported choice and editable rows; a PDF
+ * parse keeps the provenance review below.
+ */
+export default function TenderImportReviewModal(props) {
+  if (props.parse && props.parse.kind === 'excel') return <TenderExcelImportReview {...props} />;
+  return <PdfImportReview {...props} />;
+}
+
+function PdfImportReview({
   parse, tender, fileName, busy, onApply, onReread, onCancel,
 }) {
   const rows = useMemo(() => buildRows(parse, tender), [parse, tender]);

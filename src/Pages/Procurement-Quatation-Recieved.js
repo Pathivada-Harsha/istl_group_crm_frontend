@@ -58,8 +58,16 @@ const SortIcon = ({ columnId, sortConfig }) => {
 };
 
 // ── Validation sets for import ───────────────────────────────────────────────
-const VALID_GST = new Set([0, 5, 12, 18, 28]);
-const GST_OPTIONS = [0, 5, 12, 18, 28];
+const VALID_GST = new Set([0, 5, 8.9, 12, 18, 28]);
+// 8.9% is the composite solar GST rate order-book lines carry; a rate missing from
+// the list made the <select> show 0% while the total used the real rate.
+const GST_OPTIONS = [0, 5, 8.9, 12, 18, 28];
+const gstOptionsFor = (gst) => {
+  const g = parseFloat(gst);
+  return Number.isFinite(g) && !GST_OPTIONS.includes(g) ? [...GST_OPTIONS, g].sort((a, b) => a - b) : GST_OPTIONS;
+};
+// 0% is a real rate; only a missing one defaults to 18%.
+const gstOf = (t) => (t === null || t === undefined || t === "" ? 18 : parseFloat(t));
 
 /**
  * Item sources. The project BOM leads because it is what actually needs buying;
@@ -815,7 +823,7 @@ const QuotationsReceived = () => {
               ...prev,
               items: data.data.map(item => ({
                 itemName: item.itemName, description: item.specification || item.description || '',
-                quantity: item.quantity || '', unitPrice: '', taxPercent: item.taxPercent || 18,
+                quantity: item.quantity || '', unitPrice: '', taxPercent: gstOf(item.taxPercent),
                 orderBookItemId: item.id, included: true,
               })),
             };
@@ -1104,7 +1112,7 @@ const QuotationsReceived = () => {
         vendorRating: data.vendorRating || 0, deliveryTime: data.deliveryTime || '',
         paymentTerms: data.paymentTerms || '', warranty: data.warranty || '',
         notes: data.notes || '', status: data.status || 'New',
-        items: (data.items || []).map(item => ({ id: item.id, itemName: item.itemName || '', description: item.description || '', unit: item.unit || '', quantity: item.quantity || 1, make: item.make || '', unitPrice: item.unitPrice || '', taxPercent: item.taxPercent || 18, included: true })),
+        items: (data.items || []).map(item => ({ id: item.id, itemName: item.itemName || '', description: item.description || '', unit: item.unit || '', quantity: item.quantity || 1, make: item.make || '', unitPrice: item.unitPrice || '', taxPercent: gstOf(item.taxPercent), included: true })),
         // A saved round-off was an explicit decision, so editing starts from it
         // and counts as already touched rather than being re-derived.
         roundOff: data.roundOff !== null && data.roundOff !== undefined
@@ -2303,7 +2311,7 @@ const QuotationsReceived = () => {
                                     className="table-input text-center"
                                     disabled={!inc}
                                   >
-                                    {GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}
+                                    {gstOptionsFor(item.taxPercent).map(g => <option key={g} value={g}>{g}%</option>)}
                                   </select>
                                 </td>
                                 <td className="text-right" style={{ fontWeight: 600, color: inc ? '#1e293b' : '#94a3b8' }}>{inc && item.unitPrice ? formatCurrency(amount) : '-'}</td>
