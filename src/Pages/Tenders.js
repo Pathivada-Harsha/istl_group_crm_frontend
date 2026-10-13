@@ -19,6 +19,7 @@ import TenderDetail from '../components/tenders/TenderDetail';
 import TenderExcelImportDialog from '../components/tenders/TenderExcelImportDialog';
 import { exportTenders } from '../components/tenders/tenderExport';
 import tenderApi from '../services/tenderApi';
+import filterApi from '../services/filterApi';
 import { useAuth } from '../hooks/useAuth';
 import {
   newTender, hydrateTender, TENDER_STATUSES, FINANCIAL_YEARS,
@@ -46,10 +47,12 @@ const ALL_COLUMNS = [
   { key: 'tender',           label: 'Tender',           sortable: true,  required: true  },
   { key: 'issuingAuthority', label: 'Issuing Authority', sortable: true,  required: false },
   { key: 'clientCompany',    label: 'Client',            sortable: true,  required: false },
-  { key: 'sector',           label: 'Sector',            sortable: true,  required: false },
+  { key: 'groupName',        label: 'Group',             sortable: true,  required: false },
+  { key: 'subGroupName',     label: 'Category',          sortable: true,  required: false },
   { key: 'source',           label: 'Source',            sortable: true,  required: false },
   { key: 'location',         label: 'Location',          sortable: true,  required: false },
   { key: 'financialYear',    label: 'FY',                sortable: true,  required: false },
+  { key: 'assignedToName',   label: 'Assigned To',       sortable: true,  required: false },
   { key: 'bidValue',         label: 'Bid Value',         sortable: true,  required: false },
   { key: 'contractValue',    label: 'Contract Value',    sortable: true,  required: false },
   // What the tender demands (emdAmount)…
@@ -305,6 +308,23 @@ export default function Tenders() {
   };
   useEffect(() => { load(); }, []);
 
+  // Assign To: same reporting-hierarchy list as Leads; editable straight from the list row.
+  const [assignees, setAssignees] = useState([]);
+  useEffect(() => {
+    filterApi.getAssignableUsers().then((u) => setAssignees(Array.isArray(u) ? u : [])).catch(() => setAssignees([]));
+  }, []);
+  const assignTender = async (t, value) => {
+    const assignedTo = value ? Number(value) : null;
+    try {
+      const saved = await tenderApi.assign(t.id, assignedTo);
+      setTenders((prev) => prev.map((x) => (x.id === t.id
+        ? { ...x, assignedTo: saved.assignedTo, assignedToName: saved.assignedToName || '' } : x)));
+      setNotice({ kind: 'success', text: `Assigned to ${saved.assignedToName || 'nobody'}.` });
+    } catch (e) {
+      setNotice({ kind: 'error', text: e.message || 'Could not assign the tender.' });
+    }
+  };
+
   const openTender = (t) => { detailInitialRef.current = t; excelFileRef.current = null; setDetailIsNew(false); setDetailKey((k) => k + 1); setView('detail'); };
   const openNew = (excelFile = null) => {
     detailInitialRef.current = newTender();
@@ -543,6 +563,16 @@ export default function Tenders() {
           <div className="tnd-muted tnd-cell-sub" title={t.tenderNumber || ''}>{t.tenderNumber}</div>
         </>
       );
+      case 'assignedToName': return canEdit ? (
+        <div onClick={(e) => e.stopPropagation()} style={{ minWidth: 130 }}>
+          <FilterSelect
+            value={t.assignedTo ? String(t.assignedTo) : ''}
+            options={assignees.map((u) => ({ value: String(u.id), label: u.name }))}
+            placeholder="Unassigned"
+            onChange={(v) => assignTender(t, v)}
+          />
+        </div>
+      ) : (t.assignedToName || '—');
       case 'bidValue': return <span className="tnd-money">{boqBidTotal(t) > 0 ? fmtINR(boqBidTotal(t)) : '—'}</span>;
       case 'contractValue': return <span className="tnd-money">{t.contractValue ? fmtINR(t.contractValue) : '—'}</span>;
       case 'emd': return <span className="tnd-money">{t.emdAmount ? fmtINR(t.emdAmount) : '—'}</span>;

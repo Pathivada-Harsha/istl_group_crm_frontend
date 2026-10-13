@@ -2257,7 +2257,7 @@ useEffect(() => {
     setLoading(true);
     try {
       if (formData.id) {
-        const data = await fetchWithHeaders(`${API_BASE_URL}/customers/update/${formData.id}`, { method:'PUT', body: JSON.stringify(formData) });
+        const data = await fetchWithHeaders(`${API_BASE_URL}/customers/update/${formData.id}`, { method:'PUT', body: JSON.stringify({ ...formData, unassign: !formData.assignedTo }) });
         if (data.success) { showSuccess('Customer updated'); setIsAddFormOpen(false); resetForm(); fetchCustomers(); }
       } else {
         const data = await fetchWithHeaders(`${API_BASE_URL}/customers/create`, { method:'POST', body: JSON.stringify(formData) });

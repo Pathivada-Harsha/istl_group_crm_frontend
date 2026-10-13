@@ -81,6 +81,17 @@ const filterApi = {
     }
   },
 
+  // Users the caller may assign work to (reporting-graph scoped; same list the Leads page uses)
+  getAssignableUsers: async () => {
+    const response = await fetch(`${API_BASE_URL}/filters/assignable-users`, {
+      credentials: 'include',
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  },
+
   // Get projects by group and subgroup
   getProjects: async (groupName, subGroupName) => {
     try {

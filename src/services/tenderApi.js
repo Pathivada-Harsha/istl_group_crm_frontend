@@ -93,8 +93,13 @@ const tenderApi = {
   getAll: async () => (await req('/tender/getAll')).data || [],
   getById: async (id) => (await req(`/tender/${id}`)).data,
   create: async (tender) => (await req('/tender/create', { method: 'POST', body: tender })).data,
-  update: async (id, tender) => (await req(`/tender/update/${id}`, { method: 'PUT', body: tender })).data,
+  // unassign: an empty Assign To on save means "clear it" (the backend ignores a bare null).
+  update: async (id, tender) => (await req(`/tender/update/${id}`, {
+    method: 'PUT', body: { ...tender, unassign: !tender.assignedTo },
+  })).data,
   remove: async (id) => req(`/tender/delete/${id}`, { method: 'DELETE' }),
+  // Quick re-assign (also moves the linked client's assignee). assignedTo = user id or null.
+  assign: async (id, assignedTo) => (await req(`/tender/${id}/assign`, { method: 'PUT', body: { assignedTo } })).data,
 
   // Stateless parse (works before the tender is saved) → proposed values with
   // the page and line each came from, for the import review modal. Nothing is

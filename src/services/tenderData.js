@@ -501,7 +501,7 @@ export const blankTender = () => ({
   clientContactPerson: '', clientContactEmail: '', clientContactPhone: '',
   clientAddress: '', clientCity: '', clientState: '',
   // classification
-  sector: '', tenderType: '', source: '', portalLink: '',
+  sector: '', groupName: '', subGroupName: '', assignedTo: null, assignedToName: '', tenderType: '', source: '', portalLink: '',
   location: '', district: '', state: '', financialYear: CURRENT_FY,
   // financials
   estimatedValue: '', emdAmount: '', performanceSecurityPct: '',

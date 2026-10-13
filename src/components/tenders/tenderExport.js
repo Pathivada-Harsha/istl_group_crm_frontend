@@ -114,7 +114,9 @@ const TENDER_COLUMNS = [
   { h: 'Client City', v: (t) => t.clientCity },
   { h: 'Client State', v: (t) => t.clientState },
   // classification
-  { h: 'Sector', v: (t) => t.sector },
+  { h: 'Group', v: (t) => t.groupName },
+  { h: 'Category', v: (t) => t.subGroupName },
+  { h: 'Assigned To', v: (t) => t.assignedToName },
   { h: 'Tender Type', v: (t) => t.tenderType },
   { h: 'Source', v: (t) => t.source },
   { h: 'Portal Link', v: (t) => t.portalLink, w: 30 },
