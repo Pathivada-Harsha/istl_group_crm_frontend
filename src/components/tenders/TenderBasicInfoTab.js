@@ -6,11 +6,32 @@
 //  NOTE: submissionDeadline and portalLink are single fields shared with the
 //  Submission tab (one field per real-world fact).
 // ─────────────────────────────────────────────────────────────────────────────
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import FilterSelect from '../Dropdowns/FilterSelect';
-import { CLIENT_TYPES, SECTORS, TENDER_TYPES, SOURCES, FINANCIAL_YEARS, ISSUING_AUTHORITIES } from '../../services/tenderData';
+import filterApi from '../../services/filterApi';
+import { CLIENT_TYPES, TENDER_TYPES, SOURCES, FINANCIAL_YEARS, ISSUING_AUTHORITIES } from '../../services/tenderData';
+
+// Same Group / Category lists the Leads form uses (filterApi → /filters/groups, /filters/subgroups).
+const optionOf = (g) => ({ value: g.value || g.label, label: g.label || g.value });
 
 export default function TenderBasicInfoTab({ tender, patch }) {
+  const [groups, setGroups] = useState([]);
+  const [subGroups, setSubGroups] = useState([]);
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    filterApi.getAssignableUsers().then((u) => setUsers(Array.isArray(u) ? u : [])).catch(() => setUsers([]));
+  }, []);
+
+  useEffect(() => {
+    filterApi.getAllGroups().then(setGroups).catch(() => setGroups([]));
+  }, []);
+
+  useEffect(() => {
+    if (!tender.groupName) { setSubGroups([]); return; }
+    filterApi.getSubGroups(tender.groupName).then(setSubGroups).catch(() => setSubGroups([]));
+  }, [tender.groupName]);
+
   // helper renderers (plain functions, NOT components, so inputs never remount)
   const field = (label, k, { type = 'text', full = false, placeholder = '' } = {}) => (
     <div className="leads-enquiries-form-group" style={full ? { gridColumn: '1 / -1' } : undefined}>
@@ -56,10 +77,37 @@ export default function TenderBasicInfoTab({ tender, patch }) {
               {ISSUING_AUTHORITIES.map((a) => <option key={a} value={a} />)}
             </datalist>
           </div>
-          {select('Sector', 'sector', SECTORS)}
+          <div className="leads-enquiries-form-group">
+            <label>Group</label>
+            <FilterSelect
+              value={tender.groupName || ''}
+              options={groups.map(optionOf)}
+              placeholder="Select Group"
+              onChange={(v) => patch({ groupName: v, subGroupName: '' })}
+            />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Category</label>
+            <FilterSelect
+              value={tender.subGroupName || ''}
+              options={subGroups.map(optionOf)}
+              placeholder={!tender.groupName ? 'Select Group First' : 'Select Category'}
+              disabled={!tender.groupName}
+              onChange={(v) => patch({ subGroupName: v })}
+            />
+          </div>
           {select('Tender Type', 'tenderType', TENDER_TYPES)}
           {select('Source', 'source', SOURCES)}
           {select('Financial Year', 'financialYear', FINANCIAL_YEARS)}
+          <div className="leads-enquiries-form-group">
+            <label>Assign To</label>
+            <FilterSelect
+              value={tender.assignedTo ? String(tender.assignedTo) : ''}
+              options={users.map((u) => ({ value: String(u.id), label: u.name }))}
+              placeholder="Select Member"
+              onChange={(v) => patch({ assignedTo: v ? Number(v) : null, assignedToName: '' })}
+            />
+          </div>
         </div>
       </div>
 

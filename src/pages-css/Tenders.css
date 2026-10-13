@@ -454,10 +454,14 @@
 .tnd-table-card .leads-enquiries-table td[data-col="clientCompany"] { min-width: 140px; width: 14%; }
 .tnd-table-card .leads-enquiries-table th[data-col="location"],
 .tnd-table-card .leads-enquiries-table td[data-col="location"] { min-width: 130px; }
-.tnd-table-card .leads-enquiries-table th[data-col="sector"],
-.tnd-table-card .leads-enquiries-table td[data-col="sector"] { min-width: 90px; }
+.tnd-table-card .leads-enquiries-table th[data-col="groupName"],
+.tnd-table-card .leads-enquiries-table td[data-col="groupName"],
+.tnd-table-card .leads-enquiries-table th[data-col="subGroupName"],
+.tnd-table-card .leads-enquiries-table td[data-col="subGroupName"] { min-width: 100px; }
 .tnd-table-card .leads-enquiries-table th[data-col="source"],
-.tnd-table-card .leads-enquiries-table td[data-col="source"] { min-width: 100px; }
+.tnd-table-card .leads-enquiries-table td[data-col="source"],
+.tnd-table-card .leads-enquiries-table th[data-col="assignedToName"],
+.tnd-table-card .leads-enquiries-table td[data-col="assignedToName"] { min-width: 100px; }
 .tnd-table-card .leads-enquiries-table th[data-col="financialYear"],
 .tnd-table-card .leads-enquiries-table td[data-col="financialYear"] { min-width: 70px; }
 .tnd-table-card .leads-enquiries-table th[data-col="bidValue"],
@@ -472,7 +476,8 @@
 .tnd-table-card .leads-enquiries-table td[data-col="project"] { min-width: 90px; }
 
 /* Short cells never wrap — only the two text-heavy columns may. */
-.tnd-table-card .leads-enquiries-table td[data-col="sector"],
+.tnd-table-card .leads-enquiries-table td[data-col="groupName"],
+.tnd-table-card .leads-enquiries-table td[data-col="subGroupName"],
 .tnd-table-card .leads-enquiries-table td[data-col="source"],
 .tnd-table-card .leads-enquiries-table td[data-col="financialYear"],
 .tnd-table-card .leads-enquiries-table td[data-col="bidValue"],
