@@ -32,6 +32,7 @@ import LeadTechnicalScopeTab from './../components/Leads/LeadTechnicalScopeTab';
 import LeadBomTab from './../components/Leads/LeadBomTab';
 import LeadBudgetTab from './../components/Leads/LeadBudgetTab';
 import GenerateProposalModal from './../components/Leads/GenerateProposalModal.js';
+import GenerateGenericProposalModal from './../components/Leads/GenerateGenericProposalModal.js';
 import { isStatusDowngrade, isStatusLocked, lockedStatusHint, LEAD_STATUS_OPTIONS } from './../constants/leadStatus';
 import ConfirmationModal from '../components/ConfirmationModal.js';
 
@@ -46,6 +47,7 @@ import ConfirmationModal from '../components/ConfirmationModal.js';
  * with SolarProposalDocService.isSolar on the backend.
  */
 const isSolarLead = (lead) =>
+  ['pm_kusum'].includes(String(lead?.subGroupName || '').trim().toLowerCase()) ||
   String(lead?.subGroupName || '').trim().toLowerCase().startsWith('solar') ||
   String(lead?.groupName || '').trim().toLowerCase() === 'solar';
 
@@ -406,7 +408,9 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
 
   const [formData, setFormData] = useState({
     leadId: lead.id,
-    title: existingProposal?.title || '',
+    // A new proposal starts titled with the lead's name; its value is filled from the
+    // Budget tab's Proposal Price below (when there is one).
+    title: existingProposal?.title || lead.name || '',
     description: existingProposal?.description || '',
     totalValue: existingProposal?.totalValue || '',
     groupName: lead.groupName || '',
@@ -424,6 +428,26 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
   });
 
   const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
+
+  // New proposal only: pre-fill Total Value with the Budget tab's Proposal Price. If the lead
+  // has no budget yet (price 0 / unavailable) the field stays empty and shows its 0.00 placeholder.
+  // Never overwrites a value the user has already typed.
+  useEffect(() => {
+    if (existingProposal) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase}/leads/${lead.id}/estimation-summary`, { credentials: 'include', headers });
+        const body = await res.json();
+        const price = Number(body?.data?.proposalPrice ?? body?.data?.sellingPrice) || 0;
+        if (!cancelled && res.ok && body?.success && price > 0) {
+          setFormData(prev => (prev.totalValue === '' ? { ...prev, totalValue: String(Math.round(price * 100) / 100) } : prev));
+        }
+      } catch { /* no budget available: leave the value empty */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id, existingProposal]);
 
   const handleBomSearch = async (idx, term) => {
     if (!term || term.length < 2) { setFilteredBomItems(p => ({ ...p, [idx]: [] })); setShowBomDropdown(p => ({ ...p, [idx]: false })); return; }
@@ -1375,9 +1399,9 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
 
   // Which proposals have a generated Word document (and how many versions).
   useEffect(() => {
-    if (!isSolar || !proposals.length) return;
+    if (!proposals.length) return;
     fetchProposalDocs(proposals.map(p => p.id));
-  }, [isSolar, proposals, fetchProposalDocs]);
+  }, [proposals, fetchProposalDocs]);
 
   /** The .docx — always the deliverable, and always what Download hands over. */
   const fetchProposalDocxBlob = async (proposalId, version) => {
@@ -1719,26 +1743,28 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                 <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                 Add Follow-up
               </button>
-              {isSolar ? (
-                /* Solar: the client proposal is generated from this lead's tabs
-                   into the approved Word template — there is no second path. */
-                <button className="leads-enquiries-btn leads-enquiries-btn-primary"
-                  onClick={() => { setActiveTab('proposals'); setShowProposalForm(false); setGenerateProposal({ proposalId: null }); }}>
-                  <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  Generate Proposal
-                </button>
-              ) : (
+              {!isSolar && (
                 <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => { setActiveTab('proposals'); setShowProposalForm(true); setEditingProposal(null); }}>
                   <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   New Proposal
                 </button>
               )}
+              {/* Solar fills the approved Word template; every other lead gets the standard PDF. */}
+              <button className="leads-enquiries-btn leads-enquiries-btn-primary"
+                onClick={() => { setActiveTab('proposals'); setShowProposalForm(false); setGenerateProposal({ proposalId: null }); }}>
+                <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                Generate Proposal
+              </button>
             </>
           )}
         </div>
       </div>
 
-      {generateProposal && (
+      {/* Two generators, one entry point: solar fills the approved Word skeleton,
+          everything else renders the standard PDF. The split mirrors
+          SolarProposalDocService.isSolar on the backend, which refuses each
+          lead the other one takes. */}
+      {generateProposal && (isSolar ? (
         <GenerateProposalModal
           open
           lead={lead}
@@ -1749,7 +1775,18 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
           showSuccess={showSuccess}
           showError={showError}
         />
-      )}
+      ) : (
+        <GenerateGenericProposalModal
+          open
+          lead={lead}
+          currentUser={currentUser}
+          proposalId={generateProposal.proposalId}
+          onClose={() => setGenerateProposal(null)}
+          onGenerated={handleProposalGenerated}
+          showSuccess={showSuccess}
+          showError={showError}
+        />
+      ))}
 
       {/* ── Tab navigation ───────────────────────────────────────────────────
           One row, every tab, in the original order. Each tab is drawn as a
@@ -2157,15 +2194,16 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                     </label>
                   )}
                   {permissions.PROPOSAL_CREATE && (
-                    isSolar ? (
+                    <>
+                      {!isSolar && (
+                        <button className="ld-btn ld-btn-sec" onClick={() => { setShowProposalForm(true); setEditingProposal(null); setShowOfflinePanel(false); }}>
+                          + New Proposal
+                        </button>
+                      )}
                       <button className="ld-btn ld-btn-pri" onClick={() => { setShowOfflinePanel(false); setGenerateProposal({ proposalId: null }); }}>
                         Generate Proposal
                       </button>
-                    ) : (
-                      <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setEditingProposal(null); setShowOfflinePanel(false); }}>
-                        + New Proposal
-                      </button>
-                    )
+                    </>
                   )}
                 </div>
               </div>
@@ -2242,9 +2280,11 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                   <div className="ld-empty-icon">📝</div>
                   <p>No proposals yet for this lead.</p>
                   <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
-                    {permissions.PROPOSAL_CREATE && (isSolar
-                      ? <button className="ld-btn ld-btn-pri" onClick={() => { setShowOfflinePanel(false); setGenerateProposal({ proposalId: null }); }}>Generate Proposal</button>
-                      : <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setShowOfflinePanel(false); }}>+ Create Proposal</button>
+                    {permissions.PROPOSAL_CREATE && (
+                      <>
+                        <button className="ld-btn ld-btn-pri" onClick={() => { setShowOfflinePanel(false); setGenerateProposal({ proposalId: null }); }}>Generate Proposal</button>
+                        {!isSolar && <button className="ld-btn ld-btn-sec" onClick={() => { setShowProposalForm(true); setShowOfflinePanel(false); }}>+ Create Proposal</button>}
+                      </>
                     )}
                     {permissions.PROPOSAL_OFFLINE_UPLOAD && (
                     <button className="ld-pact-btn ld-pact-upload" style={{padding:'8px 16px',fontSize:13,cursor:'pointer'}} onClick={() => setShowOfflinePanel(v => !v)}>
@@ -2295,7 +2335,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                             appends, it never overwrites an already-sent file.
                             Clicking a version previews it; the chip's ⬇ saves it
                             and its 🗑 removes that version alone. */}
-                        {isSolar && (proposalDocs[p.id] || []).length > 1 && (
+                        {(proposalDocs[p.id] || []).length > 1 && (
                           <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6,alignItems:'center'}}>
                             <span style={{fontSize:11,color:__stc('#6b7280')}}>Earlier versions:</span>
                             {proposalDocs[p.id].slice(1).map(d => (
@@ -2350,57 +2390,75 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                               )}
                             </>
                           ) : (
-                            /* ── No offline PDF — Solar downloads its generated Word
-                                 document; other groups keep the generic PDF. ── */
+                            /* ── No offline PDF — the stored generated document, of
+                                 whichever kind. Solar stores a .docx with a separate
+                                 PDF rendition, so it gets both buttons; the standard
+                                 generator stores the PDF itself, so one button is the
+                                 whole story. A proposal with no generated document yet
+                                 falls back to the on-the-fly PDF endpoint. ── */
+                            (() => {
+                              const docs = proposalDocs[p.id] || [];
+                              const latest = docs[0];
+                              const isPdfDoc = latest && latest.contentType === 'application/pdf';
+                              return (
                             <>
-                              {isSolar ? (
-                                (proposalDocs[p.id] || []).length > 0 ? (
-                                  <>
-                                    <button className="ld-pact-btn ld-pact-offline-view"
-                                      onClick={() => viewProposalDoc(p.id, proposalDocs[p.id][0].version, proposalDocs[p.id][0].fileName, p.title)}
-                                      title={`Preview the latest generated proposal (v${proposalDocs[p.id][0].version})`}>
-                                      <Eye size={15} strokeWidth={2} />
-                                      View v{proposalDocs[p.id][0].version}
-                                    </button>
-                                    <button className="ld-pact-btn" onClick={() => downloadProposalDoc(p.id, proposalDocs[p.id][0].version, proposalDocs[p.id][0].fileName)}
-                                      title={`Download the editable Word file (v${proposalDocs[p.id][0].version}) — this is what gets sent to the client`}>
+                              {latest ? (
+                                <>
+                                  <button className="ld-pact-btn ld-pact-offline-view"
+                                    onClick={() => viewProposalDoc(p.id, latest.version, latest.fileName, p.title)}
+                                    title={`Preview the latest generated proposal (v${latest.version})`}>
+                                    <Eye size={15} strokeWidth={2} />
+                                    View v{latest.version}
+                                  </button>
+                                  {!isPdfDoc && (
+                                    <button className="ld-pact-btn" onClick={() => downloadProposalDoc(p.id, latest.version, latest.fileName)}
+                                      title={`Download the editable Word file (v${latest.version}) — this is what gets sent to the client`}>
                                       <DownloadIcon size={15} strokeWidth={2} />
                                       Word
                                     </button>
-                                    {/* The PDF is the same version rendered for sending/printing.
-                                        Hidden when the row can never have one (a version generated
-                                        before the feature, with no payload to re-render from). */}
-                                    {proposalDocs[p.id][0].previewable !== false && (
-                                      <button className="ld-pact-btn ld-pact-pdf"
-                                        onClick={() => downloadProposalPdf(p.id, proposalDocs[p.id][0].version, proposalDocs[p.id][0].fileName)}
-                                        title={`Download v${proposalDocs[p.id][0].version} as PDF`}>
-                                        <DownloadIcon size={15} strokeWidth={2} />
-                                        PDF
-                                      </button>
-                                    )}
-                                  </>
-                                ) : (
-                                  <span className="ld-pact-btn" style={{opacity:.65,cursor:'default'}} title="No document generated for this proposal yet">
-                                    No document yet
-                                  </span>
-                                )
+                                  )}
+                                  {/* For a .docx the PDF is the same version rendered for
+                                      sending/printing, and is hidden when the row can never
+                                      have one (a version generated before the feature, with
+                                      no payload to re-render from). For a PDF document it is
+                                      the deliverable itself, so it is always offered. */}
+                                  {(isPdfDoc || latest.previewable !== false) && (
+                                    <button className="ld-pact-btn ld-pact-pdf"
+                                      onClick={() => (isPdfDoc
+                                        ? downloadProposalDoc(p.id, latest.version, latest.fileName)
+                                        : downloadProposalPdf(p.id, latest.version, latest.fileName))}
+                                      title={`Download v${latest.version} as PDF`}>
+                                      <DownloadIcon size={15} strokeWidth={2} />
+                                      PDF
+                                    </button>
+                                  )}
+                                </>
+                              ) : isSolar ? (
+                                <span className="ld-pact-btn" style={{opacity:.65,cursor:'default'}} title="No document generated for this proposal yet">
+                                  No document yet
+                                </span>
                               ) : (
-                                <button className="ld-pact-btn" onClick={() => downloadPDF(p.id)} title="Download generated PDF">
+                                /* Nothing generated yet — the legacy on-the-fly renderer,
+                                   which produces an unstored PDF that does not qualify for
+                                   the order book. Generate one to replace it. */
+                                <button className="ld-pact-btn" onClick={() => downloadPDF(p.id)} title="Download a draft PDF (not a generated document)">
                                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                                  PDF
+                                  Draft PDF
                                 </button>
                               )}
-                              {isSolar && permissions.PROPOSAL_CREATE && (
+                              {permissions.PROPOSAL_CREATE && (
                                 <button className="ld-pact-btn ld-pact-edit" onClick={() => setGenerateProposal({ proposalId: p.id })}
-                                  title="Re-generate from the lead's current tabs as a new version">
+                                  title={latest
+                                    ? "Re-generate from the lead's current tabs as a new version"
+                                    : "Generate the client document from the lead's current tabs"}>
                                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                  Re-generate
+                                  {latest ? 'Re-generate' : 'Generate'}
                                 </button>
                               )}
                               {/* Undo a bad re-generate without losing the versions already
                                   sent — the card falls back to the one below it. Only offered
                                   while there is something to fall back to. */}
-                              {isSolar && permissions.PROPOSAL_DELETE && (proposalDocs[p.id] || []).length > 1 && (
+                              {permissions.PROPOSAL_DELETE && (proposalDocs[p.id] || []).length > 1 && (
                                 <button className="ld-pact-btn ld-pact-delete"
                                   onClick={() => setDeleteVersionConfirm({ id: p.id, proposalNo: p.proposalNo, version: proposalDocs[p.id][0].version, isLatest: true })}
                                   title={`Delete only v${proposalDocs[p.id][0].version} — v${proposalDocs[p.id][1].version} becomes the latest again`}>
@@ -2419,6 +2477,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                               </label>
                               )}
                             </>
+                              );
+                            })()
                           ))}
                           {permissions.PROPOSAL_EDIT && (
                             <button className="ld-pact-btn ld-pact-edit" onClick={() => { setEditingProposal(p); setShowProposalForm(true); }} title="Edit">
