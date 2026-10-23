@@ -392,6 +392,7 @@ const ProposalsWithTemplate = () => {
    * SolarProposalDocService.isSolar and Leads-Enquire's isSolarLead.
    */
   const isSolarProposal = (p) =>
+    ['pm_kusum'].includes(String(p?.subGroupName || '').trim().toLowerCase()) ||
     String(p?.subGroupName || '').trim().toLowerCase().startsWith('solar') ||
     String(p?.groupName || '').trim().toLowerCase() === 'solar';
 
